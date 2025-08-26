@@ -1,0 +1,20 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>8.0</LangVersion>
+    <Nullable>enable</Nullable>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- RhinoCommon ok; in questo progetto NON serve Grasshopper -->
+    <PackageReference Include="rhinocommon" Version="8.21.25188.17001" />
+    <!-- Manca Newtonsoft.Json: aggiungilo -->
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Questo progetto DEVE conoscere i tipi core -->
+    <ProjectReference Include="..\ProgesiCore\ProgesiCore.csproj" />
+  </ItemGroup>
+</Project>
