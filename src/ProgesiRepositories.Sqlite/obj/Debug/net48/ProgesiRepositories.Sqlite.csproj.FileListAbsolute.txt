@@ -1,0 +1,5 @@
+C:\Users\gianl\source\repos\Progesi\src\ProgesiRepositories.Sqlite\obj\Debug\net48\ProgesiRepositories.Sqlite.csproj.AssemblyReference.cache
+C:\Users\gianl\source\repos\Progesi\src\ProgesiRepositories.Sqlite\obj\Debug\net48\ProgesiRepositories.Sqlite.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\gianl\source\repos\Progesi\src\ProgesiRepositories.Sqlite\obj\Debug\net48\ProgesiRepositories.Sqlite.AssemblyInfoInputs.cache
+C:\Users\gianl\source\repos\Progesi\src\ProgesiRepositories.Sqlite\obj\Debug\net48\ProgesiRepositories.Sqlite.AssemblyInfo.cs
+C:\Users\gianl\source\repos\Progesi\src\ProgesiRepositories.Sqlite\obj\Debug\net48\ProgesiRepositories.Sqlite.csproj.CoreCompileInputs.cache

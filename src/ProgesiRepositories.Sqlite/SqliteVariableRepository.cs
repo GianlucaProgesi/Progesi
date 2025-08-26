@@ -1,0 +1,190 @@
+﻿using Microsoft.Data.Sqlite;
+using Newtonsoft.Json;
+using ProgesiCore;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Threading;
+using System.Threading.Tasks;
+
+namespace ProgesiRepositories.Sqlite
+{
+    public sealed class SqliteVariableRepository : SqliteRepositoryBase, IVariableRepository
+    {
+        public SqliteVariableRepository(string dbPath, bool resetSchema = false) : base(dbPath, resetSchema)
+        {
+            EnsureSchema();
+        }
+
+        private void EnsureSchema()
+        {
+            using var conn = OpenConnection();
+            using (var cmd = conn.CreateCommand())
+            {
+                if (_resetSchema)
+                {
+                    cmd.CommandText = @"
+DROP TABLE IF EXISTS Variables;
+
+CREATE TABLE Variables (
+    Id           INTEGER PRIMARY KEY,
+    Name         TEXT NOT NULL,
+    ValueType    TEXT NOT NULL,
+    Value        TEXT NOT NULL,
+    MetadataId   INTEGER NULL,
+    DependsJson  TEXT NOT NULL,
+    ContentHash  TEXT
+);";
+                    cmd.ExecuteNonQuery();
+                }
+                else
+                {
+                    cmd.CommandText = @"
+CREATE TABLE IF NOT EXISTS Variables (
+    Id           INTEGER PRIMARY KEY,
+    Name         TEXT NOT NULL,
+    ValueType    TEXT NOT NULL,
+    Value        TEXT NOT NULL,
+    MetadataId   INTEGER NULL
+);";
+                    cmd.ExecuteNonQuery();
+
+                    // migrazioni non distruttive
+                    AddColumnIfMissing(conn, "Variables", "DependsJson", "TEXT NOT NULL DEFAULT '[]'");
+                    AddColumnIfMissing(conn, "Variables", "ContentHash", "TEXT");
+                }
+            }
+            EnsureContentHash(conn, "Variables");
+        }
+
+        public Task<ProgesiVariable> SaveAsync(ProgesiVariable variable, CancellationToken ct = default)
+            => SaveInternalAsync(variable, ct);
+
+        private async Task<ProgesiVariable> SaveInternalAsync(ProgesiVariable v, CancellationToken ct)
+        {
+            using var conn = OpenConnection();
+            using var tx = conn.BeginTransaction();
+
+            var hash = ProgesiHash.Compute(v);
+
+            int? existingId = null;
+            using (var find = conn.CreateCommand())
+            {
+                find.Transaction = tx;
+                find.CommandText = "SELECT Id FROM Variables WHERE ContentHash=$h LIMIT 1;";
+                find.Parameters.AddWithValue("$h", hash);
+                var obj = await find.ExecuteScalarAsync(ct);
+                if (obj != null && obj != DBNull.Value)
+                    existingId = Convert.ToInt32(obj);
+            }
+
+            if (existingId.HasValue && existingId.Value != v.Id)
+            {
+                tx.Commit();
+                return await GetByIdAsync(existingId.Value, ct);
+            }
+
+            var depends = (v.DependsFrom ?? Array.Empty<int>()).ToArray();
+            var payloadDepends = JsonConvert.SerializeObject(depends);
+
+            using (var cmd = conn.CreateCommand())
+            {
+                cmd.Transaction = tx;
+                cmd.CommandText = @"
+INSERT INTO Variables (Id, Name, ValueType, Value, MetadataId, DependsJson, ContentHash)
+VALUES ($id, $name, $vt, $val, $mid, $dep, $h)
+ON CONFLICT(Id) DO UPDATE SET
+  Name=excluded.Name,
+  ValueType=excluded.ValueType,
+  Value=excluded.Value,
+  MetadataId=excluded.MetadataId,
+  DependsJson=excluded.DependsJson,
+  ContentHash=excluded.ContentHash;";
+                cmd.Parameters.AddWithValue("$id", v.Id);
+                cmd.Parameters.AddWithValue("$name", v.Name ?? string.Empty);
+                cmd.Parameters.AddWithValue("$vt", TypeOf(v.Value));
+                cmd.Parameters.AddWithValue("$val", Stringify(v.Value));
+                if (v.MetadataId.HasValue) cmd.Parameters.AddWithValue("$mid", v.MetadataId.Value);
+                else cmd.Parameters.AddWithValue("$mid", DBNull.Value);
+                cmd.Parameters.AddWithValue("$dep", payloadDepends);
+                cmd.Parameters.AddWithValue("$h", hash);
+                await cmd.ExecuteNonQueryAsync(ct);
+            }
+
+            tx.Commit();
+            return await GetByIdAsync(v.Id, ct);
+        }
+
+        public async Task<ProgesiVariable> GetByIdAsync(int id, CancellationToken ct = default)
+        {
+            using var conn = OpenConnection();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "SELECT Id, Name, ValueType, Value, MetadataId, DependsJson FROM Variables WHERE Id=$id;";
+            cmd.Parameters.AddWithValue("$id", id);
+
+            using var r = await cmd.ExecuteReaderAsync(ct);
+            if (!await r.ReadAsync(ct)) return null;
+
+            var vid = r.GetInt32(0);
+            var name = r.GetString(1);
+            var vType = r.GetString(2);
+            var valStr = r.GetString(3);
+            int? mid = r.IsDBNull(4) ? (int?)null : r.GetInt32(4);
+            var depJs = r.IsDBNull(5) ? "[]" : r.GetString(5);
+            var depends = JsonConvert.DeserializeObject<int[]>(depJs) ?? Array.Empty<int>();
+
+            var value = ParseValue(valStr, vType);
+            return new ProgesiVariable(vid, name, value, depends, mid);
+        }
+
+        public async Task<IReadOnlyList<ProgesiVariable>> GetAllAsync(CancellationToken ct = default)
+        {
+            var list = new List<ProgesiVariable>();
+            using var conn = OpenConnection();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "SELECT Id FROM Variables ORDER BY Id;";
+
+            using var r = await cmd.ExecuteReaderAsync(ct);
+            var ids = new List<int>();
+            while (await r.ReadAsync(ct)) ids.Add(r.GetInt32(0));
+
+            foreach (var id in ids)
+            {
+                var v = await GetByIdAsync(id, ct);
+                if (v != null) list.Add(v);
+            }
+            return list;
+        }
+
+        public async Task<bool> DeleteAsync(int id, CancellationToken ct = default)
+        {
+            using var conn = OpenConnection();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "DELETE FROM Variables WHERE Id=$id;";
+            cmd.Parameters.AddWithValue("$id", id);
+            var n = await cmd.ExecuteNonQueryAsync(ct);
+            return n > 0;
+        }
+
+        public async Task<int> DeleteManyAsync(IEnumerable<int> idsToDelete, CancellationToken ct = default)
+        {
+            if (idsToDelete == null) return 0;
+            var ids = idsToDelete.ToArray();
+            if (ids.Length == 0) return 0;
+
+            using var conn = OpenConnection();
+            using var tx = conn.BeginTransaction();
+            int count = 0;
+            foreach (var id in ids)
+            {
+                using var cmd = conn.CreateCommand();
+                cmd.Transaction = tx;
+                cmd.CommandText = "DELETE FROM Variables WHERE Id=$id;";
+                cmd.Parameters.AddWithValue("$id", id);
+                count += await cmd.ExecuteNonQueryAsync(ct);
+            }
+            tx.Commit();
+            return count;
+        }
+    }
+}
