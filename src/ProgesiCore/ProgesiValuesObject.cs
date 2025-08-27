@@ -16,7 +16,7 @@ namespace ProgesiCore
 
         protected abstract IEnumerable<object> GetEqualityComponents();
 
-        public override bool Equals(object obj)
+        public override bool Equals(object? obj)
         {
             if (obj == null)
                 return false;
@@ -91,7 +91,7 @@ namespace ProgesiCore
             return CompareTo(other as object);
         }
 
-        public static bool operator ==(ValueObject a, ValueObject b)
+        public static bool operator ==(ValueObject? a, ValueObject? b)
         {
             if (a is null && b is null)
                 return true;
@@ -102,7 +102,7 @@ namespace ProgesiCore
             return a.Equals(b);
         }
 
-        public static bool operator !=(ValueObject a, ValueObject b)
+        public static bool operator !=(ValueObject? a, ValueObject? b)
         {
             return !(a == b);
         }

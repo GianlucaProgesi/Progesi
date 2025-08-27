@@ -4,7 +4,7 @@ VisualStudioVersion = 17.0.31912.275
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ProgesiGrasshopperAssembly", "src\ProgesiGrasshopperAssembly\ProgesiGrasshopperAssembly.csproj", "{554C2D2E-0573-4748-8946-E2305ADB51C3}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ProgesiRepositories.Sqlite", "src\ProgesiRepositories.Sqlite\ProgesiRepositories.Sqlite.csproj", "{B5F37984-630F-4B48-B615-12938A646CC6}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ProgesiRepositories.Sqlite", "src\ProgesiRepositories.Sqlite\ProgesiRepositories.Sqlite.csproj", "{BE0554AF-70A2-4CAE-A3E8-8DDB7C7E842D}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ProgesiRepositories.Rhino", "src\ProgesiRepositories.Rhino\ProgesiRepositories.Rhino.csproj", "{AE17F6A5-54FA-4096-9CF1-1DC112984413}"
 EndProject
@@ -26,10 +26,10 @@ Global
 		{554C2D2E-0573-4748-8946-E2305ADB51C3}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{554C2D2E-0573-4748-8946-E2305ADB51C3}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{554C2D2E-0573-4748-8946-E2305ADB51C3}.Release|Any CPU.Build.0 = Release|Any CPU
-		{B5F37984-630F-4B48-B615-12938A646CC6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{B5F37984-630F-4B48-B615-12938A646CC6}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{B5F37984-630F-4B48-B615-12938A646CC6}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{B5F37984-630F-4B48-B615-12938A646CC6}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BE0554AF-70A2-4CAE-A3E8-8DDB7C7E842D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BE0554AF-70A2-4CAE-A3E8-8DDB7C7E842D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BE0554AF-70A2-4CAE-A3E8-8DDB7C7E842D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BE0554AF-70A2-4CAE-A3E8-8DDB7C7E842D}.Release|Any CPU.Build.0 = Release|Any CPU
 		{AE17F6A5-54FA-4096-9CF1-1DC112984413}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{AE17F6A5-54FA-4096-9CF1-1DC112984413}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{AE17F6A5-54FA-4096-9CF1-1DC112984413}.Release|Any CPU.ActiveCfg = Release|Any CPU
