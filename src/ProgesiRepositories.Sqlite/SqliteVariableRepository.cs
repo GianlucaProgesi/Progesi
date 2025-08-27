@@ -49,7 +49,6 @@ CREATE TABLE IF NOT EXISTS Variables (
 );";
                     cmd.ExecuteNonQuery();
 
-                    // migrazioni non distruttive
                     AddColumnIfMissing(conn, "Variables", "DependsJson", "TEXT NOT NULL DEFAULT '[]'");
                     AddColumnIfMissing(conn, "Variables", "ContentHash", "TEXT");
                 }
@@ -81,7 +80,9 @@ CREATE TABLE IF NOT EXISTS Variables (
             if (existingId.HasValue && existingId.Value != v.Id)
             {
                 tx.Commit();
+#nullable disable
                 return await GetByIdAsync(existingId.Value, ct);
+#nullable enable
             }
 
             var depends = (v.DependsFrom ?? Array.Empty<int>()).ToArray();
@@ -112,9 +113,12 @@ ON CONFLICT(Id) DO UPDATE SET
             }
 
             tx.Commit();
+#nullable disable
             return await GetByIdAsync(v.Id, ct);
+#nullable enable
         }
 
+#nullable disable
         public async Task<ProgesiVariable> GetByIdAsync(int id, CancellationToken ct = default)
         {
             using var conn = OpenConnection();
@@ -136,6 +140,7 @@ ON CONFLICT(Id) DO UPDATE SET
             var value = ParseValue(valStr, vType);
             return new ProgesiVariable(vid, name, value, depends, mid);
         }
+#nullable enable
 
         public async Task<IReadOnlyList<ProgesiVariable>> GetAllAsync(CancellationToken ct = default)
         {
@@ -150,8 +155,10 @@ ON CONFLICT(Id) DO UPDATE SET
 
             foreach (var id in ids)
             {
+#nullable disable
                 var v = await GetByIdAsync(id, ct);
-                if (v != null) list.Add(v);
+#nullable enable
+                if (!object.ReferenceEquals(v, null)) list.Add(v);
             }
             return list;
         }

@@ -17,7 +17,7 @@ namespace ProgesiGrasshopperAssembly
 
         public override Guid ComponentGuid => new Guid("7b3f5c5a-5e2d-47c3-9fb5-0b6f8b9b2d10");
 
-        protected override System.Drawing.Bitmap Icon => null; // opzionale
+        protected override System.Drawing.Bitmap Icon => new System.Drawing.Bitmap(24,24); // opzionale
 
         protected override void RegisterInputParams(GH_InputParamManager p)
         {
@@ -57,7 +57,7 @@ namespace ProgesiGrasshopperAssembly
 
             try
             {
-                var repo = new RhinoVariableRepository();
+                var repo = new RhinoVariableRepository(Rhino.RhinoDoc.ActiveDoc ?? throw new InvalidOperationException("RhinoDoc non disponibile"));
 
                 switch ((action ?? "").Trim().ToLowerInvariant())
                 {

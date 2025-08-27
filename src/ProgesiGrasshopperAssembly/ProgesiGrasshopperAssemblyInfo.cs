@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Drawing;
 using Grasshopper;
 using Grasshopper.Kernel;
@@ -9,21 +9,17 @@ namespace ProgesiGrasshopperAssembly
     {
         public override string Name => "ProgesiGrasshopperAssembly";
 
-        //Return a 24x24 pixel bitmap to represent this GHA library.
-        public override Bitmap Icon => null;
+        // 24x24 non-null placeholder icon to satisfy NRT
+        public override Bitmap Icon => new Bitmap(24, 24);
 
-        //Return a short string describing the purpose of this GHA library.
-        public override string Description => "";
+        public override string Description => "Progesi Grasshopper components";
 
         public override Guid Id => new Guid("e25c9ed1-efc6-4705-a08b-cc926e105e98");
 
-        //Return a string identifying you or your company.
-        public override string AuthorName => "";
+        public override string AuthorName => "Progesi";
 
-        //Return a string representing your preferred contact details.
-        public override string AuthorContact => "";
+        public override string AuthorContact => "info@progesi.example";
 
-        //Return a string representing the version.  This returns the same version as the assembly.
         public override string AssemblyVersion => GetType().Assembly.GetName().Version.ToString();
     }
 }

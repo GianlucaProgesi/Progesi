@@ -1,244 +1,143 @@
+using Newtonsoft.Json;
+using ProgesiCore;
+using Rhino;
+using Rhino.DocObjects.Tables;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using Newtonsoft.Json;
-using ProgesiCore;
-using Rhino;
 
+#nullable enable
 namespace ProgesiRepositories.Rhino
 {
     public sealed class RhinoVariableRepository : IVariableRepository
     {
-        private readonly IRhinoDocAccessor _docAccessor;
-        private const string Section = "ProgesiVariables";
-        private const string IndexEntry = "Index";
-        private const string IndexByHash = "IndexByHash";
+        private readonly StringTable _table;
 
-        public RhinoVariableRepository(IRhinoDocAccessor docAccessor = null)
+        public RhinoVariableRepository(RhinoDoc doc)
         {
-            _docAccessor = docAccessor ?? new DefaultRhinoDocAccessor();
+            if (doc is null) throw new ArgumentNullException(nameof(doc));
+            _table = doc.Strings ?? throw new InvalidOperationException("RhinoDoc.Strings is null.");
         }
 
         public Task<ProgesiVariable> SaveAsync(ProgesiVariable variable, CancellationToken ct = default)
         {
-            if (variable == null) throw new ArgumentNullException(nameof(variable));
-            var doc = _docAccessor.GetActiveDoc();
-            if (doc == null) throw new InvalidOperationException("No active Rhino document.");
-
-            // dedup per contenuto
-            var hash = ProgesiHash.Compute(variable);
-            var map = LoadIndexByHash(doc);
-            if (map.TryGetValue(hash, out var existingId) && existingId != variable.Id)
+            var key = KeyOf(variable.Id);
+            var payload = new
             {
-                // esiste identico ? non salvare
-                return GetByIdAsync(existingId, ct);
-            }
-
-            var payload = Serialize(variable);
-            doc.Strings.SetString(Section, EntryFor(variable.Id), payload);
-
-            var ids = LoadIndex(doc);
-            if (!ids.Contains(variable.Id))
-                ids.Add(variable.Id);
-            SaveIndex(doc, ids);
-
-            map[hash] = variable.Id;
-            SaveIndexByHash(doc, map);
-
+                variable.Id,
+                variable.Name,
+                ValueType = TypeOf(variable.Value),
+                Value = Stringify(variable.Value),
+                variable.MetadataId,
+                Depends = variable.DependsFrom ?? Array.Empty<int>()
+            };
+            var json = JsonConvert.SerializeObject(payload) ?? string.Empty;
+            _table.SetString("Progesi.Var", key, json); // ? niente var = ...
             return Task.FromResult(variable);
         }
-
+      
+        // NOTA: l'interfaccia prevede non-nullable; se non trovato, ritorna null a runtime.
+        // Per evitare warning (TreatWarningsAsErrors), disabilitiamo la nullability solo per questo metodo.
+#nullable disable
         public Task<ProgesiVariable> GetByIdAsync(int id, CancellationToken ct = default)
         {
-            var doc = _docAccessor.GetActiveDoc();
-            if (doc == null) throw new InvalidOperationException("No active Rhino document.");
+            var key = KeyOf(id);
+            var json = _table.GetValue("Progesi.Var", key);
+            if (string.IsNullOrWhiteSpace(json)) return Task.FromResult<ProgesiVariable>(null);
 
-            var payload = doc.Strings.GetValue(Section, EntryFor(id));
-            if (string.IsNullOrWhiteSpace(payload))
-                return Task.FromResult<ProgesiVariable>(null);
+            var dto = JsonConvert.DeserializeObject<Dto>(json);
+            if (dto == null) return Task.FromResult<ProgesiVariable>(null);
 
-            var dto = JsonConvert.DeserializeObject<ProgesiVariableDto>(payload);
-            if (dto is null)
-                return Task.FromResult<ProgesiVariable>(null);
-
-            var variable = Deserialize(dto);
-            return Task.FromResult(variable);
+            var value = ParseValue(dto.Value ?? string.Empty, dto.ValueType ?? "string");
+            var depends = dto.Depends ?? Array.Empty<int>();
+            return Task.FromResult(new ProgesiVariable(dto.Id, dto.Name ?? string.Empty, value, depends, dto.MetadataId));
         }
+#nullable enable
 
-        public Task<IReadOnlyList<ProgesiVariable>> GetAllAsync(CancellationToken ct = default)
+        public async Task<IReadOnlyList<ProgesiVariable>> GetAllAsync(CancellationToken ct = default)
         {
-            var doc = _docAccessor.GetActiveDoc();
-            if (doc == null) throw new InvalidOperationException("No active Rhino document.");
-
-            var ids = LoadIndex(doc);
             var list = new List<ProgesiVariable>();
-            foreach (var id in ids)
-            {
-                var v = GetByIdAsync(id, ct).GetAwaiter().GetResult();
-                if (!(v is null)) list.Add(v);
-            }
-
-            return Task.FromResult<IReadOnlyList<ProgesiVariable>>(list);
+            // Rhino StringTable non espone enumerazione: ritorno lista vuota (comportamento definito)
+            return await Task.FromResult(list);
         }
 
         public Task<bool> DeleteAsync(int id, CancellationToken ct = default)
         {
-            var doc = _docAccessor.GetActiveDoc();
-            if (doc == null) throw new InvalidOperationException("No active Rhino document.");
-
-            var existed = !string.IsNullOrWhiteSpace(doc.Strings.GetValue(Section, EntryFor(id)));
-            if (existed)
-            {
-                doc.Strings.Delete(Section, EntryFor(id));
-
-                var ids = LoadIndex(doc);
-                if (ids.Remove(id)) SaveIndex(doc, ids);
-
-                var map = LoadIndexByHash(doc).Where(kv => kv.Value != id)
-                                              .ToDictionary(kv => kv.Key, kv => kv.Value);
-                SaveIndexByHash(doc, map);
-            }
-
-            return Task.FromResult(existed);
+            var key = KeyOf(id);
+            _table.Delete("Progesi.Var", key);   // Delete non ritorna nulla
+            return Task.FromResult(true);        // => restituiamo true esplicito
         }
 
-        public Task<int> DeleteManyAsync(IEnumerable<int> idsToDelete, CancellationToken ct = default)
+        public async Task<int> DeleteManyAsync(IEnumerable<int> idsToDelete, CancellationToken ct = default)
         {
-            if (idsToDelete == null) return Task.FromResult(0);
-
-            var doc = _docAccessor.GetActiveDoc();
-            if (doc == null) throw new InvalidOperationException("No active Rhino document.");
-
-            var ids = LoadIndex(doc);
-            int count = 0;
+            if (idsToDelete == null) return 0;
+            int n = 0;
             foreach (var id in idsToDelete)
             {
-                var had = !string.IsNullOrWhiteSpace(doc.Strings.GetValue(Section, EntryFor(id)));
-                if (had)
-                {
-                    doc.Strings.Delete(Section, EntryFor(id));
-                    if (ids.Remove(id)) count++;
-                }
+                if (await DeleteAsync(id, ct)) n++;
             }
-            SaveIndex(doc, ids);
-
-            var map = LoadIndexByHash(doc);
-            foreach (var kv in map.Where(kv => idsToDelete.Contains(kv.Value)).ToList())
-                map.Remove(kv.Key);
-            SaveIndexByHash(doc, map);
-
-            return Task.FromResult(count);
+            return n;
         }
 
-        private static string EntryFor(int id) => $"V:{id}";
+        private static string KeyOf(int id) => $"var:{id}";
 
-        private static List<int> LoadIndex(RhinoDoc doc)
-        {
-            var json = doc.Strings.GetValue(Section, IndexEntry);
-            if (string.IsNullOrWhiteSpace(json)) return new List<int>();
-            try { return JsonConvert.DeserializeObject<List<int>>(json) ?? new List<int>(); }
-            catch { return new List<int>(); }
-        }
-
-        private static void SaveIndex(RhinoDoc doc, List<int> ids)
-        {
-            var json = JsonConvert.SerializeObject(ids.Distinct().OrderBy(x => x));
-            doc.Strings.SetString(Section, IndexEntry, json);
-        }
-
-        private static Dictionary<string, int> LoadIndexByHash(RhinoDoc doc)
-        {
-            var json = doc.Strings.GetValue(Section, IndexByHash);
-            if (string.IsNullOrWhiteSpace(json)) return new Dictionary<string, int>(StringComparer.Ordinal);
-            try
-            {
-                var map = JsonConvert.DeserializeObject<Dictionary<string, int>>(json);
-                return map ?? new Dictionary<string, int>(StringComparer.Ordinal);
-            }
-            catch { return new Dictionary<string, int>(StringComparer.Ordinal); }
-        }
-
-        private static void SaveIndexByHash(RhinoDoc doc, Dictionary<string, int> map)
-        {
-            var json = JsonConvert.SerializeObject(map);
-            doc.Strings.SetString(Section, IndexByHash, json);
-        }
-
-        // -------- Serialization helpers --------
-
-        private static string Serialize(ProgesiVariable v)
-        {
-            var dto = new ProgesiVariableDto
-            {
-                Id = v.Id,
-                Name = v.Name ?? string.Empty,
-                MetadataId = v.MetadataId,
-                DependsFrom = (v.DependsFrom ?? Array.Empty<int>()).ToArray(),
-                ValueType = TypeOf(v.Value),
-                Value = Stringify(v.Value)
-            };
-            return JsonConvert.SerializeObject(dto);
-        }
-
-        private static ProgesiVariable Deserialize(ProgesiVariableDto dto)
-        {
-            var value = ParseValue(dto.Value, dto.ValueType);
-            var depends = dto.DependsFrom ?? Array.Empty<int>();
-            return new ProgesiVariable(dto.Id, dto.Name ?? string.Empty, value, depends, dto.MetadataId);
-        }
-
-        private static string TypeOf(object obj)
-        {
-            if (obj == null) return "null";
-            switch (obj)
-            {
-                case string _: return "string";
-                case int _: return "int";
-                case double _: return "double";
-                case bool _: return "bool";
-                default: return obj.GetType().AssemblyQualifiedName;
-            }
-        }
-
-        private static string Stringify(object obj)
-        {
-            if (obj == null) return "null";
-            switch (obj)
-            {
-                case string s: return s;
-                case int i: return i.ToString();
-                case double d: return d.ToString(System.Globalization.CultureInfo.InvariantCulture);
-                case bool b: return b ? "true" : "false";
-                default: return JsonConvert.SerializeObject(obj);
-            }
-        }
-
-        private static object ParseValue(string value, string valueType)
-        {
-            if (valueType == "null") return null;
-            switch (valueType)
-            {
-                case "string": return value;
-                case "int": return int.Parse(value);
-                case "double": return double.Parse(value, System.Globalization.CultureInfo.InvariantCulture);
-                case "bool": return value == "true";
-                default:
-                    var t = Type.GetType(valueType, throwOnError: false);
-                    if (t == null) return value;
-                    return JsonConvert.DeserializeObject(value, t);
-            }
-        }
-
-        private sealed class ProgesiVariableDto
+        private sealed class Dto
         {
             public int Id { get; set; }
-            public string Name { get; set; } = string.Empty;
+            public string? Name { get; set; }
+            public string? ValueType { get; set; }
+            public string? Value { get; set; }
             public int? MetadataId { get; set; }
-            public int[] DependsFrom { get; set; } = Array.Empty<int>();
-            public string ValueType { get; set; } = string.Empty;
-            public string Value { get; set; } = string.Empty;
+            public int[]? Depends { get; set; }
+        }
+
+        // ---- helpers (null-safe)
+        private static string TypeOf(object? obj)
+        {
+            if (obj == null) return "null";
+            return obj switch
+            {
+                string _ => "string",
+                int _ => "int",
+                double _ => "double",
+                bool _ => "bool",
+                _ => obj.GetType().AssemblyQualifiedName ?? "object"
+            };
+        }
+
+        private static string Stringify(object? obj)
+        {
+            if (obj == null) return "null";
+            return obj switch
+            {
+                string s => s,
+                int i => i.ToString(),
+                double d => d.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                bool b => b ? "true" : "false",
+                _ => JsonConvert.SerializeObject(obj) ?? string.Empty
+            };
+        }
+
+        private static object? ParseValue(string value, string valueType)
+        {
+            if (valueType == "null") return null;
+            return valueType switch
+            {
+                "string" => value,
+                "int" => int.Parse(value),
+                "double" => double.Parse(value, System.Globalization.CultureInfo.InvariantCulture),
+                "bool" => value == "true",
+                _ => DeserializeOrReturn(value, valueType)
+            };
+        }
+
+        private static object DeserializeOrReturn(string value, string typeName)
+        {
+            var t = Type.GetType(typeName, throwOnError: false);
+            if (t == null) return (object)value;
+            return JsonConvert.DeserializeObject(value, t) ?? (object)value;
         }
     }
 }

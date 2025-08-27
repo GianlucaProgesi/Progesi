@@ -79,8 +79,8 @@ namespace ProgesiRepositories.Sqlite
             alter.ExecuteNonQuery();
         }
 
-        // Helpers per Value (Variable)
-        protected static string TypeOf(object obj)
+        // -------- Value helpers (null-safe)
+        protected static string TypeOf(object? obj)
         {
             if (obj == null) return "null";
             return obj switch
@@ -89,11 +89,11 @@ namespace ProgesiRepositories.Sqlite
                 int _ => "int",
                 double _ => "double",
                 bool _ => "bool",
-                _ => obj.GetType().AssemblyQualifiedName
+                _ => obj.GetType().AssemblyQualifiedName ?? "object"
             };
         }
 
-        protected static string Stringify(object obj)
+        protected static string Stringify(object? obj)
         {
             if (obj == null) return "null";
             return obj switch
@@ -102,11 +102,11 @@ namespace ProgesiRepositories.Sqlite
                 int i => i.ToString(),
                 double d => d.ToString(CultureInfo.InvariantCulture),
                 bool b => b ? "true" : "false",
-                _ => JsonConvert.SerializeObject(obj)
+                _ => JsonConvert.SerializeObject(obj) ?? string.Empty
             };
         }
 
-        protected static object ParseValue(string value, string valueType)
+        protected static object? ParseValue(string value, string valueType)
         {
             if (valueType == "null") return null;
             return valueType switch
@@ -122,8 +122,8 @@ namespace ProgesiRepositories.Sqlite
         private static object DeserializeOrReturn(string value, string typeName)
         {
             var t = Type.GetType(typeName, throwOnError: false);
-            if (t == null) return value;
-            return JsonConvert.DeserializeObject(value, t);
+            if (t == null) return (object)value;
+            return JsonConvert.DeserializeObject(value, t) ?? (object)value;
         }
     }
 }
