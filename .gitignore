@@ -1,25 +1,44 @@
-# Visual Studio
-.vs/
-*.user
-*.suo
-
-# Build output
+# Build artefacts
 bin/
 obj/
 [Bb]uild/
 [Ll]og/
+*.user
+*.suo
+*.sln.docstates
+*.vcxproj.user
+*.rsuser
+.vs/
 
 # NuGet
 packages/
 *.nupkg
 *.snupkg
+.nuget/
+
+# Rider / VS Code
+.idea/
+.vscode/
 
 # Test results
 TestResults/
 *.trx
+*.coverage
+*.coveragexml
 
-# Others
-*.db
-*.sqlite
-*.DS_Store
+# OS
+.DS_Store
 Thumbs.db
+
+# Local settings
+*.local.json
+
+# Grasshopper specific (se presenti)
+*.gha
+*.ghuser
+*.gh
+*.ghx
+
+# SQLite dbs locali (se non usati come sample nel repo)
+*.sqlite
+*.db
