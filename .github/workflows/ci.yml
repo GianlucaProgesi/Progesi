@@ -1,20 +1,17 @@
 name: CI
 on:
-  push: { branches: ["**"] }
-  pull_request: { branches: ["**"] }
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
 
 jobs:
   build-test:
     runs-on: windows-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup NuGet
-        uses: NuGet/setup-nuget@v2
-
-      - name: Setup MSBuild
-        uses: microsoft/setup-msbuild@v2
+      - uses: actions/checkout@v4
+      - uses: NuGet/setup-nuget@v2
+      - uses: microsoft/setup-msbuild@v2
 
       - name: Restore
         run: nuget restore Progesi.sln
@@ -22,25 +19,8 @@ jobs:
       - name: Build (Debug)
         run: msbuild Progesi.sln /p:Configuration=Debug /m
 
-      # --- usa VSTest per i progetti .NET Framework ---
-      - name: Locate VSTest
-        shell: pwsh
-        run: |
-          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-          $path1 = & $vswhere -latest -requires Microsoft.Component.TestTools.BuildTools -find **\Common7\IDE\Extensions\TestPlatform\vstest.console.exe
-          $path2 = & $vswhere -latest -find **\Common7\IDE\CommonExtensions\Microsoft\TestWindow\vstest.console.exe
-          $vstest = if ($path1) { $path1 } elseif ($path2) { $path2 } else { "" }
-          if (-not (Test-Path $vstest)) { Write-Error "vstest.console.exe not found"; exit 1 }
-          "VSTEST_PATH=$vstest" | Out-File -FilePath $env:GITHUB_ENV -Append
-          Write-Host "vstest.console: $vstest"
-
-      - name: Run tests (.NET Framework) with VSTest
-        shell: pwsh
-        run: |
-          $dlls = Get-ChildItem -Path tests -Recurse -Filter *.Tests.dll | Where-Object { $_.FullName -match '\\bin\\Debug\\' }
-          if (-not $dlls) { Write-Error "No test assemblies found under tests/**/bin/Debug"; exit 1 }
-          & "$env:VSTEST_PATH" $dlls.FullName /Logger:trx
-        continue-on-error: false
+      - name: Test
+        run: dotnet test Progesi.sln --configuration Debug --no-build --logger "trx;LogFileName=test-results.trx"
 
       - name: Publish test results
         if: always()
