@@ -1,0 +1,23 @@
+name: CI
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  build-test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: NuGet/setup-nuget@v2
+      - uses: microsoft/setup-msbuild@v2
+
+      - name: Restore
+        run: nuget restore Progesi.sln
+
+      - name: Build (Debug)
+        run: msbuild Progesi.sln /p:Configuration=Debug /m
+
+      - name: Test
+        run: dotnet test Progesi.sln --configuration Debug --no-build --logger "trx;LogFileName=test-results.trx"
