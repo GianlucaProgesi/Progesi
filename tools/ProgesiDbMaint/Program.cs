@@ -1,6 +1,6 @@
 #nullable enable
 using Microsoft.Data.Sqlite;
-using SQLitePCL; // per Batteries_V2.Init()
+using SQLitePCL; // Batteries_V2.Init()
 using System;
 using System.Globalization;
 using System.IO;
@@ -56,6 +56,19 @@ static class Program
                     Dedup(db, args[2]);
                     break;
 
+                case "migrate":
+                    Migrate(db);
+                    break;
+
+                case "backup":
+                    if (args.Length < 3) { Console.WriteLine("Usage: backup <dbPath> <destPath>"); return 2; }
+                    Backup(db, args[2]);
+                    break;
+
+                case "analyze":
+                    Analyze(db);
+                    break;
+
                 default:
                     PrintHelp(); return 2;
             }
@@ -71,20 +84,17 @@ static class Program
     static void PrintHelp()
     {
         Console.WriteLine("Usage:");
-        Console.WriteLine("  init <dbPath>             # crea file DB e schema standard (Metadata/Variables)");
-        Console.WriteLine("  seed-demo <dbPath>        # inserisce dati di esempio (idempotente)");
+        Console.WriteLine("  init <dbPath>              # crea file DB e schema (Metadata/Variables)");
+        Console.WriteLine("  seed-demo <dbPath>         # inserisce dati di esempio (idempotente)");
         Console.WriteLine("  stats <dbPath>");
         Console.WriteLine("  integrity <dbPath>");
         Console.WriteLine("  vacuum <dbPath>");
         Console.WriteLine("  checkpoint <dbPath>");
         Console.WriteLine("  dedup <dbPath> <table>");
+        Console.WriteLine("  migrate <dbPath>           # applica migrazioni schema (__SchemaInfo)");
+        Console.WriteLine("  backup <dbPath> <destPath> # backup consistente (VACUUM INTO)");
+        Console.WriteLine("  analyze <dbPath>           # ANALYZE + PRAGMA optimize");
         Console.WriteLine();
-        Console.WriteLine("Examples:");
-        Console.WriteLine(@"  init C:\data\progesi.sqlite");
-        Console.WriteLine(@"  seed-demo C:\data\progesi.sqlite");
-        Console.WriteLine(@"  stats C:\data\progesi.sqlite");
-        Console.WriteLine(@"  dedup C:\data\progesi.sqlite Metadata");
-        Console.WriteLine(@"  dedup C:\data\progesi.sqlite Variables");
     }
 
     static SqliteConnection Open(string path, bool createIfMissing = false)
@@ -163,6 +173,22 @@ SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM __SchemaInfo);";
         }
     }
 
+    static int GetSchemaVersion(SqliteConnection c)
+    {
+        using var cmd = c.CreateCommand();
+        cmd.CommandText = "SELECT Version FROM __SchemaInfo LIMIT 1;";
+        var v = cmd.ExecuteScalar();
+        return v is null ? 1 : Convert.ToInt32(v, CultureInfo.InvariantCulture);
+    }
+
+    static void SetSchemaVersion(SqliteConnection c, int v)
+    {
+        using var cmd = c.CreateCommand();
+        cmd.CommandText = "UPDATE __SchemaInfo SET Version=$v;";
+        cmd.Parameters.AddWithValue("$v", v);
+        cmd.ExecuteNonQuery();
+    }
+
     static string NowIso() => DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture);
 
     static string Sha256Hex(string s)
@@ -197,7 +223,6 @@ SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM __SchemaInfo);";
 
     static long UpsertVariable(SqliteConnection c, string name, string valueType, string value, long? metadataId, string dependsJson)
     {
-        // calcolo hash deterministico per dedup
         var md = metadataId.HasValue ? metadataId.Value.ToString(CultureInfo.InvariantCulture) : "";
         var content = $"{name}|{valueType}|{value}|{dependsJson}|{md}";
         var h = Sha256Hex(content);
@@ -246,7 +271,6 @@ VALUES($n,$t,$v,$m,$d,$h);";
 
         var lm = NowIso();
 
-        // due metadata "demo" con snip minimo (content base64 "Hello Progesi!")
         var json1 =
             "{\"CreatedBy\":\"seed\",\"AdditionalInfo\":\"demo A\",\"References\":[\"https://example.com/A\"],\"Snips\":[{\"Id\":\"" +
             Guid.NewGuid().ToString() + "\",\"Caption\":\"cap A\",\"MimeType\":\"text/plain\",\"Content\":\"SGVsbG8gUHJvZ2VzaSE=\",\"Source\":null}]}";
@@ -258,7 +282,6 @@ VALUES($n,$t,$v,$m,$d,$h);";
         var m1 = UpsertMetadata(c, json1, lm);
         var m2 = UpsertMetadata(c, json2, lm);
 
-        // tre variables
         var v1 = UpsertVariable(c, "alpha", "int", "1", m1, "[]");
         var v2 = UpsertVariable(c, "beta", "string", "hello", m1, "[ " + v1.ToString(CultureInfo.InvariantCulture) + " ]");
         var v3 = UpsertVariable(c, "gamma", "double", "3.14", m2, "[]");
@@ -342,5 +365,69 @@ VALUES($n,$t,$v,$m,$d,$h);";
             var n = del.ExecuteNonQuery();
             Console.WriteLine($"Dedup on '{table}': removed {n} rows.");
         }
+    }
+
+    static void Migrate(string dbPath)
+    {
+        using var c = Open(dbPath, createIfMissing: false);
+        EnsureSchema(c);
+
+        var before = GetSchemaVersion(c);
+        var v = before;
+
+        using (var tx = c.BeginTransaction())
+        {
+            // v1 -> v2: indici operativi aggiuntivi
+            if (v < 2)
+            {
+                using (var cmd = c.CreateCommand())
+                {
+                    // index non-unique utili per query frequenti
+                    cmd.CommandText = @"
+CREATE INDEX IF NOT EXISTS IX_Variables_Name ON Variables(Name);
+CREATE INDEX IF NOT EXISTS IX_Variables_MetadataId ON Variables(MetadataId) WHERE MetadataId IS NOT NULL;
+CREATE INDEX IF NOT EXISTS IX_Metadata_LastModified ON Metadata(LastModified);";
+                    cmd.ExecuteNonQuery();
+                }
+                v = 2;
+                SetSchemaVersion(c, v);
+            }
+
+            tx.Commit();
+        }
+
+        Console.WriteLine($"Migrate: {before} -> {v}");
+        Stats(dbPath);
+    }
+
+    static void Backup(string dbPath, string destPath)
+    {
+        var destDir = Path.GetDirectoryName(destPath);
+        if (!string.IsNullOrEmpty(destDir) && !Directory.Exists(destDir))
+            Directory.CreateDirectory(destDir!);
+
+        using var c = Open(dbPath);
+        using var cmd = c.CreateCommand();
+        cmd.CommandText = "VACUUM INTO $out;";
+        cmd.Parameters.AddWithValue("$out", destPath);
+        cmd.ExecuteNonQuery();
+
+        Console.WriteLine($"Backup written to: {destPath}  (size: {FileSize(destPath):N0} bytes)");
+    }
+
+    static void Analyze(string dbPath)
+    {
+        using var c = Open(dbPath);
+        using (var cmd = c.CreateCommand())
+        {
+            cmd.CommandText = "ANALYZE;";
+            cmd.ExecuteNonQuery();
+        }
+        using (var cmd = c.CreateCommand())
+        {
+            cmd.CommandText = "PRAGMA optimize;";
+            cmd.ExecuteNonQuery();
+        }
+        Console.WriteLine("ANALYZE + PRAGMA optimize done.");
     }
 }
