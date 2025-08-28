@@ -42,3 +42,8 @@ Thumbs.db
 # SQLite dbs locali (se non usati come sample nel repo)
 *.sqlite
 *.db
+
+# Coverage artifacts
+CoverageReport/
+TestResults/
+
