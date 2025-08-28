@@ -1,30 +1,66 @@
 name: CI
+
 on:
+  workflow_dispatch: {}        # Avvio manuale dalla tab Actions
   push:
-    branches: [ "main" ]
+    branches: ["**"]           # Esegue su ogni branch (va bene per feature)
   pull_request:
-    branches: [ "main" ]
+    branches: ["**"]           # Esegue su ogni PR
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true     # Cancella i run precedenti sulla stessa branch/PR
 
 jobs:
   build-test:
+    name: build-test (${{ matrix.config }})
     runs-on: windows-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        config: [Debug, Release]
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: NuGet/setup-nuget@v2
-      - uses: microsoft/setup-msbuild@v2
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup NuGet
+        uses: NuGet/setup-nuget@v2
+
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      # Cache per progetti con packages.config (cartella 'packages' alla root)
+      - name: Cache NuGet (packages/)
+        uses: actions/cache@v4
+        with:
+          path: packages
+          key: ${{ runner.os }}-nuget-packagesconfig-${{ hashFiles('**/packages.config') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-packagesconfig-
+
+      # Cache per progetti con PackageReference (~/.nuget/packages)
+      - name: Cache NuGet (global ~/.nuget/packages)
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-packageref-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-packageref-
 
       - name: Restore
         run: nuget restore Progesi.sln
 
-      - name: Build (Debug)
-        run: msbuild Progesi.sln /p:Configuration=Debug /m
+      - name: Build (${{ matrix.config }})
+        run: msbuild Progesi.sln /p:Configuration=${{ matrix.config }} /m
 
-      - name: Test
-        run: dotnet test Progesi.sln --configuration Debug --no-build --logger "trx;LogFileName=test-results.trx"
+      - name: Test (${{ matrix.config }})
+        run: dotnet test Progesi.sln --configuration ${{ matrix.config }} --no-build --logger "trx;LogFileName=test-results-${{ matrix.config }}.trx"
 
       - name: Publish test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-results
-          path: '**/*.trx'
+          name: test-results-${{ matrix.config }}
+          path: '**/test-results-*.trx'
