@@ -14,7 +14,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("ProgesiRepositories.Sqlite")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+bd5cd977c50dd52a108803a3e4aa66f76a70989a")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+34e57c83381b77d080ac7af3f6b6c38370dce0f7")]
 [assembly: System.Reflection.AssemblyProductAttribute("ProgesiRepositories.Sqlite")]
 [assembly: System.Reflection.AssemblyTitleAttribute("ProgesiRepositories.Sqlite")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

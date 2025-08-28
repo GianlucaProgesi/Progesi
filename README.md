@@ -121,6 +121,38 @@ Grasshopper: componenti “end-user” oltre agli smoke tests.
 
 Documentazione API (XML doc + README per progetto).
 
+## Operations & Manutenzione
+
+### Backup del DB
+- Il DB è un singolo file SQLite (`.sqlite`). Per il backup:
+  - **a caldo**: attiva il WAL (già attivo) e copia il file `.sqlite` + `-wal` + `-shm` se presenti.
+  - **a freddo**: fermare i processi che scrivono, poi copiare il `.sqlite`.
+
+### Compattazione (VACUUM)
+- Col tempo il file può crescere. Per compattare:
+  - Esegui `VACUUM;` (puoi farlo con una utility SQLite o con un tool).
+  - Eseguire periodicamente (es. mensile) se ci sono molti delete/update.
+
+### Concorrenza
+- È abilitato il **WAL** e un `busy_timeout=5000ms`.
+- In caso di lock intensi, il repository applica **retry con backoff** fino a 1s tra i tentativi.
+
+### Deduplica & integrità
+- L’unicità è garantita da un indice `UNIQUE(ContentHash)` e da un “dedup di recupero” applicato all’avvio.
+- In presenza di DB legacy, all’avvio viene creato `__SchemaInfo` e ripuliti i duplicati mantenendo l’`Id` più basso.
+
+### Logging
+- Il repository supporta iniezione di logger:
+  - `TraceLogger` per vedere i messaggi nella finestra *Output* di Visual Studio.
+  - `FileLogger` per un file semplice.
+  - `RollingFileLogger` (consigliato in prod): rotazione per dimensione.
+- Esempio:
+  ```csharp
+  var log = new RollingFileLogger(@"C:\Logs\Progesi\sqlite.log", maxBytes: 10*1024*1024, maxFiles: 7);
+  var repo = new SqliteMetadataRepository(dbPath, resetSchema: false, logger: log);
+
+
+
 Note Rhino/Grasshopper
 
 Il progetto ProgesiGrasshopperAssembly compila contro Rhino/Grasshopper installati sul sistema.
@@ -130,3 +162,4 @@ Licenza
 
 Inserisci qui la licenza del progetto (es. MIT) oppure specifica che il codice è proprietario.
 Esempio MIT: crea un file LICENSE con il testo e cita qui “MIT License”.
+ 

@@ -1,11 +1,10 @@
 {
   "version": 2,
-  "dgSpecHash": "K+PLFAiz2TQ=",
+  "dgSpecHash": "IZCwI3z/Hw8=",
   "success": true,
   "projectFilePath": "C:\\Users\\gianl\\source\\repos\\Progesi\\src\\ProgesiRepositories.Sqlite\\ProgesiRepositories.Sqlite.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\gianl\\.nuget\\packages\\ardalis.guardclauses\\5.0.0\\ardalis.guardclauses.5.0.0.nupkg.sha512",
-    "C:\\Users\\gianl\\.nuget\\packages\\microsoft.codeanalysis.netanalyzers\\8.0.0\\microsoft.codeanalysis.netanalyzers.8.0.0.nupkg.sha512",
     "C:\\Users\\gianl\\.nuget\\packages\\microsoft.data.sqlite\\7.0.20\\microsoft.data.sqlite.7.0.20.nupkg.sha512",
     "C:\\Users\\gianl\\.nuget\\packages\\microsoft.data.sqlite.core\\7.0.20\\microsoft.data.sqlite.core.7.0.20.nupkg.sha512",
     "C:\\Users\\gianl\\.nuget\\packages\\newtonsoft.json\\13.0.3\\newtonsoft.json.13.0.3.nupkg.sha512",

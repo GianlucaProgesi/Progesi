@@ -6,8 +6,6 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
-using System.Security.Cryptography;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -15,7 +13,16 @@ namespace ProgesiRepositories.Sqlite
 {
     public sealed class SqliteMetadataRepository : SqliteRepositoryBase, IMetadataRepository
     {
-        public SqliteMetadataRepository(string dbPath, bool resetSchema = false) : base(dbPath, resetSchema)
+        // Costruttore esistente (senza logger)
+        public SqliteMetadataRepository(string dbPath, bool resetSchema = false)
+            : base(dbPath, resetSchema)
+        {
+            EnsureSchema();
+        }
+
+        // ?? NUOVO: costruttore pubblico che accetta un logger
+        public SqliteMetadataRepository(string dbPath, bool resetSchema, IProgesiLogger logger)
+            : base(dbPath, resetSchema, logger)
         {
             EnsureSchema();
         }
@@ -34,9 +41,9 @@ CREATE TABLE Metadata (
     Json         TEXT NOT NULL,
     LastModified TEXT NOT NULL,
     ContentHash  TEXT NOT NULL
-);
-CREATE UNIQUE INDEX IF NOT EXISTS IX_Metadata_ContentHash ON Metadata(ContentHash);";
+);";
                     cmd.ExecuteNonQuery();
+                    _log.Info("[SQLite] Recreated table 'Metadata' due to resetSchema=true.");
                 }
                 else
                 {
@@ -46,153 +53,187 @@ CREATE TABLE IF NOT EXISTS Metadata (
     Json         TEXT NOT NULL,
     LastModified TEXT NOT NULL,
     ContentHash  TEXT NOT NULL
-);
-CREATE UNIQUE INDEX IF NOT EXISTS IX_Metadata_ContentHash ON Metadata(ContentHash);";
+);";
                     cmd.ExecuteNonQuery();
                 }
             }
 
-            // Migrazione idempotente su DB già esistenti
-            EnsureContentHash(conn: OpenConnection(), table: "Metadata");
+            EnsureSchemaInfoAndCleanup(conn, "Metadata");
         }
 
         // ========================= CRUD =========================
 
         public async Task<ProgesiMetadata?> GetAsync(int id, CancellationToken ct = default)
         {
-            using var conn = OpenConnection();
-            using var cmd = conn.CreateCommand();
-            cmd.CommandText = "SELECT Json, LastModified FROM Metadata WHERE Id=$id;";
-            cmd.Parameters.AddWithValue("$id", id);
+            return await WithRetryAsync(async () =>
+            {
+                using var conn = OpenConnection();
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = "SELECT Json, LastModified FROM Metadata WHERE Id=$id;";
+                cmd.Parameters.AddWithValue("$id", id);
 
-            using var r = await cmd.ExecuteReaderAsync(ct);
-            if (!await r.ReadAsync(ct)) return null;
+                using var r = await cmd.ExecuteReaderAsync(ct);
+                if (!await r.ReadAsync(ct)) return null;
 
-            var json = r.GetString(0);
-            var lastModifiedStr = r.GetString(1);
+                var json = r.GetString(0);
+                var lastModifiedStr = r.GetString(1);
 
-            var dto = JsonConvert.DeserializeObject<ProgesiMetadataDto>(json);
-            if (dto is null) return null;
+                var dto = JsonConvert.DeserializeObject<ProgesiMetadataDto>(json);
+                if (dto is null) return null;
 
-            var lastModified = DateTime.Parse(lastModifiedStr, null, DateTimeStyles.RoundtripKind);
+                var lastModified = DateTime.Parse(lastModifiedStr, null, DateTimeStyles.RoundtripKind);
 
-            var refs = dto.References?.Select(s => new Uri(s, UriKind.RelativeOrAbsolute));
-            var snips = dto.Snips?.Select(s => ProgesiSnip.Create(
-                Convert.FromBase64String(s.ContentBase64 ?? string.Empty),
-                s.MimeType ?? "application/octet-stream",
-                s.Caption,
-                string.IsNullOrWhiteSpace(s.Source) ? null : new Uri(s.Source, UriKind.RelativeOrAbsolute)));
+                var refs = dto.References?.Select(s => new Uri(s, UriKind.RelativeOrAbsolute));
+                var snips = dto.Snips?.Select(s => ProgesiSnip.Create(
+                    Convert.FromBase64String(s.ContentBase64 ?? string.Empty),
+                    s.MimeType ?? "application/octet-stream",
+                    s.Caption,
+                    string.IsNullOrWhiteSpace(s.Source) ? null : new Uri(s.Source, UriKind.RelativeOrAbsolute)));
 
-            var meta = ProgesiMetadata.Create(
-                dto.CreatedBy ?? string.Empty,
-                dto.AdditionalInfo,
-                refs,
-                snips,
-                lastModified, // ? dalla colonna DB
-                id            // ? Id del record DB
-            );
+                var meta = ProgesiMetadata.Create(
+                    dto.CreatedBy ?? string.Empty,
+                    dto.AdditionalInfo,
+                    refs,
+                    snips,
+                    lastModified,
+                    id
+                );
 
-            return meta;
+                return meta;
+            }, ct: ct);
         }
 
         public async Task UpsertAsync(ProgesiMetadata metadata, CancellationToken ct = default)
         {
             if (metadata is null) throw new ArgumentNullException(nameof(metadata));
 
-            // Calcola l’hash di contenuto ESATTAMENTE come il domain
-            var contentHash = ProgesiHash.Compute(metadata);
-
-            // Serializza il DTO “reale” (non canonico): il round-trip deve riprodurre il contenuto
-            var dto = ProgesiMetadataDto.FromDomain(metadata);
-            var json = JsonConvert.SerializeObject(dto);
-            var lastMod = metadata.LastModified.ToUniversalTime().ToString("o");
-
-            using var conn = OpenConnection();
-            using var tx = conn.BeginTransaction();
-
-            // 1) Esiste già un record con lo stesso contenuto?
-            int existingId = await GetIdByHashAsync(conn, contentHash, ct);
-            if (existingId > 0)
+            await WithRetryAsync(async () =>
             {
-                // Aggiorna solo LastModified del record “unico”
-                using (var upd = conn.CreateCommand())
+                var contentHash = ProgesiHash.Compute(metadata);
+
+                var dto = ProgesiMetadataDto.FromDomain(metadata);
+                var json = JsonConvert.SerializeObject(dto);
+                var lastMod = metadata.LastModified.ToUniversalTime().ToString("o");
+
+                using var conn = OpenConnection();
+                using var tx = conn.BeginTransaction();
+
+                int existingId = await GetIdByHashAsync(conn, contentHash, ct);
+                if (existingId > 0)
                 {
-                    upd.Transaction = tx;
-                    upd.CommandText = "UPDATE Metadata SET LastModified=$lm WHERE Id=$id;";
-                    upd.Parameters.AddWithValue("$lm", lastMod);
-                    upd.Parameters.AddWithValue("$id", existingId);
-                    await upd.ExecuteNonQueryAsync(ct);
+                    using (var upd = conn.CreateCommand())
+                    {
+                        upd.Transaction = tx;
+                        upd.CommandText = "UPDATE Metadata SET LastModified=$lm WHERE Id=$id;";
+                        upd.Parameters.AddWithValue("$lm", lastMod);
+                        upd.Parameters.AddWithValue("$id", existingId);
+                        await upd.ExecuteNonQueryAsync(ct);
+                    }
+
+                    tx.Commit();
+                    _log.Debug($"[SQLite] Upsert dedup: reused Id={existingId} for ContentHash={contentHash}.");
+                    return;
                 }
 
-                // Non creare un secondo record con Id diverso ? test dedup “got2 == null”
-                tx.Commit();
-                return;
-            }
-
-            // 2) Non esiste ancora: inserisci
-            using (var ins = conn.CreateCommand())
-            {
-                ins.Transaction = tx;
-
-                if (metadata.Id > 0)
+                using (var ins = conn.CreateCommand())
                 {
-                    // Round-trip: quando l’Id è specificato e l’hash è nuovo, creiamo con quell’Id
-                    ins.CommandText = @"
+                    ins.Transaction = tx;
+
+                    if (metadata.Id > 0)
+                    {
+                        ins.CommandText = @"
 INSERT OR IGNORE INTO Metadata (Id, Json, LastModified, ContentHash)
 VALUES ($id, $json, $lm, $h);";
-                    ins.Parameters.AddWithValue("$id", metadata.Id);
-                }
-                else
-                {
-                    // Senza Id, lasciamo a SQLite l’autoincremento
-                    ins.CommandText = @"
+                        ins.Parameters.AddWithValue("$id", metadata.Id);
+                    }
+                    else
+                    {
+                        ins.CommandText = @"
 INSERT OR IGNORE INTO Metadata (Json, LastModified, ContentHash)
 VALUES ($json, $lm, $h);";
+                    }
+
+                    ins.Parameters.AddWithValue("$json", json);
+                    ins.Parameters.AddWithValue("$lm", lastMod);
+                    ins.Parameters.AddWithValue("$h", contentHash);
+
+                    var n = await ins.ExecuteNonQueryAsync(ct);
+                    tx.Commit();
+
+                    _log.Debug($"[SQLite] Upsert insert: ContentHash={contentHash}, rows affected={n}, Id={(metadata.Id > 0 ? metadata.Id : 0)}.");
+                }
+            }, ct: ct);
+        }
+
+        /// <summary>Come UpsertAsync, ma restituisce l'Id del record risultante (unico per ContentHash).</summary>
+        public async Task<int> UpsertAndGetIdAsync(ProgesiMetadata metadata, CancellationToken ct = default)
+        {
+            if (metadata is null) throw new ArgumentNullException(nameof(metadata));
+
+            return await WithRetryAsync(async () =>
+            {
+                var contentHash = ProgesiHash.Compute(metadata);
+
+                using (var conn0 = OpenConnection())
+                {
+                    var existed = await GetIdByHashAsync(conn0, contentHash, ct);
+                    if (existed > 0)
+                    {
+                        _log.Debug($"[SQLite] UpsertAndGetId: content already exists with Id={existed}.");
+                        return existed;
+                    }
                 }
 
-                ins.Parameters.AddWithValue("$json", json);
-                ins.Parameters.AddWithValue("$lm", lastMod);
-                ins.Parameters.AddWithValue("$h", contentHash);
+                await UpsertAsync(metadata, ct);
 
-                await ins.ExecuteNonQueryAsync(ct);
-            }
-
-            // (In caso di race parallela, se un altro writer ha inserito prima, l’INSERT OR IGNORE viene ignorata)
-            tx.Commit();
+                using var conn = OpenConnection();
+                var id = await GetIdByHashAsync(conn, contentHash, ct);
+                if (id <= 0) throw new InvalidOperationException("UpsertAndGetIdAsync: impossibile ricavare l'Id.");
+                _log.Debug($"[SQLite] UpsertAndGetId: resolved Id={id} for ContentHash={contentHash}.");
+                return id;
+            }, ct: ct);
         }
 
         public async Task<bool> DeleteAsync(int id, CancellationToken ct = default)
         {
-            using var conn = OpenConnection();
-            using var cmd = conn.CreateCommand();
-            cmd.CommandText = "DELETE FROM Metadata WHERE Id=$id;";
-            cmd.Parameters.AddWithValue("$id", id);
-            var n = await cmd.ExecuteNonQueryAsync(ct);
-            return n > 0;
+            return await WithRetryAsync(async () =>
+            {
+                using var conn = OpenConnection();
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = "DELETE FROM Metadata WHERE Id=$id;";
+                cmd.Parameters.AddWithValue("$id", id);
+                var n = await cmd.ExecuteNonQueryAsync(ct);
+                var ok = n > 0;
+                _log.Debug($"[SQLite] Delete Id={id}: {(ok ? "deleted" : "not found")}.");
+                return ok;
+            }, ct: ct);
         }
 
         public async Task<IReadOnlyList<ProgesiMetadata>> ListAsync(int skip = 0, int take = 100, CancellationToken ct = default)
         {
-            var list = new List<ProgesiMetadata>();
-            using var conn = OpenConnection();
-
-            var ids = new List<int>();
-            using (var cmd = conn.CreateCommand())
+            return await WithRetryAsync(async () =>
             {
-                cmd.CommandText = "SELECT Id FROM Metadata ORDER BY Id LIMIT $take OFFSET $skip;";
-                cmd.Parameters.AddWithValue("$take", take);
-                cmd.Parameters.AddWithValue("$skip", skip);
-                using var r = await cmd.ExecuteReaderAsync(ct);
-                while (await r.ReadAsync(ct)) ids.Add(r.GetInt32(0));
-            }
+                var list = new List<ProgesiMetadata>();
+                using var conn = OpenConnection();
 
-            foreach (var id in ids)
-            {
-                var m = await GetAsync(id, ct);
-                if (m != null) list.Add(m);
-            }
+                var ids = new List<int>();
+                using (var cmd = conn.CreateCommand())
+                {
+                    cmd.CommandText = "SELECT Id FROM Metadata ORDER BY Id LIMIT $take OFFSET $skip;";
+                    cmd.Parameters.AddWithValue("$take", take);
+                    cmd.Parameters.AddWithValue("$skip", skip);
+                    using var r = await cmd.ExecuteReaderAsync(ct);
+                    while (await r.ReadAsync(ct)) ids.Add(r.GetInt32(0));
+                }
 
-            return list;
+                foreach (var id in ids)
+                {
+                    var m = await GetAsync(id, ct);
+                    if (m != null) list.Add(m);
+                }
+
+                return (IReadOnlyList<ProgesiMetadata>)list;
+            }, ct: ct);
         }
 
         // ====================== Helpers ======================
