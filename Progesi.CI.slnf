@@ -1,0 +1,13 @@
+{
+  "solution": {
+    "path": "Progesi.sln",
+    "projects": [
+      "src\\ProgesiCore\\ProgesiCore.csproj",
+      "src\\ProgesiRepositories.InMemory\\ProgesiRepositories.InMemory.csproj",
+      "src\\ProgesiRepositories.Sqlite\\ProgesiRepositories.Sqlite.csproj",
+      "tests\\ProgesiCore.Tests\\ProgesiCore.Tests.csproj",
+      "tests\\ProgesiRepositories.Sqlite.Tests\\ProgesiRepositories.Sqlite.Tests.csproj",
+      "tools\\ProgesiDbMaint\\ProgesiDbMaint.csproj"
+    ]
+  }
+}
