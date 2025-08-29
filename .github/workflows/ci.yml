@@ -1,11 +1,22 @@
-name: CI
+﻿name: CI
 
 on:
   workflow_dispatch:
+    inputs:
+      run_tests:
+        description: "Run tests (true/false)"
+        required: false
+        default: "true"
+      collect_coverage:
+        description: "Collect coverage (true/false)"
+        required: false
+        default: "true"
   push:
     branches: [ main ]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
   pull_request:
-
 jobs:
   build-test:
     runs-on: windows-latest
@@ -69,3 +80,4 @@ jobs:
           path: |
             **/TestResults/**/*.trx
             **/TestResults/*/coverage.cobertura.xml
+
