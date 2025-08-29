@@ -5,7 +5,7 @@ on:
     branches: ["**"]
   pull_request:
     branches: ["**"]
-
+  workflow_dispatch: {}   # <— aggiungi questa riga se manca
 jobs:
   build-test:
     runs-on: windows-latest
