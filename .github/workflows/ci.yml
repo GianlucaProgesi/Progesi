@@ -1,4 +1,4 @@
-﻿name: CI (manual)
+name: CI (manual)
 
 on:
   workflow_dispatch:
@@ -41,7 +41,6 @@ jobs:
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/packages.lock.json') }}
           restore-keys: ${{ runner.os }}-nuget-
 
-      # ------------------ TARGET SELECTION ------------------
       - name: Choose build target (prefer .slnf, then .sln)
         shell: pwsh
         run: |
@@ -58,7 +57,6 @@ jobs:
             Write-Host 'No .slnf/.sln found -> discovery fallback'
           }
 
-      # ------------------ SOLUTION PATH ------------------
       - name: Restore (solution)
         if: ${{ env.CI_BUILD_TARGET != '' }}
         run: dotnet restore "${{ env.CI_BUILD_TARGET }}"
@@ -78,9 +76,8 @@ jobs:
             $extraArgs += '--'
             $extraArgs += 'DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura'
           }
-          dotnet test "${{ env.CI_BUILD_TARGET }}" -c Release --no-build --logger "trx;LogFileName=testresults.trx" $extraArgs
+          dotnet test "${{ env.CI_BUILD_TARGET }}" -c Release --no-build --results-directory TestResults --logger "trx;LogFileName=testresults.trx" $extraArgs
 
-      # ------------------ DISCOVERY FALLBACK ------------------
       - name: Discover SDK-style projects (exclude Rhino/Grasshopper)
         if: ${{ env.CI_BUILD_TARGET == '' }}
         shell: pwsh
@@ -120,17 +117,33 @@ jobs:
             $extraArgs += 'DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura'
           }
           Get-Content buildlist.txt | Where-Object { $_ -match 'Test|\.Tests\\' } | ForEach-Object {
-            dotnet test $_ -c Release --no-build --logger "trx;LogFileName=testresults.trx" $extraArgs
+            dotnet test $_ -c Release --no-build --results-directory TestResults --logger "trx;LogFileName=testresults.trx" $extraArgs
           }
 
-      # ------------------ COVERAGE REPORT ------------------
-      - name: Generate HTML coverage report
+      - name: Locate test & coverage files (debug)
+        if: always()
+        shell: pwsh
+        run: |
+          Write-Host "=== Listing TestResults ==="
+          if (Test-Path TestResults) {
+            Get-ChildItem -Recurse TestResults | ForEach-Object { $_.FullName }
+          } else {
+            Write-Host "No TestResults directory."
+          }
+
+      - name: Generate HTML coverage report (skip if none)
         if: ${{ inputs.collect_coverage == 'true' && inputs.run_tests == 'true' }}
         shell: pwsh
         run: |
-          dotnet tool install -g dotnet-reportgenerator-globaltool
+          $cov = Get-ChildItem -Recurse -Path "TestResults" -Filter "coverage.cobertura.xml" -ErrorAction SilentlyContinue
+          if (-not $cov) {
+            Write-Host "No coverage.cobertura.xml found. Skipping report generation."
+            exit 0
+          }
+          dotnet tool update -g dotnet-reportgenerator-globaltool
           $env:PATH += ";$env:USERPROFILE\.dotnet\tools"
-          reportgenerator -reports:"**/TestResults/*/coverage.cobertura.xml" -targetdir:"CoverageReport" -reporttypes:"Html;TextSummary"
+          $reports = ($cov | Select-Object -Expand FullName) -join ';'
+          reportgenerator -reports:"$reports" -targetdir:"CoverageReport" -reporttypes:"Html;TextSummary"
           if (Test-Path "CoverageReport/Summary.txt") { Get-Content CoverageReport/Summary.txt }
 
       - name: Coverage summary (job summary)
@@ -154,7 +167,6 @@ jobs:
         with:
           name: TestResults
           path: |
-            **/TestResults/**/*.trx
-            **/TestResults/*/coverage.cobertura.xml
+            TestResults/**/*.trx
+            TestResults/**/coverage.cobertura.xml
             CoverageReport/**
-
