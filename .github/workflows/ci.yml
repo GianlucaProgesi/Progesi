@@ -121,14 +121,6 @@ jobs:
         run: |
           if (Test-Path "CoverageReport/Summary.txt") {
             $sum = Get-Content CoverageReport/Summary.txt -Raw
-            @"
-```yaml
-      - name: Coverage summary (job summary)
-        if: ${{ inputs.collect_coverage == 'true' && inputs.run_tests == 'true' }}
-        shell: pwsh
-        run: |
-          if (Test-Path "CoverageReport/Summary.txt") {
-            $sum = Get-Content CoverageReport/Summary.txt -Raw
             $content  = "### Code Coverage (ReportGenerator)`n"
             $content += "```" + "`n"
             $content += $sum + "`n"
@@ -147,4 +139,3 @@ jobs:
             **/TestResults/**/*.trx
             **/TestResults/*/coverage.cobertura.xml
             CoverageReport/**
-
