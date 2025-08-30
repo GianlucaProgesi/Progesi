@@ -122,4 +122,29 @@ jobs:
           if (Test-Path "CoverageReport/Summary.txt") {
             $sum = Get-Content CoverageReport/Summary.txt -Raw
             @"
-### Code Coverage (ReportGenerator)
+```yaml
+      - name: Coverage summary (job summary)
+        if: ${{ inputs.collect_coverage == 'true' && inputs.run_tests == 'true' }}
+        shell: pwsh
+        run: |
+          if (Test-Path "CoverageReport/Summary.txt") {
+            $sum = Get-Content CoverageReport/Summary.txt -Raw
+            $content  = "### Code Coverage (ReportGenerator)`n"
+            $content += "```" + "`n"
+            $content += $sum + "`n"
+            $content += "```" + "`n"
+            $content | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          } else {
+            Write-Host "CoverageReport/Summary.txt non trovato: salto il riepilogo."
+          }
+
+      - name: Upload test & coverage artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: TestResults
+          path: |
+            **/TestResults/**/*.trx
+            **/TestResults/*/coverage.cobertura.xml
+            CoverageReport/**
+
