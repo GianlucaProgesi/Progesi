@@ -72,8 +72,13 @@ jobs:
         shell: pwsh
         run: |
           $collect = ('${{ inputs.collect_coverage }}' -eq 'true')
-          $extra = if ($collect) { '--collect:"XPlat Code Coverage" -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura' } else { '' }
-          dotnet test "${{ env.CI_BUILD_TARGET }}" -c Release --no-build --logger "trx;LogFileName=testresults.trx" $extra
+          $extraArgs = @()
+          if ($collect) {
+            $extraArgs += '--collect:"XPlat Code Coverage"'
+            $extraArgs += '--'
+            $extraArgs += 'DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura'
+          }
+          dotnet test "${{ env.CI_BUILD_TARGET }}" -c Release --no-build --logger "trx;LogFileName=testresults.trx" $extraArgs
 
       # ------------------ DISCOVERY FALLBACK ------------------
       - name: Discover SDK-style projects (exclude Rhino/Grasshopper)
@@ -108,9 +113,14 @@ jobs:
         shell: pwsh
         run: |
           $collect = ('${{ inputs.collect_coverage }}' -eq 'true')
-          $extra = if ($collect) { '--collect:"XPlat Code Coverage" -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura' } else { '' }
+          $extraArgs = @()
+          if ($collect) {
+            $extraArgs += '--collect:"XPlat Code Coverage"'
+            $extraArgs += '--'
+            $extraArgs += 'DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura'
+          }
           Get-Content buildlist.txt | Where-Object { $_ -match 'Test|\.Tests\\' } | ForEach-Object {
-            dotnet test $_ -c Release --no-build --logger "trx;LogFileName=testresults.trx" $extra
+            dotnet test $_ -c Release --no-build --logger "trx;LogFileName=testresults.trx" $extraArgs
           }
 
       # ------------------ COVERAGE REPORT ------------------
