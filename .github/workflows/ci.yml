@@ -1,4 +1,4 @@
-name: CI
+name: CI (manual)
 
 on:
   workflow_dispatch:
@@ -11,12 +11,6 @@ on:
         description: "Collect coverage (true/false)"
         required: false
         default: "true"
-  push:
-    branches: [ main ]
-    paths-ignore:
-      - "**/*.md"
-      - "docs/**"
-  pull_request:
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -27,19 +21,11 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 20
 
-    # Flag sicuri per TUTTI gli eventi:
-    env:
-      RUN_TESTS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.run_tests || 'true' }}
-      COLLECT_COVERAGE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.collect_coverage || 'true' }}
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - name: Disable dotnet problem matcher (reduce noisy annotations)
-        run: echo "::remove-matcher owner=dotnet::"
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -75,10 +61,10 @@ jobs:
         run: dotnet build "${{ env.CI_BUILD_TARGET }}" -c Release --no-restore /warnaserror
 
       - name: Test (.slnf) + optional coverage
-        if: ${{ env.CI_BUILD_TARGET != '' && env.RUN_TESTS == 'true' }}
+        if: ${{ env.CI_BUILD_TARGET != '' && inputs.run_tests == 'true' }}
         shell: pwsh
         run: |
-          $collect = ('${{ env.COLLECT_COVERAGE }}' -eq 'true')
+          $collect = ('${{ inputs.collect_coverage }}' -eq 'true')
           $extra = if ($collect) { '--collect:"XPlat Code Coverage" -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura' } else { '' }
           dotnet test "${{ env.CI_BUILD_TARGET }}" -c Release --no-build --logger "trx;LogFileName=testresults.trx" $extra
 
@@ -111,18 +97,17 @@ jobs:
           Get-Content buildlist.txt | ForEach-Object { dotnet build $_ -c Release --no-restore /warnaserror }
 
       - name: Test (discover) + optional coverage
-        if: ${{ env.CI_BUILD_TARGET == '' && env.RUN_TESTS == 'true' }}
+        if: ${{ env.CI_BUILD_TARGET == '' && inputs.run_tests == 'true' }}
         shell: pwsh
         run: |
-          $collect = ('${{ env.COLLECT_COVERAGE }}' -eq 'true')
+          $collect = ('${{ inputs.collect_coverage }}' -eq 'true')
           $extra = if ($collect) { '--collect:"XPlat Code Coverage" -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura' } else { '' }
           Get-Content buildlist.txt | Where-Object { $_ -match 'Test|\.Tests\\' } | ForEach-Object {
             dotnet test $_ -c Release --no-build --logger "trx;LogFileName=testresults.trx" $extra
           }
 
-      # ----- Coverage HTML + riepilogo -----
       - name: Generate HTML coverage report
-        if: ${{ env.RUN_TESTS == 'true' && env.COLLECT_COVERAGE == 'true' }}
+        if: ${{ inputs.collect_coverage == 'true' && inputs.run_tests == 'true' }}
         shell: pwsh
         run: |
           dotnet tool install -g dotnet-reportgenerator-globaltool
@@ -131,22 +116,10 @@ jobs:
           if (Test-Path "CoverageReport/Summary.txt") { Get-Content CoverageReport/Summary.txt }
 
       - name: Coverage summary (job summary)
-        if: ${{ env.RUN_TESTS == 'true' && env.COLLECT_COVERAGE == 'true' }}
+        if: ${{ inputs.collect_coverage == 'true' && inputs.run_tests == 'true' }}
         shell: pwsh
         run: |
           if (Test-Path "CoverageReport/Summary.txt") {
             $sum = Get-Content CoverageReport/Summary.txt -Raw
             @"
 ### Code Coverage (ReportGenerator)
-"@ | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
-          }
-
-      - name: Upload test & coverage artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: TestResults
-          path: |
-            **/TestResults/**/*.trx
-            **/TestResults/*/coverage.cobertura.xml
-            CoverageReport/**
