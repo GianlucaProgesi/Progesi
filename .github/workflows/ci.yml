@@ -27,11 +27,19 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 20
 
+    # Flag sicuri per TUTTI gli eventi:
+    env:
+      RUN_TESTS: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.run_tests || 'true' }}
+      COLLECT_COVERAGE: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.collect_coverage || 'true' }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Disable dotnet problem matcher (reduce noisy annotations)
+        run: echo "::remove-matcher owner=dotnet::"
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -67,10 +75,10 @@ jobs:
         run: dotnet build "${{ env.CI_BUILD_TARGET }}" -c Release --no-restore /warnaserror
 
       - name: Test (.slnf) + optional coverage
-        if: ${{ env.CI_BUILD_TARGET != '' && fromJSON(inputs.run_tests) }}
+        if: ${{ env.CI_BUILD_TARGET != '' && env.RUN_TESTS == 'true' }}
         shell: pwsh
         run: |
-          $collect = ('${{ inputs.collect_coverage }}' -eq 'true')
+          $collect = ('${{ env.COLLECT_COVERAGE }}' -eq 'true')
           $extra = if ($collect) { '--collect:"XPlat Code Coverage" -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura' } else { '' }
           dotnet test "${{ env.CI_BUILD_TARGET }}" -c Release --no-build --logger "trx;LogFileName=testresults.trx" $extra
 
@@ -86,7 +94,7 @@ jobs:
               return $isSdk -and $notRh
             } catch { return $false }
           } | Select-Object -ExpandProperty FullName
-          if (-not $projects) { throw 'Nessun progetto SDK-style trovato.' }
+          if (-not $projects) { throw "Nessun progetto SDK-style trovato." }
           Set-Content buildlist.txt ($projects -join "`n")
           Write-Host "Projects to build:`n$(Get-Content buildlist.txt -Raw)"
 
@@ -103,10 +111,10 @@ jobs:
           Get-Content buildlist.txt | ForEach-Object { dotnet build $_ -c Release --no-restore /warnaserror }
 
       - name: Test (discover) + optional coverage
-        if: ${{ env.CI_BUILD_TARGET == '' && fromJSON(inputs.run_tests) }}
+        if: ${{ env.CI_BUILD_TARGET == '' && env.RUN_TESTS == 'true' }}
         shell: pwsh
         run: |
-          $collect = ('${{ inputs.collect_coverage }}' -eq 'true')
+          $collect = ('${{ env.COLLECT_COVERAGE }}' -eq 'true')
           $extra = if ($collect) { '--collect:"XPlat Code Coverage" -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura' } else { '' }
           Get-Content buildlist.txt | Where-Object { $_ -match 'Test|\.Tests\\' } | ForEach-Object {
             dotnet test $_ -c Release --no-build --logger "trx;LogFileName=testresults.trx" $extra
@@ -114,7 +122,7 @@ jobs:
 
       # ----- Coverage HTML + riepilogo -----
       - name: Generate HTML coverage report
-        if: ${{ inputs.collect_coverage == 'true' && inputs.run_tests == 'true' }}
+        if: ${{ env.RUN_TESTS == 'true' && env.COLLECT_COVERAGE == 'true' }}
         shell: pwsh
         run: |
           dotnet tool install -g dotnet-reportgenerator-globaltool
@@ -123,25 +131,10 @@ jobs:
           if (Test-Path "CoverageReport/Summary.txt") { Get-Content CoverageReport/Summary.txt }
 
       - name: Coverage summary (job summary)
-        if: ${{ inputs.collect_coverage == 'true' && inputs.run_tests == 'true' }}
+        if: ${{ env.RUN_TESTS == 'true' && env.COLLECT_COVERAGE == 'true' }}
         shell: pwsh
         run: |
           if (Test-Path "CoverageReport/Summary.txt") {
             $sum = Get-Content CoverageReport/Summary.txt -Raw
             @"
 ### Code Coverage (ReportGenerator)
-```
-$sum
-```
-"@ | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
-          }
-
-      - name: Upload test & coverage artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: TestResults
-          path: |
-            **/TestResults/**/*.trx
-            **/TestResults/*/coverage.cobertura.xml
-            CoverageReport/**
