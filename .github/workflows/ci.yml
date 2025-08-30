@@ -1,4 +1,4 @@
-name: CI (manual)
+﻿name: CI (manual)
 
 on:
   workflow_dispatch:
@@ -38,7 +38,7 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-${{ hashFiles('**/packages.lock.json') }}
+          key: ${{ runner.os }}-nuget-${{ hashFiles(''**/packages.lock.json'') }}
           restore-keys: ${{ runner.os }}-nuget-
 
       # ------------------ TARGET SELECTION ------------------
