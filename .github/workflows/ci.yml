@@ -163,7 +163,7 @@ jobs:
             [void]$sb.AppendLine()
             [void]$sb.AppendLine("```")
             [void]$sb.Append($sum)
-            if (-not $sum.EndsWith("`n")) { [void]$sb.AppendLine() }
+            [void]$sb.AppendLine()
             [void]$sb.AppendLine("```")
             $sb.ToString() | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
           } else {
