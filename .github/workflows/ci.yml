@@ -20,7 +20,6 @@ on:
       - "Directory.Build.props"
       - ".editorconfig"
 
-# necessario per committare il badge da Actions
 permissions:
   contents: write
 
@@ -53,7 +52,6 @@ jobs:
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/packages.lock.json') }}
           restore-keys: ${{ runner.os }}-nuget-
 
-      # ---- Normalizza gli input per PR/manuale (default: true/true) ----
       - name: Resolve inputs (defaults for PR)
         shell: pwsh
         run: |
@@ -61,8 +59,8 @@ jobs:
           if ([string]::IsNullOrWhiteSpace($run)) { $run = 'true' }
           $cov = '${{ inputs.collect_coverage }}'
           if ([string]::IsNullOrWhiteSpace($cov)) { $cov = 'true' }
-          "RUN_TESTS=$run"            | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          "COLLECT_COVERAGE=$cov"     | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "RUN_TESTS=$run"        | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "COLLECT_COVERAGE=$cov" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       # ------------------ TARGET SELECTION ------------------
       - name: Choose build target (prefer .slnf, then .sln)
@@ -103,7 +101,8 @@ jobs:
             dotnet tool update -g dotnet-format
             $env:PATH += ";$env:USERPROFILE\.dotnet\tools"
           }
-          dotnet format --verify-no-changes --severity info
+          # >>> Fix: passa il workspace esplicito
+          dotnet format "${{ env.CI_BUILD_TARGET }}" --verify-no-changes --severity info
 
       - name: Build (solution)
         if: ${{ env.CI_BUILD_TARGET != '' }}
@@ -156,7 +155,13 @@ jobs:
             dotnet tool update -g dotnet-format
             $env:PATH += ";$env:USERPROFILE\.dotnet\tools"
           }
-          dotnet format --verify-no-changes --severity info
+          # >>> Fix: formatta OGNI progetto scoperto
+          $failed = $false
+          Get-Content buildlist.txt | ForEach-Object {
+            dotnet format $_ --verify-no-changes --severity info
+            if ($LASTEXITCODE -ne 0) { $failed = $true }
+          }
+          if ($failed) { throw "Formatting check failed for one or more projects." }
 
       - name: Build (discover)
         if: ${{ env.CI_BUILD_TARGET == '' }}
@@ -253,7 +258,6 @@ jobs:
             Write-Host 'CoverageReport/Summary.txt non trovato: salto il riepilogo.'
           }
 
-      # ------------------ Soglia minima coverage ------------------
       - name: Enforce minimum line coverage
         if: ${{ env.COLLECT_COVERAGE == 'true' && env.RUN_TESTS == 'true' }}
         shell: pwsh
