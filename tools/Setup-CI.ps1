@@ -1,0 +1,233 @@
+﻿<#
+.SYNOPSIS
+  Scrive/aggiorna .github/workflows/ci.yml con una versione robusta.
+  Opzionalmente aggiunge coverlet.collector ai progetti di test,
+  e può fare commit/push automatico.
+
+.EXAMPLE
+  pwsh -File tools/Setup-CI.ps1 -Commit -Push -Branch main -AddCollector
+#>
+
+[CmdletBinding()]
+param(
+  [switch]$Commit,
+  [switch]$Push,
+  [string]$Branch = "main",
+  [switch]$AddCollector
+)
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+
+$workflowDir = ".github/workflows"
+$workflowFile = Join-Path $workflowDir "ci.yml"
+
+if (-not (Test-Path $workflowDir)) {
+  New-Item -ItemType Directory -Path $workflowDir -Force | Out-Null
+}
+
+$yml = @'
+name: CI (manual)
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_tests:
+        description: "Run tests (true/false)"
+        required: false
+        default: "true"
+      collect_coverage:
+        description: "Collect coverage (true/false)"
+        required: false
+        default: "true"
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-test:
+    runs-on: windows-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            6.0.x
+
+      - name: Cache NuGet
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/packages.lock.json') }}
+          restore-keys: ${{ runner.os }}-nuget-
+
+      - name: Choose build target (prefer .slnf, then .sln)
+        shell: pwsh
+        run: |
+          if (Test-Path 'Progesi.CI.slnf') {
+            'CI_BUILD_TARGET=Progesi.CI.slnf' | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+            Write-Host 'Using Progesi.CI.slnf'
+          }
+          elseif (Test-Path 'Progesi.sln') {
+            'CI_BUILD_TARGET=Progesi.sln' | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+            Write-Host 'Using Progesi.sln'
+          }
+          else {
+            'CI_BUILD_TARGET=' | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+            Write-Host 'No .slnf/.sln found -> discovery fallback'
+          }
+
+      - name: Restore (solution)
+        if: ${{ env.CI_BUILD_TARGET != '' }}
+        run: dotnet restore "${{ env.CI_BUILD_TARGET }}"
+
+      - name: Build (solution)
+        if: ${{ env.CI_BUILD_TARGET != '' }}
+        run: dotnet build "${{ env.CI_BUILD_TARGET }}" -c Release --no-restore /warnaserror
+
+      - name: Test (solution) + optional coverage
+        if: ${{ env.CI_BUILD_TARGET != '' && inputs.run_tests == 'true' }}
+        shell: pwsh
+        run: |
+          $collect = ('${{ inputs.collect_coverage }}' -eq 'true')
+          $extraArgs = @()
+          if ($collect) {
+            $extraArgs += '--collect:"XPlat Code Coverage"'
+            $extraArgs += '--'
+            $extraArgs += 'DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura'
+          }
+          dotnet test "${{ env.CI_BUILD_TARGET }}" -c Release --no-build --results-directory TestResults --logger "trx;LogFileName=testresults.trx" $extraArgs
+
+      - name: Discover SDK-style projects (exclude Rhino/Grasshopper)
+        if: ${{ env.CI_BUILD_TARGET == '' }}
+        shell: pwsh
+        run: |
+          $projects = Get-ChildItem -Recurse -Filter *.csproj | Where-Object {
+            try {
+              $isSdk = (Select-Xml -Path $_.FullName -XPath '/Project/@Sdk').Node
+              $notRh = $_.FullName -notmatch 'Rhino|Grasshopper'
+              return $isSdk -and $notRh
+            } catch { return $false }
+          } | Select-Object -ExpandProperty FullName
+          if (-not $projects) { throw "Nessun progetto SDK-style trovato." }
+          Set-Content buildlist.txt ($projects -join "`n")
+          Write-Host "Projects to build:`n$(Get-Content buildlist.txt -Raw)"
+
+      - name: Restore (discover)
+        if: ${{ env.CI_BUILD_TARGET == '' }}
+        shell: pwsh
+        run: |
+          Get-Content buildlist.txt | ForEach-Object { dotnet restore $_ }
+
+      - name: Build (discover)
+        if: ${{ env.CI_BUILD_TARGET == '' }}
+        shell: pwsh
+        run: |
+          Get-Content buildlist.txt | ForEach-Object { dotnet build $_ -c Release --no-restore /warnaserror }
+
+      - name: Test (discover) + optional coverage
+        if: ${{ env.CI_BUILD_TARGET == '' && inputs.run_tests == 'true' }}
+        shell: pwsh
+        run: |
+          $collect = ('${{ inputs.collect_coverage }}' -eq 'true')
+          $extraArgs = @()
+          if ($collect) {
+            $extraArgs += '--collect:"XPlat Code Coverage"'
+            $extraArgs += '--'
+            $extraArgs += 'DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura'
+          }
+          Get-Content buildlist.txt | Where-Object { $_ -match 'Test|\.Tests\\' } | ForEach-Object {
+            dotnet test $_ -c Release --no-build --results-directory TestResults --logger "trx;LogFileName=testresults.trx" $extraArgs
+          }
+
+      - name: Locate test & coverage files (debug)
+        if: always()
+        shell: pwsh
+        run: |
+          Write-Host "=== Listing TestResults ==="
+          if (Test-Path TestResults) {
+            Get-ChildItem -Recurse TestResults | ForEach-Object { $_.FullName }
+          } else {
+            Write-Host "No TestResults directory."
+          }
+
+      - name: Generate HTML coverage report (skip if none)
+        if: ${{ inputs.collect_coverage == 'true' && inputs.run_tests == 'true' }}
+        shell: pwsh
+        run: |
+          $cov = Get-ChildItem -Recurse -Path "TestResults" -Filter "coverage.cobertura.xml" -ErrorAction SilentlyContinue
+          if (-not $cov) {
+            Write-Host "No coverage.cobertura.xml found. Skipping report generation."
+            exit 0
+          }
+          dotnet tool update -g dotnet-reportgenerator-globaltool
+          $env:PATH += ";$env:USERPROFILE\.dotnet\tools"
+          $reports = ($cov | Select-Object -Expand FullName) -join ';'
+          reportgenerator -reports:"$reports" -targetdir:"CoverageReport" -reporttypes:"Html;TextSummary"
+          if (Test-Path "CoverageReport/Summary.txt") { Get-Content CoverageReport/Summary.txt }
+
+      - name: Coverage summary (job summary)
+        if: ${{ inputs.collect_coverage == 'true' && inputs.run_tests == 'true' }}
+        shell: pwsh
+        run: |
+          if (Test-Path "CoverageReport/Summary.txt") {
+            $sum = Get-Content CoverageReport/Summary.txt -Raw
+            $content  = "### Code Coverage (ReportGenerator)`n"
+            $content += "```" + "`n"
+            $content += $sum + "`n"
+            $content += "```" + "`n"
+            $content | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          } else {
+            Write-Host "CoverageReport/Summary.txt non trovato: salto il riepilogo."
+          }
+
+      - name: Upload test & coverage artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: TestResults
+          path: |
+            TestResults/**/*.trx
+            TestResults/**/coverage.cobertura.xml
+            CoverageReport/**
+'@
+
+# Scrive il file
+$utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+[System.IO.File]::WriteAllText($workflowFile, $yml, $utf8NoBom)
+Write-Host "✅ Aggiornato $workflowFile"
+
+# Opzionale: aggiunge coverlet.collector ai progetti di test
+if ($AddCollector) {
+  Write-Host "==> Abilito coverlet.collector nei progetti di test..."
+  $testProjects = Get-ChildItem -Recurse -Filter *.csproj | Where-Object {
+    $_.FullName -match 'Test|\.Tests\\'
+  }
+  foreach ($p in $testProjects) {
+    Write-Host " - $($p.FullName)"
+    dotnet add "$($p.FullName)" package coverlet.collector --version 6.0.2 | Out-Null
+  }
+}
+
+# Commit / push
+if ($Commit) {
+  git add "$workflowFile"
+  if ($AddCollector) {
+    $testProjects | ForEach-Object { git add $_.FullName }
+  }
+  git commit -m "ci: replace workflow with resilient version (+ optional coverlet.collector)" | Out-Null
+  Write-Host "✅ Commit creato."
+  if ($Push) {
+    git push origin $Branch
+    Write-Host "✅ Push su '$Branch' eseguito."
+  }
+}
