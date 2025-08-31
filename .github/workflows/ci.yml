@@ -1,4 +1,4 @@
-name: CI (manual)
+name: CI
 
 on:
   workflow_dispatch:
@@ -11,8 +11,16 @@ on:
         description: "Collect coverage (true/false)"
         required: false
         default: "true"
+  pull_request:
+    branches: [ main ]
+    paths:
+      - "src/**"
+      - "tests/**"
+      - ".github/workflows/ci.yml"
+      - "Directory.Build.props"
+      - ".editorconfig"
 
-# necessario per poter committare il badge dal workflow
+# necessario per committare il badge da Actions
 permissions:
   contents: write
 
@@ -45,7 +53,18 @@ jobs:
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/packages.lock.json') }}
           restore-keys: ${{ runner.os }}-nuget-
 
-      # -------- TARGET SELECTION (.slnf preferito) ----------
+      # ---- Normalizza gli input per PR/manuale (default: true/true) ----
+      - name: Resolve inputs (defaults for PR)
+        shell: pwsh
+        run: |
+          $run = '${{ inputs.run_tests }}'
+          if ([string]::IsNullOrWhiteSpace($run)) { $run = 'true' }
+          $cov = '${{ inputs.collect_coverage }}'
+          if ([string]::IsNullOrWhiteSpace($cov)) { $cov = 'true' }
+          "RUN_TESTS=$run"            | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "COLLECT_COVERAGE=$cov"     | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+      # ------------------ TARGET SELECTION ------------------
       - name: Choose build target (prefer .slnf, then .sln)
         shell: pwsh
         run: |
@@ -63,19 +82,38 @@ jobs:
           }
 
       # ------------------ SOLUTION PATH ------------------
-      - name: Restore (solution)
+      - name: Restore (solution) — auto locked-mode
         if: ${{ env.CI_BUILD_TARGET != '' }}
-        run: dotnet restore "${{ env.CI_BUILD_TARGET }}"
+        shell: pwsh
+        run: |
+          $hasLocks = (Get-ChildItem -Recurse -Filter packages.lock.json -ErrorAction SilentlyContinue).Count -gt 0
+          if ($hasLocks) {
+            Write-Host "Lock files presenti: uso --locked-mode"
+            dotnet restore "${{ env.CI_BUILD_TARGET }}" --locked-mode
+          } else {
+            dotnet restore "${{ env.CI_BUILD_TARGET }}"
+          }
+
+      - name: Verify code format (dotnet format)
+        if: ${{ env.CI_BUILD_TARGET != '' }}
+        shell: pwsh
+        run: |
+          try { dotnet format --version | Out-Null }
+          catch {
+            dotnet tool update -g dotnet-format
+            $env:PATH += ";$env:USERPROFILE\.dotnet\tools"
+          }
+          dotnet format --verify-no-changes --severity info
 
       - name: Build (solution)
         if: ${{ env.CI_BUILD_TARGET != '' }}
         run: dotnet build "${{ env.CI_BUILD_TARGET }}" -c Release --no-restore /warnaserror
 
       - name: Test (solution) + optional coverage
-        if: ${{ env.CI_BUILD_TARGET != '' && inputs.run_tests == 'true' }}
+        if: ${{ env.CI_BUILD_TARGET != '' && env.RUN_TESTS == 'true' }}
         shell: pwsh
         run: |
-          $collect = ('${{ inputs.collect_coverage }}' -eq 'true')
+          $collect = ($env:COLLECT_COVERAGE -eq 'true')
           $extraArgs = @()
           if ($collect) {
             $extraArgs += '--collect:"XPlat Code Coverage"'
@@ -100,23 +138,39 @@ jobs:
           Set-Content buildlist.txt ($projects -join "`n")
           Write-Host "Projects to build:`n$(Get-Content buildlist.txt -Raw)"
 
-      - name: Restore (discover)
+      - name: Restore (discover) — auto locked-mode
         if: ${{ env.CI_BUILD_TARGET == '' }}
         shell: pwsh
         run: |
-          Get-Content buildlist.txt | ForEach-Object { dotnet restore $_ }
+          $hasLocks = (Get-ChildItem -Recurse -Filter packages.lock.json -ErrorAction SilentlyContinue).Count -gt 0
+          Get-Content buildlist.txt | ForEach-Object {
+            if ($hasLocks) { dotnet restore $_ --locked-mode } else { dotnet restore $_ }
+          }
+
+      - name: Verify code format (dotnet format) [discover]
+        if: ${{ env.CI_BUILD_TARGET == '' }}
+        shell: pwsh
+        run: |
+          try { dotnet format --version | Out-Null }
+          catch {
+            dotnet tool update -g dotnet-format
+            $env:PATH += ";$env:USERPROFILE\.dotnet\tools"
+          }
+          dotnet format --verify-no-changes --severity info
 
       - name: Build (discover)
         if: ${{ env.CI_BUILD_TARGET == '' }}
         shell: pwsh
         run: |
-          Get-Content buildlist.txt | ForEach-Object { dotnet build $_ -c Release --no-restore /warnaserror }
+          Get-Content buildlist.txt | ForEach-Object {
+            dotnet build $_ -c Release --no-restore /warnaserror
+          }
 
       - name: Test (discover) + optional coverage
-        if: ${{ env.CI_BUILD_TARGET == '' && inputs.run_tests == 'true' }}
+        if: ${{ env.CI_BUILD_TARGET == '' && env.RUN_TESTS == 'true' }}
         shell: pwsh
         run: |
-          $collect = ('${{ inputs.collect_coverage }}' -eq 'true')
+          $collect = ($env:COLLECT_COVERAGE -eq 'true')
           $extraArgs = @()
           if ($collect) {
             $extraArgs += '--collect:"XPlat Code Coverage"'
@@ -141,7 +195,7 @@ jobs:
 
       # ------------------ GUARDRAIL: fallisci se zero test ------------------
       - name: Guardrail — fail if no tests executed
-        if: always() && inputs.run_tests == 'true'
+        if: always() && env.RUN_TESTS == 'true'
         shell: pwsh
         run: |
           $trx = Get-ChildItem -Recurse -Path "TestResults" -Filter "*.trx" -ErrorAction SilentlyContinue
@@ -150,7 +204,7 @@ jobs:
 
       # ------------------ COVERAGE REPORT ------------------
       - name: Generate HTML coverage report (skip if none)
-        if: ${{ inputs.collect_coverage == 'true' && inputs.run_tests == 'true' }}
+        if: ${{ env.COLLECT_COVERAGE == 'true' && env.RUN_TESTS == 'true' }}
         shell: pwsh
         run: |
           $cov = Get-ChildItem -Recurse -Path "TestResults" -Filter "coverage.cobertura.xml" -ErrorAction SilentlyContinue
@@ -165,7 +219,7 @@ jobs:
           if (Test-Path "CoverageReport/Summary.txt") { Get-Content CoverageReport/Summary.txt }
 
       - name: Publish coverage badge (main only)
-        if: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && inputs.collect_coverage == 'true' && inputs.run_tests == 'true' && hashFiles('CoverageReport/badge_linecoverage.svg') != '' }}
+        if: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && env.COLLECT_COVERAGE == 'true' && env.RUN_TESTS == 'true' && hashFiles('CoverageReport/badge_linecoverage.svg') != '' }}
         shell: pwsh
         run: |
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
@@ -181,7 +235,7 @@ jobs:
           }
 
       - name: Coverage summary (job summary)
-        if: ${{ inputs.collect_coverage == 'true' && inputs.run_tests == 'true' }}
+        if: ${{ env.COLLECT_COVERAGE == 'true' && env.RUN_TESTS == 'true' }}
         shell: pwsh
         run: |
           $summary = 'CoverageReport/Summary.txt'
@@ -201,7 +255,7 @@ jobs:
 
       # ------------------ Soglia minima coverage ------------------
       - name: Enforce minimum line coverage
-        if: ${{ inputs.collect_coverage == 'true' && inputs.run_tests == 'true' }}
+        if: ${{ env.COLLECT_COVERAGE == 'true' && env.RUN_TESTS == 'true' }}
         shell: pwsh
         env:
           MIN_COVERAGE: '56.0'
