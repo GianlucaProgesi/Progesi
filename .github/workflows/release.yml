@@ -53,47 +53,46 @@ jobs:
           name: nuget
           path: nuget
 
-      - name: Create/Update GitHub Release
+      - name: GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ github.ref_name }}
           files: nuget/*.nupkg
           generate_release_notes: true
 
-      - name: Setup .NET (for push)
+      - name: Setup .NET (push clients)
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
 
-      # 1) Prova con GITHUB_TOKEN (best effort)
-      - name: Publish to GitHub Packages using GITHUB_TOKEN (best-effort)
+      # ✅ Forziamo l'autenticazione impostando NUGET_AUTH_TOKEN
+      #    e usiamo direttamente l'URL .../index.json nello --source
+      - name: Publish to GitHub Packages (try GITHUB_TOKEN)
+        env:
+          NUGET_AUTH_TOKEN: ${{ github.token }}
         continue-on-error: true
         run: |
-          dotnet nuget add source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json" \
-            --name "github-token" \
-            --username "${{ github.actor }}" \
-            --password "${{ github.token }}" \
-            --store-password-in-clear-text
-          dotnet nuget push "./nuget/*.nupkg" --source "github-token" --skip-duplicate
+          dotnet nuget push "nuget/*.nupkg" \
+            --source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json" \
+            --api-key "x" \
+            --skip-duplicate
 
-      # 2) Fallback con PAT se disponibile
-      - name: Publish to GitHub Packages using GPR_PAT (fallback)
+      - name: Publish to GitHub Packages (fallback with PAT)
         if: ${{ secrets.GPR_PAT != '' }}
+        env:
+          NUGET_AUTH_TOKEN: ${{ secrets.GPR_PAT }}
         continue-on-error: true
         run: |
-          dotnet nuget add source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json" \
-            --name "github-pat" \
-            --username "${{ github.repository_owner }}" \
-            --password "${{ secrets.GPR_PAT }}" \
-            --store-password-in-clear-text
-          dotnet nuget push "./nuget/*.nupkg" --source "github-pat" --skip-duplicate
+          dotnet nuget push "nuget/*.nupkg" \
+            --source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json" \
+            --api-key "x" \
+            --skip-duplicate
 
-      # NuGet.org: non bloccare la release
       - name: Publish to NuGet.org (optional)
         if: ${{ secrets.NUGET_API_KEY != '' }}
         continue-on-error: true
         run: |
-          dotnet nuget push "./nuget/*.nupkg" \
+          dotnet nuget push "nuget/*.nupkg" \
             --source "https://api.nuget.org/v3/index.json" \
             --skip-duplicate \
             --api-key "${{ secrets.NUGET_API_KEY }}"
