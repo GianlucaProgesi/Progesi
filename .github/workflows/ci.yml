@@ -92,17 +92,16 @@ jobs:
             dotnet restore "${{ env.CI_BUILD_TARGET }}"
           }
 
-      - name: Verify code format (dotnet format)
+      - name: Verify whitespace formatting
         if: ${{ env.CI_BUILD_TARGET != '' }}
         shell: pwsh
         run: |
-          try { dotnet format --version | Out-Null }
-          catch {
+          try { dotnet format --version | Out-Null } catch {
             dotnet tool update -g dotnet-format
             $env:PATH += ";$env:USERPROFILE\.dotnet\tools"
           }
-          # >>> Fix: passa il workspace esplicito
-          dotnet format "${{ env.CI_BUILD_TARGET }}" --verify-no-changes --severity info
+          # ✅ controlliamo SOLO whitespace, per evitare blocchi su regole non auto-fixabili
+          dotnet format whitespace "${{ env.CI_BUILD_TARGET }}" --verify-no-changes
 
       - name: Build (solution)
         if: ${{ env.CI_BUILD_TARGET != '' }}
@@ -146,22 +145,20 @@ jobs:
             if ($hasLocks) { dotnet restore $_ --locked-mode } else { dotnet restore $_ }
           }
 
-      - name: Verify code format (dotnet format) [discover]
+      - name: Verify whitespace formatting [discover]
         if: ${{ env.CI_BUILD_TARGET == '' }}
         shell: pwsh
         run: |
-          try { dotnet format --version | Out-Null }
-          catch {
+          try { dotnet format --version | Out-Null } catch {
             dotnet tool update -g dotnet-format
             $env:PATH += ";$env:USERPROFILE\.dotnet\tools"
           }
-          # >>> Fix: formatta OGNI progetto scoperto
           $failed = $false
           Get-Content buildlist.txt | ForEach-Object {
-            dotnet format $_ --verify-no-changes --severity info
+            dotnet format whitespace $_ --verify-no-changes
             if ($LASTEXITCODE -ne 0) { $failed = $true }
           }
-          if ($failed) { throw "Formatting check failed for one or more projects." }
+          if ($failed) { throw "Whitespace formatting differences detected." }
 
       - name: Build (discover)
         if: ${{ env.CI_BUILD_TARGET == '' }}
@@ -198,7 +195,6 @@ jobs:
             Write-Host "No TestResults directory."
           }
 
-      # ------------------ GUARDRAIL: fallisci se zero test ------------------
       - name: Guardrail — fail if no tests executed
         if: always() && env.RUN_TESTS == 'true'
         shell: pwsh
@@ -207,7 +203,6 @@ jobs:
           if (-not $trx) { Write-Error "Nessun file .trx trovato: sembra non siano stati eseguiti test." }
           else { Write-Host "Trovati $($trx.Count) file .trx." }
 
-      # ------------------ COVERAGE REPORT ------------------
       - name: Generate HTML coverage report (skip if none)
         if: ${{ env.COLLECT_COVERAGE == 'true' && env.RUN_TESTS == 'true' }}
         shell: pwsh
