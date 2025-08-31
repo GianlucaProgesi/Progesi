@@ -1,4 +1,4 @@
-﻿name: CI (manual)
+name: CI (manual)
 
 on:
   workflow_dispatch:
@@ -15,6 +15,9 @@ on:
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
+
+permissions:
+  contents: write
 
 jobs:
   build-test:
@@ -148,7 +151,7 @@ jobs:
           dotnet tool update -g dotnet-reportgenerator-globaltool
           $env:PATH += ";$env:USERPROFILE\.dotnet\tools"
           $reports = ($cov | Select-Object -Expand FullName) -join ';'
-          reportgenerator -reports:"$reports" -targetdir:"CoverageReport" -reporttypes:"Html;TextSummary"
+          reportgenerator -reports:"$reports" -targetdir:"CoverageReport" -reporttypes:"Html;TextSummary";Badges
           if (Test-Path "CoverageReport/Summary.txt") { Get-Content CoverageReport/Summary.txt }
 
       - name: Guardrail â€” fail if no tests executed
@@ -199,6 +202,23 @@ jobs:
             Write-Host 'CoverageReport/Summary.txt non trovato: salto il riepilogo.'
           }
 
+      - name: Publish coverage badge (main only)
+        if: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && inputs.collect_coverage == 'true' && inputs.run_tests == 'true' && hashFiles('CoverageReport/badge_linecoverage.svg') != '' }}
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "github-actions[bot]"
+          New-Item -ItemType Directory -Force -Path docs/coverage | Out-Null
+          Copy-Item "CoverageReport/badge_linecoverage.svg" "docs/coverage/badge_linecoverage.svg" -Force
+          if (git status --porcelain) {
+            git add docs/coverage/badge_linecoverage.svg
+            git commit -m "ci: update coverage badge [skip ci]"
+            git push origin HEAD:main
+          } else {
+            Write-Host "No badge changes to commit."
+          }
       - name: Upload test & coverage artifacts
         if: always()
         uses: actions/upload-artifact@v4
