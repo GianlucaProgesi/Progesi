@@ -46,6 +46,10 @@ jobs:
   release:
     needs: pack
     runs-on: ubuntu-latest
+    # ⬇️ Mappiamo i secrets in env, così gli 'if:' possono usare env.*
+    env:
+      GPR_PAT: ${{ secrets.GPR_PAT }}
+      NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
     steps:
       - name: Download nupkg
         uses: actions/download-artifact@v4
@@ -60,16 +64,16 @@ jobs:
           draft: false
           generate_release_notes: true
 
-      # --- Opzionale: pubblica su GitHub Packages se presente il PAT ---
+      # --- Opzionale: GitHub Packages (solo se il PAT esiste) ---
       - name: Publish to GitHub Packages (optional)
-        if: ${{ secrets.GPR_PAT != '' }}
+        if: ${{ env.GPR_PAT != '' }}
         run: |
           dotnet nuget add source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json" \
-            --name "github" --username "${{ github.repository_owner }}" --password "${{ secrets.GPR_PAT }}" --store-password-in-clear-text
-          dotnet nuget push "./nuget/*.nupkg" --source "github" --skip-duplicate --api-key "${{ secrets.GPR_PAT }}"
+            --name "github" --username "${{ github.repository_owner }}" --password "${{ env.GPR_PAT }}" --store-password-in-clear-text
+          dotnet nuget push "./nuget/*.nupkg" --source "github" --skip-duplicate --api-key "${{ env.GPR_PAT }}"
 
-      # --- Opzionale: pubblica su NuGet.org se presente l'API key ---
+      # --- Opzionale: NuGet.org (solo se la API key esiste) ---
       - name: Publish to NuGet.org (optional)
-        if: ${{ secrets.NUGET_API_KEY != '' }}
+        if: ${{ env.NUGET_API_KEY != '' }}
         run: |
-          dotnet nuget push "./nuget/*.nupkg" --source "https://api.nuget.org/v3/index.json" --skip-duplicate --api-key "${{ secrets.NUGET_API_KEY }}"
+          dotnet nuget push "./nuget/*.nupkg" --source "https://api.nuget.org/v3/index.json" --skip-duplicate --api-key "${{ env.NUGET_API_KEY }}"
