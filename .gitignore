@@ -47,3 +47,5 @@ Thumbs.db
 CoverageReport/
 TestResults/
 
+.github/workflows/ci.yml.bak
+tools/*.ps1
