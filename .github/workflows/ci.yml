@@ -166,7 +166,7 @@ jobs:
         if: ${{ inputs.collect_coverage == 'true' && inputs.run_tests == 'true' }}
         shell: pwsh
         env:
-          MIN_COVERAGE: '55.0'   # alza gradualmente (oggi sei a 60.1)
+          MIN_COVERAGE: '56.0'   # alza gradualmente (oggi sei a 60.1)
         run: |
           $summary = 'CoverageReport/Summary.txt'
           if (-not (Test-Path $summary)) {
