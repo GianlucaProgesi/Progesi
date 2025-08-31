@@ -8,30 +8,42 @@ namespace ProgesiCore.Tests
     public class ProgesiMetadataTests
     {
         [Fact]
-        public void Create_Update_AddRemove_Reference_Snip()
+        public void Create_And_Touch()
         {
-            // Id obbligatorio > 0
-            var m = ProgesiMetadata.Create("gianluca", "first", id: 1);
-            m.CreatedBy.Should().Be("gianluca");
-            m.AdditionalInfo.Should().Be("first");
+            var m = ProgesiMetadata.Create("user-x", id: 1); // id > 0 obbligatorio
+            m.Id.Should().Be(1);
+            var before = m.LastModified;
+            System.Threading.Thread.Sleep(5);
+            m.Touch();
+            m.LastModified.Should().BeAfter(before);
+        }
 
-            m.UpdateAdditionalInfo("updated");
-            m.AdditionalInfo.Should().Be("updated");
+        [Fact]
+        public void References_NoDuplicates_And_Remove()
+        {
+            var m = ProgesiMetadata.Create("user-x", id: 1); // id > 0
+            var u = new Uri("http://example.com/a");
 
-            var u1 = new Uri("https://example.com/a/");
-            var u2 = new Uri("https://example.com/b");
-            m.AddReference(u1);
-            m.AddReference(u2);
-            m.References.Should().HaveCount(2);
+            m.AddReference(u);
+            m.AddReference(u);
+            m.References.Count.Should().Be(1);
 
-            var removed = m.RemoveReference(u1);
-            removed.Should().BeTrue();
-            m.References.Should().HaveCount(1);
+            m.RemoveReference(u).Should().BeTrue();
+            m.References.Count.Should().Be(0);
+        }
 
-            var snip = m.AddSnip(new byte[] { 1, 2, 3 }, "image/png", "cap");
-            m.Snips.Should().ContainSingle();
+        [Fact]
+        public void Snips_Add_Remove_And_Validate()
+        {
+            var m = ProgesiMetadata.Create("user-x", id: 1); // id > 0
+            var snip = m.AddSnip(new byte[] { 1, 2, 3 }, "image/png", "cap", new Uri("http://src"));
+            m.Snips.Should().HaveCount(1);
+
+            m.RemoveSnip(Guid.NewGuid()).Should().BeFalse();
             m.RemoveSnip(snip.Id).Should().BeTrue();
-            m.Snips.Should().BeEmpty();
+
+            Assert.ThrowsAny<Exception>(() => m.AddSnip(Array.Empty<byte>(), "image/png"));
+            Assert.ThrowsAny<Exception>(() => m.AddSnip(new byte[] { 9 }, ""));
         }
     }
 }
