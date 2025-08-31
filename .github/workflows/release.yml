@@ -1,0 +1,61 @@
+name: Release (tag)
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  pack:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            6.0.x
+
+      - name: Extract version from tag
+        id: ver
+        shell: bash
+        run: echo "v=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      - name: Restore (locked if available)
+        shell: pwsh
+        run: |
+          $hasLocks = (Get-ChildItem -Recurse -Filter packages.lock.json -ErrorAction SilentlyContinue).Count -gt 0
+          if ($hasLocks) { dotnet restore Progesi.CI.slnf --locked-mode } else { dotnet restore Progesi.CI.slnf }
+
+      - name: Build
+        run: dotnet build Progesi.CI.slnf -c Release --no-restore
+
+      - name: Pack ProgesiCore
+        run: dotnet pack src/ProgesiCore/ProgesiCore.csproj -c Release -o artifacts/nuget -p:PackageVersion=${{ steps.ver.outputs.v }}
+
+      - name: Upload nupkg
+        uses: actions/upload-artifact@v4
+        with:
+          name: nuget
+          path: artifacts/nuget/*.nupkg
+
+  release:
+    needs: pack
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download nupkg
+        uses: actions/download-artifact@v4
+        with:
+          name: nuget
+          path: ./nuget
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ./nuget/*.nupkg
+          draft: false
+          generate_release_notes: true
