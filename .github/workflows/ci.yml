@@ -155,6 +155,19 @@ jobs:
         if: ${{ inputs.collect_coverage == 'true' && inputs.run_tests == 'true' && hashFiles('CoverageReport/Summary.txt') != '' }}
         shell: pwsh
         run: |
-          $sum = Get-Content "CoverageReport/Summary.txt" -Raw
-          @"
-### Code Coverage (ReportGenerator)
+          # Evito problemi coi backtick usando righe separate
+          "### Code Coverage (ReportGenerator)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          "" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          "```" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          Get-Content "CoverageReport/Summary.txt" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          "```" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+
+      - name: Upload test & coverage artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: TestResults
+          path: |
+            TestResults/**/*.trx
+            TestResults/**/coverage.cobertura.xml
+            CoverageReport/**
