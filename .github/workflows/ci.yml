@@ -41,6 +41,7 @@ jobs:
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/packages.lock.json') }}
           restore-keys: ${{ runner.os }}-nuget-
 
+      # ------------------ TARGET SELECTION ------------------
       - name: Choose build target (prefer .slnf, then .sln)
         shell: pwsh
         run: |
@@ -57,6 +58,7 @@ jobs:
             Write-Host 'No .slnf/.sln found -> discovery fallback'
           }
 
+      # ------------------ SOLUTION PATH ------------------
       - name: Restore (solution)
         if: ${{ env.CI_BUILD_TARGET != '' }}
         run: dotnet restore "${{ env.CI_BUILD_TARGET }}"
@@ -78,6 +80,7 @@ jobs:
           }
           dotnet test "${{ env.CI_BUILD_TARGET }}" -c Release --no-build --results-directory TestResults --logger "trx;LogFileName=testresults.trx" $extraArgs
 
+      # ------------------ DISCOVERY FALLBACK ------------------
       - name: Discover SDK-style projects (exclude Rhino/Grasshopper)
         if: ${{ env.CI_BUILD_TARGET == '' }}
         shell: pwsh
@@ -120,6 +123,7 @@ jobs:
             dotnet test $_ -c Release --no-build --results-directory TestResults --logger "trx;LogFileName=testresults.trx" $extraArgs
           }
 
+      # --- DEBUG: lista file prodotti
       - name: Locate test & coverage files (debug)
         if: always()
         shell: pwsh
@@ -131,6 +135,7 @@ jobs:
             Write-Host "No TestResults directory."
           }
 
+      # ------------------ COVERAGE REPORT ------------------
       - name: Generate HTML coverage report (skip if none)
         if: ${{ inputs.collect_coverage == 'true' && inputs.run_tests == 'true' }}
         shell: pwsh
@@ -147,26 +152,9 @@ jobs:
           if (Test-Path "CoverageReport/Summary.txt") { Get-Content CoverageReport/Summary.txt }
 
       - name: Coverage summary (job summary)
-        if: ${{ inputs.collect_coverage == 'true' && inputs.run_tests == 'true' }}
+        if: ${{ inputs.collect_coverage == 'true' && inputs.run_tests == 'true' && hashFiles('CoverageReport/Summary.txt') != '' }}
         shell: pwsh
         run: |
-          if (Test-Path "CoverageReport/Summary.txt") {
-            $sum = Get-Content CoverageReport/Summary.txt -Raw
-            $content  = "### Code Coverage (ReportGenerator)`n"
-            $content += "```" + "`n"
-            $content += $sum + "`n"
-            $content += "```" + "`n"
-            $content | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
-          } else {
-            Write-Host "CoverageReport/Summary.txt non trovato: salto il riepilogo."
-          }
-
-      - name: Upload test & coverage artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: TestResults
-          path: |
-            TestResults/**/*.trx
-            TestResults/**/coverage.cobertura.xml
-            CoverageReport/**
+          $sum = Get-Content "CoverageReport/Summary.txt" -Raw
+          @"
+### Code Coverage (ReportGenerator)
