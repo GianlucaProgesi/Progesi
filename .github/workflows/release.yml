@@ -4,10 +4,11 @@ on:
   push:
     tags:
       - 'v*.*.*'
+  workflow_dispatch:
 
 permissions:
-  contents: write        # creare release e caricare asset
-  packages: write        # pubblicare su GitHub Packages
+  contents: write
+  packages: write
 
 jobs:
   pack:
@@ -15,6 +16,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -23,65 +26,70 @@ jobs:
             8.0.x
             6.0.x
 
+      - name: Compute version from tag
+        id: ver
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}"
+          if ($tag.StartsWith('v')) { $v = $tag.Substring(1) } else { $v = $tag }
+          "PKG_VERSION=$v" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          Write-Host "Version: $v"
+
       - name: Restore
-        run: dotnet restore Progesi.CI.slnf
+        run: dotnet restore "Progesi.CI.slnf"
 
       - name: Build
-        run: dotnet build Progesi.CI.slnf -c Release --no-restore
+        run: dotnet build "Progesi.CI.slnf" -c Release --no-restore
 
-      - name: Pack
-        run: dotnet pack src/ProgesiCore/ProgesiCore.csproj -c Release -o .\nuget --no-build
+      - name: Pack ProgesiCore
+        run: dotnet pack src/ProgesiCore/ProgesiCore.csproj -c Release -o out /p:PackageVersion=${{ env.PKG_VERSION }} /p:ContinuousIntegrationBuild=true
 
-      - name: Upload package artifact
+      - name: Upload nupkg
         uses: actions/upload-artifact@v4
         with:
           name: nuget
-          path: nuget/*.nupkg
+          path: out/*.nupkg
+          if-no-files-found: error
 
   release:
-    runs-on: ubuntu-latest
     needs: pack
+    runs-on: ubuntu-latest
     env:
       OWNER: ${{ github.repository_owner }}
-      # Se hai definito GPR_PAT lo usiamo, altrimenti si usa il GitHub token del workflow.
-      GPR_TOKEN: ${{ secrets.GPR_PAT != '' && secrets.GPR_PAT || github.token }}
+      # Esponiamo i secret come env
+      NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+      GPR_PAT: ${{ secrets.GPR_PAT }}
     steps:
-      - name: Download package artifact
+      - name: Download nupkg
         uses: actions/download-artifact@v4
         with:
           name: nuget
           path: nuget
 
-      - name: Create GitHub Release & upload asset
-        uses: softprops/action-gh-release@v2
-        with:
-          files: nuget/*.nupkg
-          generate_release_notes: true
-
-      # ---------- NuGet.org (solo se hai il secret) ----------
-      - name: Push to NuGet.org (skips if key missing)
-        if: ${{ secrets.NUGET_API_KEY != '' }}
-        shell: bash
+      - name: Push to NuGet.org (if key present)
+        if: ${{ env.NUGET_API_KEY != '' }}
         run: |
           dotnet nuget push "nuget/*.nupkg" \
             --source "https://api.nuget.org/v3/index.json" \
-            --api-key "${{ secrets.NUGET_API_KEY }}" \
+            --api-key "$NUGET_API_KEY" \
             --skip-duplicate
 
-      # ---------- GitHub Packages (GPR) ----------
-      # Qui usiamo l'owner come username e GPR_TOKEN (PAT se presente, altrimenti GITHUB_TOKEN) come password.
-      - name: Add GitHub Packages source
-        shell: bash
+      - name: Configure GitHub Packages source (if PAT present)
+        if: ${{ env.GPR_PAT != '' }}
         run: |
-          dotnet nuget add source "https://nuget.pkg.github.com/${OWNER}/index.json" \
+          dotnet nuget add source "https://nuget.pkg.github.com/${{ env.OWNER }}/index.json" \
             --name "github" \
-            --username "${OWNER}" \
-            --password "${GPR_TOKEN}" \
+            --username "${{ env.OWNER }}" \
+            --password "$GPR_PAT" \
             --store-password-in-clear-text
 
-      - name: Push to GitHub Packages (GPR)
-        shell: bash
-        run: |
-          dotnet nuget push "nuget/*.nupkg" \
-            --source "github" \
-            --skip-duplicate
+      - name: Push to GitHub Packages (if PAT present)
+        if: ${{ env.GPR_PAT != '' }}
+        run: dotnet nuget push "nuget/*.nupkg" --source "github" --skip-duplicate
+
+      - name: Create GitHub Release (attach nupkg)
+        uses: softprops/action-gh-release@v2
+        with:
+          files: nuget/*.nupkg
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
