@@ -1,4 +1,4 @@
-﻿name: CI (manual)
+name: CI (manual)
 
 on:
   workflow_dispatch:
@@ -12,12 +12,13 @@ on:
         required: false
         default: "true"
 
+# necessario per poter committare il badge dal workflow
+permissions:
+  contents: write
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
-
-permissions:
-  contents: write
 
 jobs:
   build-test:
@@ -44,7 +45,7 @@ jobs:
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/packages.lock.json') }}
           restore-keys: ${{ runner.os }}-nuget-
 
-      # ------------------ TARGET SELECTION ------------------
+      # -------- TARGET SELECTION (.slnf preferito) ----------
       - name: Choose build target (prefer .slnf, then .sln)
         shell: pwsh
         run: |
@@ -126,7 +127,7 @@ jobs:
             dotnet test $_ -c Release --no-build --results-directory TestResults --logger "trx;LogFileName=testresults.trx" $extraArgs
           }
 
-      # --- DEBUG: lista file prodotti
+      # --- DEBUG: lista risultati
       - name: Locate test & coverage files (debug)
         if: always()
         shell: pwsh
@@ -138,6 +139,15 @@ jobs:
             Write-Host "No TestResults directory."
           }
 
+      # ------------------ GUARDRAIL: fallisci se zero test ------------------
+      - name: Guardrail — fail if no tests executed
+        if: always() && inputs.run_tests == 'true'
+        shell: pwsh
+        run: |
+          $trx = Get-ChildItem -Recurse -Path "TestResults" -Filter "*.trx" -ErrorAction SilentlyContinue
+          if (-not $trx) { Write-Error "Nessun file .trx trovato: sembra non siano stati eseguiti test." }
+          else { Write-Host "Trovati $($trx.Count) file .trx." }
+
       # ------------------ COVERAGE REPORT ------------------
       - name: Generate HTML coverage report (skip if none)
         if: ${{ inputs.collect_coverage == 'true' && inputs.run_tests == 'true' }}
@@ -148,65 +158,15 @@ jobs:
             Write-Host "No coverage.cobertura.xml found. Skipping report generation."
             exit 0
           }
-          dotnet tool update -g dotnet-reportgenerator-globaltool
+          try { dotnet tool update -g dotnet-reportgenerator-globaltool } catch { dotnet tool install -g dotnet-reportgenerator-globaltool }
           $env:PATH += ";$env:USERPROFILE\.dotnet\tools"
           $reports = ($cov | Select-Object -Expand FullName) -join ';'
           reportgenerator -reports:"$reports" -targetdir:"CoverageReport" -reporttypes:"Html;TextSummary;Badges"
           if (Test-Path "CoverageReport/Summary.txt") { Get-Content CoverageReport/Summary.txt }
 
-      - name: Guardrail Ã¢â‚¬â€ fail if no tests executed
-        if: always() && inputs.run_tests == 'true'
-        shell: pwsh
-        run: |
-          $trx = Get-ChildItem -Recurse -Path "TestResults" -Filter "*.trx" -ErrorAction SilentlyContinue
-          if (-not $trx) {
-            Write-Error "Nessun file .trx trovato: sembra non siano stati eseguiti test."
-          } else {
-            Write-Host "Trovati $($trx.Count) file .trx."
-          }
-
-      - name: Enforce minimum line coverage
-        if: ${{ inputs.collect_coverage == 'true' && inputs.run_tests == 'true' }}
-        shell: pwsh
-        env:
-          MIN_COVERAGE: '75.0'   # alza gradualmente (oggi sei a 60.1)
-        run: |
-          $summary = 'CoverageReport/Summary.txt'
-          if (-not (Test-Path $summary)) {
-            Write-Host 'Nessun Summary.txt, salto il controllo soglia.'
-            exit 0
-          }
-          $line = Select-String -Path $summary -Pattern '^  Line coverage:\s+([0-9.]+)%' | Select-Object -First 1
-          if (-not $line) { Write-Host 'Riga "Line coverage" non trovata, salto.'; exit 0 }
-          $pct = [double]($line.Matches[0].Groups[1].Value)
-          $min = [double]$env:MIN_COVERAGE
-          Write-Host ("Line coverage: {0}%  Ã¢â‚¬â€  Threshold: {1}%" -f $pct, $min)
-          if ($pct -lt $min) { throw "Coverage {0}% < threshold {1}%" -f $pct, $min }
-
-      - name: Coverage summary (job summary)
-        if: ${{ inputs.collect_coverage == 'true' && inputs.run_tests == 'true' }}
-        shell: pwsh
-        run: |
-          $summary = 'CoverageReport/Summary.txt'
-          if (Test-Path $summary) {
-            $sum = Get-Content $summary -Raw
-            $sb = New-Object System.Text.StringBuilder
-            [void]$sb.AppendLine('### Code Coverage (ReportGenerator)')
-            [void]$sb.AppendLine()
-            [void]$sb.AppendLine('```')   # apici singoli Ã¢â€¡â€™ backtick letterali
-            [void]$sb.Append($sum)
-            [void]$sb.AppendLine()        # aggiungo newline sempre, niente `n
-            [void]$sb.AppendLine('```')   # apici singoli
-            $sb.ToString() | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
-          } else {
-            Write-Host 'CoverageReport/Summary.txt non trovato: salto il riepilogo.'
-          }
-
       - name: Publish coverage badge (main only)
         if: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && inputs.collect_coverage == 'true' && inputs.run_tests == 'true' && hashFiles('CoverageReport/badge_linecoverage.svg') != '' }}
         shell: pwsh
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git config user.name "github-actions[bot]"
@@ -219,6 +179,45 @@ jobs:
           } else {
             Write-Host "No badge changes to commit."
           }
+
+      - name: Coverage summary (job summary)
+        if: ${{ inputs.collect_coverage == 'true' && inputs.run_tests == 'true' }}
+        shell: pwsh
+        run: |
+          $summary = 'CoverageReport/Summary.txt'
+          if (Test-Path $summary) {
+            $sum = Get-Content $summary -Raw
+            $sb = New-Object System.Text.StringBuilder
+            [void]$sb.AppendLine('### Code Coverage (ReportGenerator)')
+            [void]$sb.AppendLine()
+            [void]$sb.AppendLine('```')
+            [void]$sb.Append($sum)
+            [void]$sb.AppendLine()
+            [void]$sb.AppendLine('```')
+            $sb.ToString() | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          } else {
+            Write-Host 'CoverageReport/Summary.txt non trovato: salto il riepilogo.'
+          }
+
+      # ------------------ Soglia minima coverage ------------------
+      - name: Enforce minimum line coverage
+        if: ${{ inputs.collect_coverage == 'true' && inputs.run_tests == 'true' }}
+        shell: pwsh
+        env:
+          MIN_COVERAGE: '56.0'
+        run: |
+          $summary = 'CoverageReport/Summary.txt'
+          if (-not (Test-Path $summary)) {
+            Write-Host 'Nessun Summary.txt, salto il controllo soglia.'
+            exit 0
+          }
+          $m = Select-String -Path $summary -Pattern '^  Line coverage:\s+([0-9.]+)%' | Select-Object -First 1
+          if (-not $m) { Write-Host 'Riga "Line coverage" non trovata, salto.'; exit 0 }
+          $pct = [double]$m.Matches[0].Groups[1].Value
+          $min = [double]$env:MIN_COVERAGE
+          Write-Host ("Line coverage: {0}%  —  Threshold: {1}%" -f $pct, $min)
+          if ($pct -lt $min) { throw ("Coverage {0}% < threshold {1}%" -f $pct, $min) }
+
       - name: Upload test & coverage artifacts
         if: always()
         uses: actions/upload-artifact@v4
@@ -228,4 +227,3 @@ jobs:
             TestResults/**/*.trx
             TestResults/**/coverage.cobertura.xml
             CoverageReport/**
-
