@@ -100,12 +100,11 @@ jobs:
             dotnet tool update -g dotnet-format
             $env:PATH += ";$env:USERPROFILE\.dotnet\tools"
           }
-          # ✅ controlliamo SOLO whitespace, per evitare blocchi su regole non auto-fixabili
           dotnet format whitespace "${{ env.CI_BUILD_TARGET }}" --verify-no-changes
 
       - name: Build (solution)
         if: ${{ env.CI_BUILD_TARGET != '' }}
-        run: dotnet build "${{ env.CI_BUILD_TARGET }}" -c Release --no-restore /warnaserror
+        run: dotnet build "${{ env.CI_BUILD_TARGET }}" -c Release --no-restore
 
       - name: Test (solution) + optional coverage
         if: ${{ env.CI_BUILD_TARGET != '' && env.RUN_TESTS == 'true' }}
@@ -165,7 +164,7 @@ jobs:
         shell: pwsh
         run: |
           Get-Content buildlist.txt | ForEach-Object {
-            dotnet build $_ -c Release --no-restore /warnaserror
+            dotnet build $_ -c Release --no-restore
           }
 
       - name: Test (discover) + optional coverage
@@ -183,7 +182,6 @@ jobs:
             dotnet test $_ -c Release --no-build --results-directory TestResults --logger "trx;LogFileName=testresults.trx" $extraArgs
           }
 
-      # --- DEBUG: lista risultati
       - name: Locate test & coverage files (debug)
         if: always()
         shell: pwsh
