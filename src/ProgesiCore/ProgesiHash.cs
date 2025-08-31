@@ -4,7 +4,6 @@ using System.Security.Cryptography;
 using System.Text;
 using Newtonsoft.Json;
 
-#nullable enable
 namespace ProgesiCore
 {
     public static class ProgesiHash
@@ -17,60 +16,57 @@ namespace ProgesiCore
         // ===== helper visibile anche da altri tipi =====
         public static string CanonicalValue(object? obj)
         {
-            if (obj is null) return "<null>";
-            switch (obj)
+            return obj is null
+                ? "<null>"
+                : obj switch
             {
-                case string s:
-                    return s;
-                case bool b:
-                    return b ? "true" : "false";
-                case int i:
-                    return i.ToString();
-                case long l:
-                    return l.ToString();
-                case double d:
-                    return d.ToString(System.Globalization.CultureInfo.InvariantCulture);
-                case float f:
-                    return f.ToString(System.Globalization.CultureInfo.InvariantCulture);
-                case decimal m:
-                    return m.ToString(System.Globalization.CultureInfo.InvariantCulture);
-                default:
-                    return JsonConvert.SerializeObject(obj, JsonSettings) ?? string.Empty;
-            }
+                string s => s,
+                bool b => b ? "true" : "false",
+                int i => i.ToString(),
+                long l => l.ToString(),
+                double d => d.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                float f => f.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                decimal m => m.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                _ => JsonConvert.SerializeObject(obj, JsonSettings) ?? string.Empty,
+            };
         }
 
         internal static string Sha256Hex(string s)
         {
             using var sha = SHA256.Create();
-            var bytes = Encoding.UTF8.GetBytes(s ?? string.Empty);
-            var hash = sha.ComputeHash(bytes);
+            byte[] bytes = Encoding.UTF8.GetBytes(s ?? string.Empty);
+            byte[] hash = sha.ComputeHash(bytes);
             return string.Concat(hash.Select(b => b.ToString("x2")));
         }
 
         private static string Sha256Hex(byte[] bytes)
         {
             using var sha = SHA256.Create();
-            var hash = sha.ComputeHash(bytes ?? Array.Empty<byte>());
+            byte[] hash = sha.ComputeHash(bytes ?? Array.Empty<byte>());
             return string.Concat(hash.Select(b => b.ToString("x2")));
         }
 
         private static string NormalizeUri(Uri u)
         {
             // lower-case host; remove trailing slash
-            var s = u.ToString();
+            string s = u.ToString();
             if (u.IsAbsoluteUri)
             {
                 var builder = new UriBuilder(u) { Host = u.Host.ToLowerInvariant() };
                 s = builder.Uri.ToString();
             }
-            if (s.EndsWith("/")) s = s.Substring(0, s.Length - 1);
+            if (s.EndsWith("/"))
+            {
+                s = s.Substring(0, s.Length - 1);
+            }
+
             return s;
         }
 
         // ===== Compute per Variable =====
         public static string Compute(ProgesiVariable v)
         {
-            var depends = (v.DependsFrom ?? Array.Empty<int>()).OrderBy(x => x).ToArray();
+            int[] depends = (v.DependsFrom ?? Array.Empty<int>()).OrderBy(x => x).ToArray();
             var payload = new
             {
                 v.Name,
@@ -78,14 +74,14 @@ namespace ProgesiCore
                 Depends = depends,
                 v.MetadataId
             };
-            var json = JsonConvert.SerializeObject(payload, JsonSettings) ?? string.Empty;
+            string json = JsonConvert.SerializeObject(payload, JsonSettings) ?? string.Empty;
             return Sha256Hex(json);
         }
 
         // ===== Compute per Metadata =====
         public static string Compute(ProgesiMetadata m)
         {
-            var refs = (m.References ?? Array.Empty<Uri>())
+            string[] refs = (m.References ?? Array.Empty<Uri>())
                        .Select(NormalizeUri)
                        .OrderBy(s => s, StringComparer.Ordinal)
                        .ToArray();
@@ -110,7 +106,7 @@ namespace ProgesiCore
                 Snips = snips
             };
 
-            var json = JsonConvert.SerializeObject(payload, JsonSettings) ?? string.Empty;
+            string json = JsonConvert.SerializeObject(payload, JsonSettings) ?? string.Empty;
             return Sha256Hex(json);
         }
     }

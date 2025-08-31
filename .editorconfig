@@ -1,23 +1,24 @@
-<Project>
-  <PropertyGroup>
-    <!-- Build deterministica: stessi input => stessi binari -->
-    <Deterministic>true</Deterministic>
+root = true
 
-    <!-- Segnale per pipeline/compilatore -->
-    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+[*]
+charset = utf-8-bom
+end_of_line = crlf
+insert_final_newline = true
+indent_style = space
+indent_size = 4
+trim_trailing_whitespace = true
 
-    <!-- Linguaggio C# aggiornato (VS2022 lo supporta anche su net48) -->
-    <LangVersion>latest</LangVersion>
+# C#
+[*.cs]
+# Prefer var quando il tipo è ovvio
+csharp_style_var_when_type_is_apparent = true:suggestion
+# 'this.' non necessario
+dotnet_style_qualification_for_field = false:suggestion
+dotnet_style_qualification_for_property = false:suggestion
+dotnet_style_qualification_for_method = false:suggestion
+dotnet_style_qualification_for_event = false:suggestion
 
-    <!-- Analyzer (soft): raccomandati, niente “upgrade” warning -->
-    <EnableNETAnalyzers>true</EnableNETAnalyzers>
-    <AnalysisMode>Recommended</AnalysisMode>
-    <_SkipUpgradeNetAnalyzersNuGetWarning>true</_SkipUpgradeNetAnalyzersNuGetWarning>
-
-    <!-- Non cambiamo doc XML (alcuni progetti potrebbero non volerle) -->
-    <GenerateDocumentationFile>false</GenerateDocumentationFile>
-
-    <!-- Evita file di sorgente generati nel repo -->
-    <EmitCompilerGeneratedFiles>false</EmitCompilerGeneratedFiles>
-  </PropertyGroup>
-</Project>
+# Analyzer (non aggressivi)
+dotnet_analyzer_diagnostic.category-Style.severity = suggestion
+dotnet_analyzer_diagnostic.category-Design.severity = warning
+dotnet_analyzer_diagnostic.category-Usage.severity  = warning

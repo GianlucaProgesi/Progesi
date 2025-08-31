@@ -1,6 +1,5 @@
 ﻿using System;
 using FluentAssertions;
-using ProgesiCore;
 using Xunit;
 
 namespace ProgesiCore.Tests
@@ -19,40 +18,40 @@ namespace ProgesiCore.Tests
             b.AddReference(new Uri("http://example.com/b"));
             b.AddReference(new Uri("http://example.com/a"));
 
-            ProgesiHash.Compute(a).Should().Be(ProgesiHash.Compute(b));
+            _ = ProgesiHash.Compute(a).Should().Be(ProgesiHash.Compute(b));
 
             // Set diverso (sostituisco /b con /c) → hash diverso
             var c = ProgesiMetadata.Create("user", id: 1);
             c.AddReference(new Uri("http://example.com/a"));
             c.AddReference(new Uri("http://example.com/c"));
 
-            ProgesiHash.Compute(a).Should().NotBe(ProgesiHash.Compute(c));
+            _ = ProgesiHash.Compute(a).Should().NotBe(ProgesiHash.Compute(c));
         }
 
         [Fact]
         public void Metadata_Snips_OrderInsensitive_And_ContentSensitive()
         {
-            var bytes1 = new byte[] { 1, 2, 3, 4 };
-            var bytes2 = new byte[] { 5, 6, 7, 8 };
-            var bytes3 = new byte[] { 9, 9, 9, 9 };
+            byte[] bytes1 = new byte[] { 1, 2, 3, 4 };
+            byte[] bytes2 = new byte[] { 5, 6, 7, 8 };
+            byte[] bytes3 = new byte[] { 9, 9, 9, 9 };
 
             var a = ProgesiMetadata.Create("user", id: 1);
-            a.AddSnip(bytes1, "application/octet-stream", "x", new Uri("http://src/1"));
-            a.AddSnip(bytes2, "application/octet-stream", "y", new Uri("http://src/2"));
+            _ = a.AddSnip(bytes1, "application/octet-stream", "x", new Uri("http://src/1"));
+            _ = a.AddSnip(bytes2, "application/octet-stream", "y", new Uri("http://src/2"));
 
             var b = ProgesiMetadata.Create("user", id: 1);
-            b.AddSnip(bytes2, "application/octet-stream", "y", new Uri("http://src/2"));
-            b.AddSnip(bytes1, "application/octet-stream", "x", new Uri("http://src/1"));
+            _ = b.AddSnip(bytes2, "application/octet-stream", "y", new Uri("http://src/2"));
+            _ = b.AddSnip(bytes1, "application/octet-stream", "x", new Uri("http://src/1"));
 
             // Ordine diverso → hash uguale
-            ProgesiHash.Compute(a).Should().Be(ProgesiHash.Compute(b));
+            _ = ProgesiHash.Compute(a).Should().Be(ProgesiHash.Compute(b));
 
             // Contenuto diverso → hash diverso
             var c = ProgesiMetadata.Create("user", id: 1);
-            c.AddSnip(bytes1, "application/octet-stream", "x", new Uri("http://src/1"));
-            c.AddSnip(bytes3, "application/octet-stream", "z", new Uri("http://src/3"));
+            _ = c.AddSnip(bytes1, "application/octet-stream", "x", new Uri("http://src/1"));
+            _ = c.AddSnip(bytes3, "application/octet-stream", "z", new Uri("http://src/3"));
 
-            ProgesiHash.Compute(a).Should().NotBe(ProgesiHash.Compute(c));
+            _ = ProgesiHash.Compute(a).Should().NotBe(ProgesiHash.Compute(c));
         }
     }
 }

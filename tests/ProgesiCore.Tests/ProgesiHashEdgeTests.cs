@@ -1,6 +1,5 @@
 ﻿using System.Collections.Generic;
 using FluentAssertions;
-using ProgesiCore;
 using Xunit;
 
 namespace ProgesiCore.Tests
@@ -19,15 +18,15 @@ namespace ProgesiCore.Tests
         [MemberData(nameof(CanonicalBasicData))]
         public void CanonicalValue_Basic(object? input, string expected)
         {
-            ProgesiHash.CanonicalValue(input).Should().Be(expected);
+            _ = ProgesiHash.CanonicalValue(input).Should().Be(expected);
         }
 
         [Fact]
         public void CanonicalValue_Primitives_Invariant()
         {
-            ProgesiHash.CanonicalValue(true).Should().Be("true");
-            ProgesiHash.CanonicalValue(123).Should().Be("123");
-            ProgesiHash.CanonicalValue(1.5).Should().Be("1.5");
+            _ = ProgesiHash.CanonicalValue(true).Should().Be("true");
+            _ = ProgesiHash.CanonicalValue(123).Should().Be("123");
+            _ = ProgesiHash.CanonicalValue(1.5).Should().Be("1.5");
         }
 
         [Fact]
@@ -37,15 +36,15 @@ namespace ProgesiCore.Tests
             var a = new ProgesiVariable(10, "K", 42, new[] { 3, 1, 2 }, metadataId: 7);
             var b = new ProgesiVariable(10, "K", 42, new[] { 1, 2, 3 }, metadataId: 7);
 
-            ProgesiHash.Compute(a).Should().Be(ProgesiHash.Compute(b)); // l'ordine NON conta
+            _ = ProgesiHash.Compute(a).Should().Be(ProgesiHash.Compute(b)); // l'ordine NON conta
 
             // Cambia il contenuto delle dipendenze -> hash diverso
             var c = new ProgesiVariable(10, "K", 42, new[] { 1, 2, 4 }, metadataId: 7);
-            ProgesiHash.Compute(a).Should().NotBe(ProgesiHash.Compute(c));
+            _ = ProgesiHash.Compute(a).Should().NotBe(ProgesiHash.Compute(c));
 
             // (in alternativa) cambiare il Name deve cambiare l'hash
             var d = new ProgesiVariable(10, "K2", 42, new[] { 3, 1, 2 }, metadataId: 7);
-            ProgesiHash.Compute(a).Should().NotBe(ProgesiHash.Compute(d));
+            _ = ProgesiHash.Compute(a).Should().NotBe(ProgesiHash.Compute(d));
         }
     }
 }

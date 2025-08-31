@@ -1,23 +1,11 @@
-<Project>
-  <PropertyGroup>
-    <!-- Build deterministica: stessi input => stessi binari -->
-    <Deterministic>true</Deterministic>
-
-    <!-- Segnale per pipeline/compilatore -->
-    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
-
-    <!-- Linguaggio C# aggiornato (VS2022 lo supporta anche su net48) -->
-    <LangVersion>latest</LangVersion>
-
-    <!-- Analyzer (soft): raccomandati, niente “upgrade” warning -->
-    <EnableNETAnalyzers>true</EnableNETAnalyzers>
-    <AnalysisMode>Recommended</AnalysisMode>
-    <_SkipUpgradeNetAnalyzersNuGetWarning>true</_SkipUpgradeNetAnalyzersNuGetWarning>
-
-    <!-- Non cambiamo doc XML (alcuni progetti potrebbero non volerle) -->
-    <GenerateDocumentationFile>false</GenerateDocumentationFile>
-
-    <!-- Evita file di sorgente generati nel repo -->
-    <EmitCompilerGeneratedFiles>false</EmitCompilerGeneratedFiles>
-  </PropertyGroup>
+﻿<Project>
+    <PropertyGroup>
+        <LangVersion>latest</LangVersion>
+        <Deterministic>true</Deterministic>
+        <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+        <!-- Manteniamo l’allineamento con la pipeline che già usa /warnaserror -->
+        <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+        <!-- Passeremo a <Nullable>enable</Nullable> quando avremo “ripulito” i warning -->
+        <Nullable>disable</Nullable>
+    </PropertyGroup>
 </Project>

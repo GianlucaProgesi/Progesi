@@ -1,7 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
+﻿using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -14,5 +11,5 @@ namespace ProgesiCore
         Task<IReadOnlyList<ProgesiVariable>> GetAllAsync(CancellationToken ct = default);
         Task<bool> DeleteAsync(int id, CancellationToken ct = default);
         Task<int> DeleteManyAsync(IEnumerable<int> ids, CancellationToken ct = default);
-    }  
+    }
 }

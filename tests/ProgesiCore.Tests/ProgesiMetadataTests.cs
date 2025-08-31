@@ -1,6 +1,5 @@
-using System;
+﻿using System;
 using FluentAssertions;
-using ProgesiCore;
 using Xunit;
 
 namespace ProgesiCore.Tests
@@ -11,11 +10,11 @@ namespace ProgesiCore.Tests
         public void Create_And_Touch()
         {
             var m = ProgesiMetadata.Create("user-x", id: 1); // id > 0 obbligatorio
-            m.Id.Should().Be(1);
-            var before = m.LastModified;
+            _ = m.Id.Should().Be(1);
+            DateTime before = m.LastModified;
             System.Threading.Thread.Sleep(5);
             m.Touch();
-            m.LastModified.Should().BeAfter(before);
+            _ = m.LastModified.Should().BeAfter(before);
         }
 
         [Fact]
@@ -26,24 +25,24 @@ namespace ProgesiCore.Tests
 
             m.AddReference(u);
             m.AddReference(u);
-            m.References.Count.Should().Be(1);
+            _ = m.References.Count.Should().Be(1);
 
-            m.RemoveReference(u).Should().BeTrue();
-            m.References.Count.Should().Be(0);
+            _ = m.RemoveReference(u).Should().BeTrue();
+            _ = m.References.Count.Should().Be(0);
         }
 
         [Fact]
         public void Snips_Add_Remove_And_Validate()
         {
             var m = ProgesiMetadata.Create("user-x", id: 1); // id > 0
-            var snip = m.AddSnip(new byte[] { 1, 2, 3 }, "image/png", "cap", new Uri("http://src"));
-            m.Snips.Should().HaveCount(1);
+            ProgesiSnip snip = m.AddSnip(new byte[] { 1, 2, 3 }, "image/png", "cap", new Uri("http://src"));
+            _ = m.Snips.Should().HaveCount(1);
 
-            m.RemoveSnip(Guid.NewGuid()).Should().BeFalse();
-            m.RemoveSnip(snip.Id).Should().BeTrue();
+            _ = m.RemoveSnip(Guid.NewGuid()).Should().BeFalse();
+            _ = m.RemoveSnip(snip.Id).Should().BeTrue();
 
-            Assert.ThrowsAny<Exception>(() => m.AddSnip(Array.Empty<byte>(), "image/png"));
-            Assert.ThrowsAny<Exception>(() => m.AddSnip(new byte[] { 9 }, ""));
+            _ = Assert.ThrowsAny<Exception>(() => m.AddSnip(Array.Empty<byte>(), "image/png"));
+            _ = Assert.ThrowsAny<Exception>(() => m.AddSnip(new byte[] { 9 }, ""));
         }
     }
 }

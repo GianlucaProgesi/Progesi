@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using Ardalis.GuardClauses;
 
-#nullable enable
 namespace ProgesiCore
 {
     public sealed class ProgesiVariable : ValueObject
@@ -16,8 +15,8 @@ namespace ProgesiCore
 
         public ProgesiVariable(int id, string name, object? value, IEnumerable<int>? dependsFrom = null, int? metadataId = null)
         {
-            Guard.Against.NegativeOrZero(id, nameof(id));
-            Guard.Against.NullOrWhiteSpace(name, nameof(name));
+            _ = Guard.Against.NegativeOrZero(id, nameof(id));
+            _ = Guard.Against.NullOrWhiteSpace(name, nameof(name));
 
             Id = id;
             Name = name;
@@ -34,7 +33,11 @@ namespace ProgesiCore
             // evitare null: convertiamo in string canonicale
             yield return Value is null ? "<null>" : Value.GetType().FullName!;
             yield return ProgesiHash.CanonicalValue(Value);
-            foreach (var d in DependsFrom.OrderBy(x => x)) yield return d;
+            foreach (int d in DependsFrom.OrderBy(x => x))
+            {
+                yield return d;
+            }
+
             yield return MetadataId.HasValue ? (object)MetadataId.Value : "<null>";
         }
     }

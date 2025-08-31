@@ -1,6 +1,5 @@
 ﻿using System.Collections.Generic;
 using FluentAssertions;
-using ProgesiCore;
 using Xunit;
 
 namespace ProgesiCore.Tests
@@ -33,12 +32,12 @@ namespace ProgesiCore.Tests
             var y = new DummyVo(1, "k");
             var z = new DummyVo(2, "k");
 
-            x.Equals(y).Should().BeTrue();
-            x.GetHashCode().Should().Be(y.GetHashCode());
-            x.Equals(z).Should().BeFalse();
+            _ = x.Equals(y).Should().BeTrue();
+            _ = x.GetHashCode().Should().Be(y.GetHashCode());
+            _ = x.Equals(z).Should().BeFalse();
 
             var set = new HashSet<DummyVo> { x, y, z };
-            set.Should().HaveCount(2); // x e y si deduplicano
+            _ = set.Should().HaveCount(2); // x e y si deduplicano
         }
     }
 }

@@ -1,6 +1,5 @@
 ﻿using System.Collections.Generic;
 using FluentAssertions;
-using ProgesiCore;
 using Xunit;
 
 namespace ProgesiCore.Tests
@@ -30,17 +29,17 @@ namespace ProgesiCore.Tests
         public void Operators_Handle_Null_Correctly()
         {
             var x = new DummyVo2(1, "a");
-            (x == null).Should().BeFalse();
-            (null == x).Should().BeFalse();
-            (x != null).Should().BeTrue();
-            (null != x).Should().BeTrue();
+            _ = (x == null).Should().BeFalse();
+            _ = (null == x).Should().BeFalse();
+            _ = (x != null).Should().BeTrue();
+            _ = (null != x).Should().BeTrue();
         }
 
         [Fact]
         public void Equals_Object_With_DifferentType_IsFalse()
         {
             var x = new DummyVo2(1, "a");
-            x.Equals("not-a-vo").Should().BeFalse();
+            _ = x.Equals("not-a-vo").Should().BeFalse();
         }
 
         [Fact]
@@ -48,16 +47,16 @@ namespace ProgesiCore.Tests
         {
             var x = new DummyVo2(1, "a");
             var y = new DummyVo2(1, "a");
-            x.CompareTo(y).Should().Be(0);
+            _ = x.CompareTo(y).Should().Be(0);
         }
 
         [Fact]
         public void GetHashCode_Is_Stable()
         {
             var x = new DummyVo2(2, "b");
-            var h1 = x.GetHashCode();
-            var h2 = x.GetHashCode();
-            h2.Should().Be(h1);
+            int h1 = x.GetHashCode();
+            int h2 = x.GetHashCode();
+            _ = h2.Should().Be(h1);
         }
     }
 }

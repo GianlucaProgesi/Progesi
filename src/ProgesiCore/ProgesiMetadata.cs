@@ -20,7 +20,9 @@ namespace ProgesiCore
             IEnumerable<ProgesiSnip>? snips)
         {
             if (id <= 0)
+            {
                 throw new ArgumentException("Id must be positive.", nameof(id));
+            }
 
             Id = id;
             LastModified = lastModified;
@@ -29,20 +31,26 @@ namespace ProgesiCore
 
             if (references != null)
             {
-                foreach (var r in references)
+                foreach (Uri r in references)
                 {
-                    if (r == null) continue;
+                    if (r == null)
+                    {
+                        continue;
+                    }
+
                     _references.Add(r.ToString());
                 }
             }
 
             if (snips != null)
             {
-                foreach (var s in snips)
+                foreach (ProgesiSnip s in snips)
                 {
                     // Evita l'overload dell'operator != su ValueObject in C# 8
-                    if (!object.ReferenceEquals(s, null))
+                    if (s is object)
+                    {
                         _snips.Add(s);
+                    }
                 }
             }
         }
@@ -57,7 +65,7 @@ namespace ProgesiCore
         {
             return new ProgesiMetadata(
                 id ?? 0,
-                (lastModifiedUtc ?? DateTime.UtcNow),
+                lastModifiedUtc ?? DateTime.UtcNow,
                 createdBy,
                 additionalInfo,
                 references,
@@ -86,31 +94,56 @@ namespace ProgesiCore
 
         public void AddReference(Uri reference)
         {
-            if (reference == null) return;
-            var s = reference.ToString();
+            if (reference == null)
+            {
+                return;
+            }
+
+            string s = reference.ToString();
             if (!_references.Contains(s))
+            {
                 _references.Add(s);
+            }
+
             Touch();
         }
 
         public void AddReferences(IEnumerable<Uri> references)
         {
-            if (references == null) return;
-            foreach (var r in references)
+            if (references == null)
             {
-                if (r == null) continue;
-                var s = r.ToString();
+                return;
+            }
+
+            foreach (Uri r in references)
+            {
+                if (r == null)
+                {
+                    continue;
+                }
+
+                string s = r.ToString();
                 if (!_references.Contains(s))
+                {
                     _references.Add(s);
+                }
             }
             Touch();
         }
 
         public bool RemoveReference(Uri reference)
         {
-            if (reference == null) return false;
-            var removed = _references.Remove(reference.ToString());
-            if (removed) Touch();
+            if (reference == null)
+            {
+                return false;
+            }
+
+            bool removed = _references.Remove(reference.ToString());
+            if (removed)
+            {
+                Touch();
+            }
+
             return removed;
         }
 
@@ -124,8 +157,12 @@ namespace ProgesiCore
 
         public bool RemoveSnip(Guid snipId)
         {
-            var idx = _snips.FindIndex(s => s.Id == snipId);
-            if (idx < 0) return false;
+            int idx = _snips.FindIndex(s => s.Id == snipId);
+            if (idx < 0)
+            {
+                return false;
+            }
+
             _snips.RemoveAt(idx);
             Touch();
             return true;
@@ -142,11 +179,15 @@ namespace ProgesiCore
             yield return CreatedBy;
             yield return AdditionalInfo;
 
-            foreach (var r in _references)
+            foreach (string r in _references)
+            {
                 yield return r;
+            }
 
-            foreach (var s in _snips)
+            foreach (ProgesiSnip s in _snips)
+            {
                 yield return s;
+            }
 
             yield return LastModified;
         }
@@ -159,11 +200,19 @@ namespace ProgesiCore
         private ProgesiSnip(Guid id, byte[] content, string mimeType, string? caption, string? source)
         {
             if (id == Guid.Empty)
+            {
                 throw new ArgumentException("Id must not be empty.", nameof(id));
+            }
+
             if (content == null || content.Length == 0)
+            {
                 throw new ArgumentException("Content must not be empty.", nameof(content));
+            }
+
             if (string.IsNullOrWhiteSpace(mimeType))
+            {
                 throw new ArgumentNullException(nameof(mimeType));
+            }
 
             Id = id;
             Content = content;

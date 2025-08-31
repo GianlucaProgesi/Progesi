@@ -1,4 +1,4 @@
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -11,39 +11,39 @@ namespace ProgesiRepositories.InMemory
     {
         private readonly ConcurrentDictionary<int, ProgesiVariable> _store = new ConcurrentDictionary<int, ProgesiVariable>();
 
-        public Task<ProgesiVariable> SaveAsync(ProgesiVariable variable, CancellationToken ct = default(CancellationToken))
+        public Task<ProgesiVariable> SaveAsync(ProgesiVariable variable, CancellationToken ct = default)
         {
             _store[variable.Id] = variable;
             return Task.FromResult(variable);
         }
 
-        public Task<ProgesiVariable> GetByIdAsync(int id, CancellationToken ct = default(CancellationToken))
+        public Task<ProgesiVariable> GetByIdAsync(int id, CancellationToken ct = default)
         {
-            ProgesiVariable v;
-            _store.TryGetValue(id, out v);
+            _ = _store.TryGetValue(id, out ProgesiVariable v);
             return Task.FromResult(v);
         }
 
-        public Task<IReadOnlyList<ProgesiVariable>> GetAllAsync(CancellationToken ct = default(CancellationToken))
+        public Task<IReadOnlyList<ProgesiVariable>> GetAllAsync(CancellationToken ct = default)
         {
             IReadOnlyList<ProgesiVariable> list = _store.Values.ToList();
             return Task.FromResult(list);
         }
 
-        public Task<bool> DeleteAsync(int id, CancellationToken ct = default(CancellationToken))
+        public Task<bool> DeleteAsync(int id, CancellationToken ct = default)
         {
-            ProgesiVariable removed;
-            bool ok = _store.TryRemove(id, out removed);
+            bool ok = _store.TryRemove(id, out _);
             return Task.FromResult(ok);
         }
 
-        public Task<int> DeleteManyAsync(IEnumerable<int> ids, CancellationToken ct = default(CancellationToken))
+        public Task<int> DeleteManyAsync(IEnumerable<int> ids, CancellationToken ct = default)
         {
             int count = 0;
-            foreach (var id in ids)
+            foreach (int id in ids)
             {
-                ProgesiVariable removed;
-                if (_store.TryRemove(id, out removed)) count++;
+                if (_store.TryRemove(id, out ProgesiVariable removed))
+                {
+                    count++;
+                }
             }
             return Task.FromResult(count);
         }

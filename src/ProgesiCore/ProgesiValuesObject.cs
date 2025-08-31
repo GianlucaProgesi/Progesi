@@ -1,8 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace ProgesiCore
 {
@@ -19,10 +17,14 @@ namespace ProgesiCore
         public override bool Equals(object? obj)
         {
             if (obj == null)
+            {
                 return false;
+            }
 
             if (GetUnproxiedType(this) != GetUnproxiedType(obj))
+            {
                 return false;
+            }
 
             var valueObject = (ValueObject)obj;
 
@@ -38,7 +40,7 @@ namespace ProgesiCore
                     {
                         unchecked
                         {
-                            return current * 23 + (obj?.GetHashCode() ?? 0);
+                            return (current * 23) + (obj?.GetHashCode() ?? 0);
                         }
                     });
             }
@@ -52,7 +54,9 @@ namespace ProgesiCore
             Type otherType = GetUnproxiedType(obj);
 
             if (thisType != otherType)
+            {
                 return string.Compare(thisType.ToString(), otherType.ToString(), StringComparison.Ordinal);
+            }
 
             var other = (ValueObject)obj;
 
@@ -63,7 +67,9 @@ namespace ProgesiCore
             {
                 int comparison = CompareComponents(components[i], otherComponents[i]);
                 if (comparison != 0)
+                {
                     return comparison;
+                }
             }
 
             return 0;
@@ -72,18 +78,23 @@ namespace ProgesiCore
         private int CompareComponents(object object1, object object2)
         {
             if (object1 is null && object2 is null)
+            {
                 return 0;
+            }
 
             if (object1 is null)
+            {
                 return -1;
+            }
 
             if (object2 is null)
+            {
                 return 1;
+            }
 
-            if (object1 is IComparable comparable1 && object2 is IComparable comparable2)
-                return comparable1.CompareTo(comparable2);
-
-            return object1.Equals(object2) ? 0 : -1;
+            return object1 is IComparable comparable1 && object2 is IComparable comparable2
+                ? comparable1.CompareTo(comparable2)
+                : object1.Equals(object2) ? 0 : -1;
         }
 
         public int CompareTo(ValueObject other)
@@ -94,12 +105,11 @@ namespace ProgesiCore
         public static bool operator ==(ValueObject? a, ValueObject? b)
         {
             if (a is null && b is null)
+            {
                 return true;
+            }
 
-            if (a is null || b is null)
-                return false;
-
-            return a.Equals(b);
+            return a is null || b is null ? false : a.Equals(b);
         }
 
         public static bool operator !=(ValueObject? a, ValueObject? b)
@@ -115,10 +125,7 @@ namespace ProgesiCore
             Type type = obj.GetType();
             string typeString = type.ToString();
 
-            if (typeString.Contains(EFCoreProxyPrefix) || typeString.EndsWith(NHibernateProxyPostfix))
-                return type.BaseType;
-
-            return type;
+            return typeString.Contains(EFCoreProxyPrefix) || typeString.EndsWith(NHibernateProxyPostfix) ? type.BaseType : type;
         }
     }
 }
