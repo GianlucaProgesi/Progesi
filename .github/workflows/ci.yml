@@ -155,19 +155,19 @@ jobs:
         if: ${{ inputs.collect_coverage == 'true' && inputs.run_tests == 'true' }}
         shell: pwsh
         run: |
-          $summary = "CoverageReport/Summary.txt"
+          $summary = 'CoverageReport/Summary.txt'
           if (Test-Path $summary) {
             $sum = Get-Content $summary -Raw
             $sb = New-Object System.Text.StringBuilder
-            [void]$sb.AppendLine("### Code Coverage (ReportGenerator)")
+            [void]$sb.AppendLine('### Code Coverage (ReportGenerator)')
             [void]$sb.AppendLine()
-            [void]$sb.AppendLine("```")
+            [void]$sb.AppendLine('```')   # apici singoli ⇒ backtick letterali
             [void]$sb.Append($sum)
-            [void]$sb.AppendLine()
-            [void]$sb.AppendLine("```")
+            [void]$sb.AppendLine()        # aggiungo newline sempre, niente `n
+            [void]$sb.AppendLine('```')   # apici singoli
             $sb.ToString() | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
           } else {
-            Write-Host "CoverageReport/Summary.txt non trovato: salto il riepilogo."
+            Write-Host 'CoverageReport/Summary.txt non trovato: salto il riepilogo.'
           }
 
       - name: Upload test & coverage artifacts
