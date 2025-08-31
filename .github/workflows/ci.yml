@@ -1,4 +1,4 @@
-name: CI (manual)
+﻿name: CI (manual)
 
 on:
   workflow_dispatch:
@@ -151,10 +151,10 @@ jobs:
           dotnet tool update -g dotnet-reportgenerator-globaltool
           $env:PATH += ";$env:USERPROFILE\.dotnet\tools"
           $reports = ($cov | Select-Object -Expand FullName) -join ';'
-          reportgenerator -reports:"$reports" -targetdir:"CoverageReport" -reporttypes:"Html;TextSummary";Badges
+          reportgenerator -reports:"$reports" -targetdir:"CoverageReport" -reporttypes:"Html;TextSummary;Badges"
           if (Test-Path "CoverageReport/Summary.txt") { Get-Content CoverageReport/Summary.txt }
 
-      - name: Guardrail â€” fail if no tests executed
+      - name: Guardrail Ã¢â‚¬â€ fail if no tests executed
         if: always() && inputs.run_tests == 'true'
         shell: pwsh
         run: |
@@ -180,7 +180,7 @@ jobs:
           if (-not $line) { Write-Host 'Riga "Line coverage" non trovata, salto.'; exit 0 }
           $pct = [double]($line.Matches[0].Groups[1].Value)
           $min = [double]$env:MIN_COVERAGE
-          Write-Host ("Line coverage: {0}%  â€”  Threshold: {1}%" -f $pct, $min)
+          Write-Host ("Line coverage: {0}%  Ã¢â‚¬â€  Threshold: {1}%" -f $pct, $min)
           if ($pct -lt $min) { throw "Coverage {0}% < threshold {1}%" -f $pct, $min }
 
       - name: Coverage summary (job summary)
@@ -193,7 +193,7 @@ jobs:
             $sb = New-Object System.Text.StringBuilder
             [void]$sb.AppendLine('### Code Coverage (ReportGenerator)')
             [void]$sb.AppendLine()
-            [void]$sb.AppendLine('```')   # apici singoli â‡’ backtick letterali
+            [void]$sb.AppendLine('```')   # apici singoli Ã¢â€¡â€™ backtick letterali
             [void]$sb.Append($sum)
             [void]$sb.AppendLine()        # aggiungo newline sempre, niente `n
             [void]$sb.AppendLine('```')   # apici singoli
@@ -228,3 +228,4 @@ jobs:
             TestResults/**/*.trx
             TestResults/**/coverage.cobertura.xml
             CoverageReport/**
+
