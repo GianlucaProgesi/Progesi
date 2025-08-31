@@ -19,16 +19,16 @@ namespace ProgesiCore
             return obj is null
                 ? "<null>"
                 : obj switch
-            {
-                string s => s,
-                bool b => b ? "true" : "false",
-                int i => i.ToString(),
-                long l => l.ToString(),
-                double d => d.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                float f => f.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                decimal m => m.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                _ => JsonConvert.SerializeObject(obj, JsonSettings) ?? string.Empty,
-            };
+                {
+                    string s => s,
+                    bool b => b ? "true" : "false",
+                    int i => i.ToString(),
+                    long l => l.ToString(),
+                    double d => d.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    float f => f.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    decimal m => m.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                    _ => JsonConvert.SerializeObject(obj, JsonSettings) ?? string.Empty,
+                };
         }
 
         internal static string Sha256Hex(string s)
