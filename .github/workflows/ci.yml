@@ -151,6 +151,35 @@ jobs:
           reportgenerator -reports:"$reports" -targetdir:"CoverageReport" -reporttypes:"Html;TextSummary"
           if (Test-Path "CoverageReport/Summary.txt") { Get-Content CoverageReport/Summary.txt }
 
+      - name: Guardrail — fail if no tests executed
+        if: always() && inputs.run_tests == 'true'
+        shell: pwsh
+        run: |
+          $trx = Get-ChildItem -Recurse -Path "TestResults" -Filter "*.trx" -ErrorAction SilentlyContinue
+          if (-not $trx) {
+            Write-Error "Nessun file .trx trovato: sembra non siano stati eseguiti test."
+          } else {
+            Write-Host "Trovati $($trx.Count) file .trx."
+          }
+
+      - name: Enforce minimum line coverage
+        if: ${{ inputs.collect_coverage == 'true' && inputs.run_tests == 'true' }}
+        shell: pwsh
+        env:
+          MIN_COVERAGE: '55.0'   # alza gradualmente (oggi sei a 60.1)
+        run: |
+          $summary = 'CoverageReport/Summary.txt'
+          if (-not (Test-Path $summary)) {
+            Write-Host 'Nessun Summary.txt, salto il controllo soglia.'
+            exit 0
+          }
+          $line = Select-String -Path $summary -Pattern '^  Line coverage:\s+([0-9.]+)%' | Select-Object -First 1
+          if (-not $line) { Write-Host 'Riga "Line coverage" non trovata, salto.'; exit 0 }
+          $pct = [double]($line.Matches[0].Groups[1].Value)
+          $min = [double]$env:MIN_COVERAGE
+          Write-Host ("Line coverage: {0}%  —  Threshold: {1}%" -f $pct, $min)
+          if ($pct -lt $min) { throw "Coverage {0}% < threshold {1}%" -f $pct, $min }
+
       - name: Coverage summary (job summary)
         if: ${{ inputs.collect_coverage == 'true' && inputs.run_tests == 'true' }}
         shell: pwsh
