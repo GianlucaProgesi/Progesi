@@ -1,24 +1,11 @@
-root = true
+﻿root = true
 
 [*]
-charset = utf-8-bom
+charset = utf-8
 end_of_line = crlf
 insert_final_newline = true
-indent_style = space
-indent_size = 4
 trim_trailing_whitespace = true
 
-# C#
 [*.cs]
-# Prefer var quando il tipo è ovvio
-csharp_style_var_when_type_is_apparent = true:suggestion
-# 'this.' non necessario
-dotnet_style_qualification_for_field = false:suggestion
-dotnet_style_qualification_for_property = false:suggestion
-dotnet_style_qualification_for_method = false:suggestion
-dotnet_style_qualification_for_event = false:suggestion
-
-# Analyzer (non aggressivi)
-dotnet_analyzer_diagnostic.category-Style.severity = suggestion
-dotnet_analyzer_diagnostic.category-Design.severity = warning
-dotnet_analyzer_diagnostic.category-Usage.severity  = warning
+indent_style = space
+indent_size = 4
