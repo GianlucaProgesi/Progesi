@@ -1,13 +1,12 @@
-name: Release (tag)
+name: release
 
 on:
   push:
     tags:
-      - 'v*.*.*'
-  workflow_dispatch:
+      - "v*.*.*"
 
 permissions:
-  contents: write
+  contents: read
   packages: write
 
 jobs:
@@ -16,8 +15,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -26,39 +23,33 @@ jobs:
             8.0.x
             6.0.x
 
-      - name: Compute version from tag
-        id: ver
-        shell: pwsh
-        run: |
-          $tag = "${{ github.ref_name }}"
-          if ($tag.StartsWith('v')) { $v = $tag.Substring(1) } else { $v = $tag }
-          "PKG_VERSION=$v" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          Write-Host "Version: $v"
-
       - name: Restore
-        run: dotnet restore "Progesi.CI.slnf"
+        run: dotnet restore Progesi.CI.slnf
 
       - name: Build
-        run: dotnet build "Progesi.CI.slnf" -c Release --no-restore
+        run: dotnet build Progesi.CI.slnf -c Release --no-restore
 
-      - name: Pack ProgesiCore
-        run: dotnet pack src/ProgesiCore/ProgesiCore.csproj -c Release -o out /p:PackageVersion=${{ env.PKG_VERSION }} /p:ContinuousIntegrationBuild=true
+      - name: Pack
+        run: dotnet pack src/ProgesiCore/ProgesiCore.csproj -c Release -o ./nuget --no-build
 
       - name: Upload nupkg
         uses: actions/upload-artifact@v4
         with:
           name: nuget
-          path: out/*.nupkg
+          path: nuget/*.nupkg
           if-no-files-found: error
 
   release:
     needs: pack
     runs-on: ubuntu-latest
+
+    # Raccogliamo qui le variabili che useremo negli 'if:'
     env:
       OWNER: ${{ github.repository_owner }}
-      # Esponiamo i secret come env
       NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
-      GPR_PAT: ${{ secrets.GPR_PAT }}
+      # Se GPR_PAT non c’è, usiamo il GITHUB_TOKEN del job
+      GPR_TOKEN: ${{ secrets.GPR_PAT != '' && secrets.GPR_PAT || github.token }}
+
     steps:
       - name: Download nupkg
         uses: actions/download-artifact@v4
@@ -66,30 +57,36 @@ jobs:
           name: nuget
           path: nuget
 
-      - name: Push to NuGet.org (if key present)
-        if: ${{ env.NUGET_API_KEY != '' }}
+      # --- NuGet.org ---------------------------------------------------------
+      - name: Push to NuGet.org
+        if: env.NUGET_API_KEY != ''
         run: |
           dotnet nuget push "nuget/*.nupkg" \
             --source "https://api.nuget.org/v3/index.json" \
-            --api-key "$NUGET_API_KEY" \
+            --api-key  "${{ env.NUGET_API_KEY }}" \
             --skip-duplicate
 
-      - name: Configure GitHub Packages source (if PAT present)
-        if: ${{ env.GPR_PAT != '' }}
+      # --- GitHub Packages (GPR) --------------------------------------------
+      - name: Configure GPR source with credentials
+        if: env.GPR_TOKEN != ''
         run: |
           dotnet nuget add source "https://nuget.pkg.github.com/${{ env.OWNER }}/index.json" \
             --name "github" \
-            --username "${{ env.OWNER }}" \
-            --password "$GPR_PAT" \
+            --username "${{ github.actor }}" \
+            --password "${{ env.GPR_TOKEN }}" \
             --store-password-in-clear-text
 
-      - name: Push to GitHub Packages (if PAT present)
-        if: ${{ env.GPR_PAT != '' }}
-        run: dotnet nuget push "nuget/*.nupkg" --source "github" --skip-duplicate
+      - name: Push to GitHub Packages (GPR)
+        if: env.GPR_TOKEN != ''
+        run: |
+          dotnet nuget push "nuget/*.nupkg" \
+            --source "github" \
+            --api-key "${{ env.GPR_TOKEN }}" \
+            --skip-duplicate
 
-      - name: Create GitHub Release (attach nupkg)
+      # --- Release su GitHub -------------------------------------------------
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: nuget/*.nupkg
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          generate_release_notes: true
