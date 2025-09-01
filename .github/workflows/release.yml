@@ -43,11 +43,10 @@ jobs:
     needs: pack
     runs-on: ubuntu-latest
 
-    # Raccogliamo qui le variabili che useremo negli 'if:'
     env:
       OWNER: ${{ github.repository_owner }}
       NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
-      # Se GPR_PAT non c’è, usiamo il GITHUB_TOKEN del job
+      # Se non fornisci GPR_PAT, usiamo il GITHUB_TOKEN del job
       GPR_TOKEN: ${{ secrets.GPR_PAT != '' && secrets.GPR_PAT || github.token }}
 
     steps:
@@ -57,34 +56,33 @@ jobs:
           name: nuget
           path: nuget
 
-      # --- NuGet.org ---------------------------------------------------------
+      # ---------------- NuGet.org ----------------
       - name: Push to NuGet.org
         if: env.NUGET_API_KEY != ''
         run: |
           dotnet nuget push "nuget/*.nupkg" \
             --source "https://api.nuget.org/v3/index.json" \
-            --api-key  "${{ env.NUGET_API_KEY }}" \
+            --api-key "${{ env.NUGET_API_KEY }}" \
             --skip-duplicate
 
-      # --- GitHub Packages (GPR) --------------------------------------------
-      - name: Configure GPR source with credentials
+      # ------------- GitHub Packages -------------
+      # (Opzionale) Aggiungo la source nominata, ma non serve per l'autenticazione
+      - name: Add GPR source (optional)
         if: env.GPR_TOKEN != ''
         run: |
           dotnet nuget add source "https://nuget.pkg.github.com/${{ env.OWNER }}/index.json" \
-            --name "github" \
-            --username "${{ github.actor }}" \
-            --password "${{ env.GPR_TOKEN }}" \
-            --store-password-in-clear-text
+            --name "github"
 
       - name: Push to GitHub Packages (GPR)
         if: env.GPR_TOKEN != ''
+        env:
+          # <- Qui avviene davvero l'autenticazione con GPR
+          NUGET_AUTH_TOKEN: ${{ env.GPR_TOKEN }}
         run: |
           dotnet nuget push "nuget/*.nupkg" \
-            --source "github" \
-            --api-key "${{ env.GPR_TOKEN }}" \
+            --source "https://nuget.pkg.github.com/${{ env.OWNER }}/index.json" \
             --skip-duplicate
 
-      # --- Release su GitHub -------------------------------------------------
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
