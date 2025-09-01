@@ -46,7 +46,7 @@ jobs:
     env:
       OWNER: ${{ github.repository_owner }}
       NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
-      # Se non fornisci GPR_PAT, usiamo il GITHUB_TOKEN del job
+      # Se non c'è GPR_PAT, uso il GITHUB_TOKEN
       GPR_TOKEN: ${{ secrets.GPR_PAT != '' && secrets.GPR_PAT || github.token }}
 
     steps:
@@ -66,21 +66,21 @@ jobs:
             --skip-duplicate
 
       # ------------- GitHub Packages -------------
-      # (Opzionale) Aggiungo la source nominata, ma non serve per l'autenticazione
-      - name: Add GPR source (optional)
+      - name: Configure GPR source (username+password)
         if: env.GPR_TOKEN != ''
         run: |
+          dotnet nuget remove source github || true
           dotnet nuget add source "https://nuget.pkg.github.com/${{ env.OWNER }}/index.json" \
-            --name "github"
+            --name "github" \
+            --username "${{ env.OWNER }}" \
+            --password "${{ env.GPR_TOKEN }}" \
+            --store-password-in-clear-text
 
       - name: Push to GitHub Packages (GPR)
         if: env.GPR_TOKEN != ''
-        env:
-          # <- Qui avviene davvero l'autenticazione con GPR
-          NUGET_AUTH_TOKEN: ${{ env.GPR_TOKEN }}
         run: |
           dotnet nuget push "nuget/*.nupkg" \
-            --source "https://nuget.pkg.github.com/${{ env.OWNER }}/index.json" \
+            --source "github" \
             --skip-duplicate
 
       - name: Create GitHub Release
