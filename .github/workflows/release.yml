@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     tags:
-      - 'v*'   # es: v1.0.18
+      - 'v*'   # es: v1.0.21
 
 permissions:
   contents: write
@@ -56,7 +56,7 @@ jobs:
           printf "%s\n" "${PACKABLE[@]}" > packlist.txt
           echo "count=${#PACKABLE[@]}" >> "$GITHUB_OUTPUT"
 
-      # Pack per progetto (evita MSB1008) e imposta /p:Version se siamo su un tag
+      # Pack per progetto (evita MSB1008). Se c'è un tag, forza /p:Version
       - name: Pack (per project loop)
         shell: bash
         run: |
@@ -103,7 +103,7 @@ jobs:
         shell: bash
         run: echo "VER=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
-      # Pubblica su NuGet.org
+      # ---- Publish to NuGet.org (solo i pacchetti della versione del tag) ----
       - name: Publish to NuGet.org
         if: startsWith(github.ref, 'refs/tags/')
         env:
@@ -114,7 +114,7 @@ jobs:
             --api-key "$NUGET_API_KEY" \
             --skip-duplicate
 
-      # Configura la source 'gpr' (usa GPR_PAT se presente, altrimenti GITHUB_TOKEN)
+      # ---- Configure GitHub Packages source (usa GPR_PAT se presente) --------
       - name: Configure GitHub Packages source (gpr)
         if: startsWith(github.ref, 'refs/tags/')
         env:
@@ -133,19 +133,23 @@ jobs:
             --store-password-in-clear-text
           dotnet nuget list source
 
-      # Pubblica su GPR per-pacchetto; tollera 401/403 solo per ProgesiCore
+      # ---- Publish to GitHub Packages (per package, passa sempre --api-key) ---
+      # Tolleriamo 401/403 SOLO per ProgesiCore (package già associato altrove)
       - name: Publish to GitHub Packages (per package)
         if: startsWith(github.ref, 'refs/tags/')
         env:
           VER: ${{ steps.vars.outputs.VER }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GPR_PAT: ${{ secrets.GPR_PAT }}
         shell: bash
         run: |
           set -euo pipefail
+          API_KEY="${GPR_PAT:-$GITHUB_TOKEN}"
           for nupkg in ./nupkg/*.${VER}.nupkg; do
             name="$(basename "$nupkg")"
             echo "→ Pushing $name to GPR..."
             set +e
-            dotnet nuget push "$nupkg" --source "gpr" --skip-duplicate
+            dotnet nuget push "$nupkg" --source "gpr" --api-key "$API_KEY" --skip-duplicate
             rc=$?
             set -e
             if [ $rc -ne 0 ]; then
