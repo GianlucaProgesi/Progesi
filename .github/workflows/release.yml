@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     tags:
-      - 'v*'   # es: v1.0.16
+      - 'v*'   # es: v1.0.18
 
 permissions:
   contents: write
@@ -36,7 +36,7 @@ jobs:
             echo "VER=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
           fi
 
-      # Scopri i progetti packabili in ./src (salta quelli con <IsPackable>false</IsPackable>)
+      # Rileva i progetti packabili in ./src (salta quelli con <IsPackable>false</IsPackable>)
       - name: Discover packable projects
         id: discover
         shell: bash
@@ -56,7 +56,7 @@ jobs:
           printf "%s\n" "${PACKABLE[@]}" > packlist.txt
           echo "count=${#PACKABLE[@]}" >> "$GITHUB_OUTPUT"
 
-      # Pack uno per uno (evita MSB1008) e imposta /p:Version se siamo su un tag
+      # Pack per progetto (evita MSB1008) e imposta /p:Version se siamo su un tag
       - name: Pack (per project loop)
         shell: bash
         run: |
@@ -103,7 +103,7 @@ jobs:
         shell: bash
         run: echo "VER=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
-      # Pubblica solo i nupkg della versione del tag su NuGet.org
+      # Pubblica su NuGet.org
       - name: Publish to NuGet.org
         if: startsWith(github.ref, 'refs/tags/')
         env:
@@ -114,32 +114,43 @@ jobs:
             --api-key "$NUGET_API_KEY" \
             --skip-duplicate
 
-      # Pubblica su GitHub Packages: usa GPR_PAT se presente, altrimenti GITHUB_TOKEN
-      # Gestione tollerante del 403 su ProgesiCore (package già associato altrove)
-      - name: Publish to GitHub Packages
+      # Configura la source 'gpr' (usa GPR_PAT se presente, altrimenti GITHUB_TOKEN)
+      - name: Configure GitHub Packages source (gpr)
         if: startsWith(github.ref, 'refs/tags/')
         env:
           OWNER: ${{ github.repository_owner }}
+          USERNAME: ${{ github.actor }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           GPR_PAT: ${{ secrets.GPR_PAT }}
+        run: |
+          set -euo pipefail
+          API_KEY="${GPR_PAT:-$GITHUB_TOKEN}"
+          dotnet nuget remove source gpr || true
+          dotnet nuget add source "https://nuget.pkg.github.com/${OWNER}/index.json" \
+            --name "gpr" \
+            --username "${USERNAME}" \
+            --password "${API_KEY}" \
+            --store-password-in-clear-text
+          dotnet nuget list source
+
+      # Pubblica su GPR per-pacchetto; tollera 401/403 solo per ProgesiCore
+      - name: Publish to GitHub Packages (per package)
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          VER: ${{ steps.vars.outputs.VER }}
         shell: bash
         run: |
           set -euo pipefail
-          VER="${{ steps.vars.outputs.VER }}"
-          API_KEY="${GPR_PAT:-$GITHUB_TOKEN}"
           for nupkg in ./nupkg/*.${VER}.nupkg; do
             name="$(basename "$nupkg")"
             echo "→ Pushing $name to GPR..."
             set +e
-            dotnet nuget push "$nupkg" \
-              --source "https://nuget.pkg.github.com/$OWNER/index.json" \
-              --api-key "$API_KEY" \
-              --skip-duplicate
+            dotnet nuget push "$nupkg" --source "gpr" --skip-duplicate
             rc=$?
             set -e
             if [ $rc -ne 0 ]; then
               if [[ "$name" == ProgesiCore.* ]]; then
-                echo "⚠️  GPR 403 su $name: probabilmente il package è associato ad un altro repo. Lo salto e continuo."
+                echo "⚠️  GPR auth su $name (401/403): probabilmente il package è associato a un altro repo. Lo salto e continuo."
                 continue
               fi
               exit $rc
