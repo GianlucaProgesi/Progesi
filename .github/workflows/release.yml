@@ -1,4 +1,4 @@
-name: release
+﻿name: release
 
 on:
   workflow_dispatch:
@@ -28,7 +28,6 @@ jobs:
       - name: Build
         run: dotnet build -c Release --no-restore
 
-      # Calcola la versione dal tag se presente (es. v1.0.1 -> 1.0.1)
       - name: Compute version (if tag)
         id: vars
         shell: bash
@@ -37,7 +36,7 @@ jobs:
             echo "VER=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
           fi
 
-      # Pack SOLO i csproj sotto ./src; se c'è un tag forza /p:Version=...
+      # Pack SOLO i progetti sotto ./src; se c'è un tag forza la Version
       - name: Pack (src only)
         shell: bash
         run: |
@@ -74,7 +73,7 @@ jobs:
         shell: bash
         run: echo "VER=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
 
-      # --- Publish to nuget.org (solo i pacchetti della versione del tag) -----
+      # --- Publish to NuGet.org (solo i pacchetti della versione del tag) -----
       - name: Publish to NuGet.org
         if: startsWith(github.ref, 'refs/tags/')
         env:
@@ -85,7 +84,7 @@ jobs:
             --api-key "$NUGET_API_KEY" \
             --skip-duplicate
 
-      # --- Publish to GitHub Packages (usa esplicitamente --api-key) -----------
+      # --- Publish to GitHub Packages (usa --api-key su GPR) -------------------
       - name: Publish to GitHub Packages
         if: startsWith(github.ref, 'refs/tags/')
         env:
