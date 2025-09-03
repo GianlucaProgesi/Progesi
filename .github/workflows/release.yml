@@ -4,11 +4,11 @@ on:
   workflow_dispatch:
   push:
     tags:
-      - 'v*'   # es: v1.0.5
+      - 'v*'   # es: v1.0.1
 
 permissions:
-  contents: write   # per creare la GitHub Release
-  packages: write   # per pubblicare su GitHub Packages
+  contents: write
+  packages: write
 
 jobs:
   pack:
@@ -28,10 +28,24 @@ jobs:
       - name: Build
         run: dotnet build -c Release --no-restore
 
-      # Se tutti i progetti non-voluti sono IsPackable=false, questo basta.
-      # In alternativa potresti packare solo i csproj sotto ./src.
-      - name: Pack
-        run: dotnet pack -c Release --no-build -o ./nupkg
+      # Calcola la versione dal tag se presente (es. v1.0.1 -> 1.0.1)
+      - name: Compute version (if tag)
+        id: vars
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
+            echo "VER=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Pack SOLO i csproj sotto ./src; se c'è un tag forza /p:Version=...
+      - name: Pack (src only)
+        shell: bash
+        run: |
+          if [[ -n "${{ steps.vars.outputs.VER }}" ]]; then
+            dotnet pack ./src/*/*.csproj -c Release --no-build -o ./nupkg /p:Version=${{ steps.vars.outputs.VER }}
+          else
+            dotnet pack ./src/*/*.csproj -c Release --no-build -o ./nupkg
+          fi
 
       - name: Upload nupkg
         uses: actions/upload-artifact@v4
@@ -54,41 +68,38 @@ jobs:
         with:
           dotnet-version: '8.0.x'
 
-      # --- Publish to nuget.org ------------------------------------------------
+      - name: Compute version (from tag)
+        id: vars
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: bash
+        run: echo "VER=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
+      # --- Publish to nuget.org (solo i pacchetti della versione del tag) -----
       - name: Publish to NuGet.org
+        if: startsWith(github.ref, 'refs/tags/')
         env:
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
         run: |
-          dotnet nuget push "./nupkg/*.nupkg" \
+          dotnet nuget push "./nupkg/*.${{ steps.vars.outputs.VER }}.nupkg" \
             --source "https://api.nuget.org/v3/index.json" \
             --api-key "$NUGET_API_KEY" \
             --skip-duplicate
 
-      # --- Configure GitHub Packages source -----------------------------------
-      - name: Configure GitHub Packages source (GPR)
-        env:
-          GITHUB_ACTOR: ${{ github.actor }}
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          OWNER: ${{ github.repository_owner }}
-        run: |
-          dotnet nuget remove source github || true
-          dotnet nuget add source "https://nuget.pkg.github.com/$OWNER/index.json" \
-            --name "github" \
-            --username "$GITHUB_ACTOR" \
-            --password "$GITHUB_TOKEN" \
-            --store-password-in-clear-text
-          dotnet nuget list source
-
-      # --- Publish to GitHub Packages -----------------------------------------
+      # --- Publish to GitHub Packages (usa esplicitamente --api-key) -----------
       - name: Publish to GitHub Packages
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          OWNER: ${{ github.repository_owner }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          dotnet nuget push "./nupkg/*.nupkg" \
-            --source "github" \
+          dotnet nuget push "./nupkg/*.${{ steps.vars.outputs.VER }}.nupkg" \
+            --source "https://nuget.pkg.github.com/$OWNER/index.json" \
+            --api-key "$GITHUB_TOKEN" \
             --skip-duplicate
 
-      # --- Crea la GitHub Release con gli artifacts ----------------------------
+      # --- GitHub Release con i nupkg della versione ---------------------------
       - name: Create GitHub Release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: ./nupkg/*.nupkg
+          files: ./nupkg/*.${{ steps.vars.outputs.VER }}.nupkg
