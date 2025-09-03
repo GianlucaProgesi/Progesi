@@ -1,23 +1,24 @@
 name: release
 
 on:
-  # tag tipo v1.2.3 -> esegue pack + pubblicazione
   push:
     tags:
-      - 'v*'
-  # opzionale: esegui a mano per provare il pack (puoi passare la versione)
+      - "v*.*.*"
   workflow_dispatch:
     inputs:
       version:
-        description: "Versione del pacchetto (es. 1.2.3). Se vuota e c'è un tag v*, useremo il tag."
+        description: "Versione pacchetto (es. 1.2.3). Se vuoto, useremo il tag v*"
         required: false
         default: ""
+
+permissions:
+  contents: write   # per creare la Release
+  packages: write   # per pubblicare su GitHub Packages
 
 jobs:
   pack:
     runs-on: windows-latest
     env:
-      # per calcolare la versione del pacchetto
       RAW_TAG: ${{ github.ref_name }}
       DISPATCH_VERSION: ${{ inputs.version || '' }}
     steps:
@@ -29,32 +30,32 @@ jobs:
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.x'
+          dotnet-version: |
+            8.0.x
+            6.0.x
 
-      - name: Calcola versione pacchetto
+      - name: Calcola versione
         shell: pwsh
         run: |
-          $v = "$env:DISPATCH_VERSION"
+          $v = "${{ env.DISPATCH_VERSION }}"
           if ([string]::IsNullOrWhiteSpace($v)) {
-            $v = "$env:RAW_TAG".TrimStart('v')
+            $t = "${{ env.RAW_TAG }}"
+            if ($t.StartsWith('v')) { $v = $t.Substring(1) } else { $v = $t }
           }
-          if ([string]::IsNullOrWhiteSpace($v)) {
-            throw "Versione non determinabile. Fornisci 'version' nel workflow_dispatch o usa un tag 'v*'."
-          }
-          "PKG_VERSION=$v" >> $env:GITHUB_ENV
-          Write-Host "Versione: $v"
+          if ([string]::IsNullOrWhiteSpace($v)) { throw "Versione non determinabile (serve input o tag v*)" }
+          "PKG_VERSION=$v" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          Write-Host "Versione pacchetto: $v"
 
       - name: Restore
         run: dotnet restore Progesi.CI.slnf
 
-      - name: Pack ProgesiCore
-        run: >
-          dotnet pack src/ProgesiCore/ProgesiCore.csproj
-          -c Release
-          -p:PackageVersion=${{ env.PKG_VERSION }}
-          -o nuget
+      - name: Build
+        run: dotnet build Progesi.CI.slnf -c Release --no-restore
 
-      - name: Pubblica artefatti (nupkg)
+      - name: Pack ProgesiCore
+        run: dotnet pack src/ProgesiCore/ProgesiCore.csproj -c Release -o nuget --no-build /p:PackageVersion=${{ env.PKG_VERSION }}
+
+      - name: Upload nupkg artifact
         uses: actions/upload-artifact@v4
         with:
           name: nuget
@@ -64,28 +65,29 @@ jobs:
   release:
     needs: pack
     runs-on: ubuntu-latest
-    # GITHUB_TOKEN avrà permesso di scrivere sui packages
-    permissions:
-      contents: write
-      packages: write
     env:
       OWNER: ${{ github.repository_owner }}
-      # Se esiste GPR_PAT lo usiamo, altrimenti GITHUB_TOKEN
+      # Se GPR_PAT è impostato lo usiamo, altrimenti GITHUB_TOKEN
       GPR_TOKEN: ${{ secrets.GPR_PAT != '' && secrets.GPR_PAT || github.token }}
       NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
     steps:
-      - name: Scarica artefatti
+      - name: Download nupkg
         uses: actions/download-artifact@v4
         with:
           name: nuget
           path: nuget
 
-      - name: Setup .NET SDK per push
+      - name: Setup .NET SDK
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.x'
+          dotnet-version: 8.x
 
-      # Pubblica su NuGet.org solo se hai impostato il secret NUGET_API_KEY
+      - name: Install NuGet CLI (fallback)
+        run: |
+          dotnet tool install --global NuGet.CommandLine
+          echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
+
+      # ---------------- NuGet.org (opzionale) ----------------
       - name: Push to NuGet.org
         if: env.NUGET_API_KEY != ''
         run: |
@@ -94,17 +96,43 @@ jobs:
             --api-key "${{ env.NUGET_API_KEY }}" \
             --skip-duplicate
 
-      # Pubblica su GitHub Packages (GPR) usando PAT o GITHUB_TOKEN
-      - name: Push to GitHub Packages (GPR)
+      # --------------- GitHub Packages (GPR) -----------------
+      - name: Configure GPR source for dotnet & nuget
         run: |
           SRC="https://nuget.pkg.github.com/${{ env.OWNER }}/index.json"
-          echo "Pushing to $SRC"
-          dotnet nuget push "nuget/*.nupkg" \
-            --source "$SRC" \
-            --api-key "${{ env.GPR_TOKEN }}" \
-            --skip-duplicate
 
-      - name: Crea GitHub Release
+          # Config per dotnet
+          dotnet nuget remove source github || true
+          dotnet nuget add source "$SRC" \
+            --name "github" \
+            --username "${{ env.OWNER }}" \
+            --password "${{ env.GPR_TOKEN }}" \
+            --store-password-in-clear-text
+
+          # Config per NuGet CLI
+          nuget sources Remove -Name "github" || true
+          nuget sources Add -Name "github" -Source "$SRC" \
+            -UserName "${{ env.OWNER }}" \
+            -Password "${{ env.GPR_TOKEN }}" \
+            -StorePasswordInClearText
+
+          echo "Sorgente configurata: $SRC"
+
+      - name: Push to GitHub Packages (try dotnet, then nuget)
+        shell: bash
+        run: |
+          set -eo pipefail
+          echo "Tentativo con dotnet nuget push sulla source 'github'..."
+          if dotnet nuget push "nuget/*.nupkg" --source "github" --api-key "${GPR_TOKEN}" --skip-duplicate; then
+            echo "dotnet push riuscito."
+          else
+            echo "dotnet push fallito, provo con NuGet CLI..."
+            nuget push "nuget/*.nupkg" -Source "github" -ApiKey "${GPR_TOKEN}" -NonInteractive -SkipDuplicate
+            echo "nuget push riuscito."
+          fi
+
+      # ---------------- GitHub Release -----------------------
+      - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: nuget/*.nupkg
