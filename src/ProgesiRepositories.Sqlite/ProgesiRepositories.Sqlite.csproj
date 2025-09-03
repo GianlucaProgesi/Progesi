@@ -6,7 +6,6 @@
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
   </PropertyGroup>
 
-  <!-- Nessun ProjectReference a se stesso! -->
   <ItemGroup>
     <ProjectReference Include="..\ProgesiCore\ProgesiCore.csproj" />
   </ItemGroup>
@@ -15,5 +14,12 @@
     <PackageReference Include="Microsoft.Data.Sqlite" Version="7.0.20" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="2.1.8" />
+  </ItemGroup>
+
+  <!-- Includi esplicito dei logger -->
+  <ItemGroup>
+    <Compile Include="Logging.cs" />
+    <Compile Include="Logging.Extras.cs" />
+    <Compile Include="Logging.Rolling.cs" />
   </ItemGroup>
 </Project>
