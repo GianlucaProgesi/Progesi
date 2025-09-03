@@ -1,139 +1,94 @@
 name: release
 
 on:
+  workflow_dispatch:
   push:
     tags:
-      - "v*.*.*"
-  workflow_dispatch:
-    inputs:
-      version:
-        description: "Versione pacchetto (es. 1.2.3). Se vuoto, useremo il tag v*"
-        required: false
-        default: ""
+      - 'v*'   # es: v1.0.5
 
 permissions:
-  contents: write   # per creare la Release
+  contents: write   # per creare la GitHub Release
   packages: write   # per pubblicare su GitHub Packages
 
 jobs:
   pack:
-    runs-on: windows-latest
-    env:
-      RAW_TAG: ${{ github.ref_name }}
-      DISPATCH_VERSION: ${{ inputs.version || '' }}
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Setup .NET SDK
+      - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: |
-            8.0.x
-            6.0.x
-
-      - name: Calcola versione
-        shell: pwsh
-        run: |
-          $v = "${{ env.DISPATCH_VERSION }}"
-          if ([string]::IsNullOrWhiteSpace($v)) {
-            $t = "${{ env.RAW_TAG }}"
-            if ($t.StartsWith('v')) { $v = $t.Substring(1) } else { $v = $t }
-          }
-          if ([string]::IsNullOrWhiteSpace($v)) { throw "Versione non determinabile (serve input o tag v*)" }
-          "PKG_VERSION=$v" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          Write-Host "Versione pacchetto: $v"
+          dotnet-version: '8.0.x'
 
       - name: Restore
-        run: dotnet restore Progesi.CI.slnf
+        run: dotnet restore
 
       - name: Build
-        run: dotnet build Progesi.CI.slnf -c Release --no-restore
+        run: dotnet build -c Release --no-restore
 
-      - name: Pack ProgesiCore
-        run: dotnet pack src/ProgesiCore/ProgesiCore.csproj -c Release -o nuget --no-build /p:PackageVersion=${{ env.PKG_VERSION }}
+      # Se tutti i progetti non-voluti sono IsPackable=false, questo basta.
+      # In alternativa potresti packare solo i csproj sotto ./src.
+      - name: Pack
+        run: dotnet pack -c Release --no-build -o ./nupkg
 
-      - name: Upload nupkg artifact
+      - name: Upload nupkg
         uses: actions/upload-artifact@v4
         with:
-          name: nuget
-          path: nuget/*.nupkg
-          if-no-files-found: error
+          name: nupkg
+          path: ./nupkg/*.nupkg
 
   release:
     needs: pack
     runs-on: ubuntu-latest
-    env:
-      OWNER: ${{ github.repository_owner }}
-      # Se GPR_PAT è impostato lo usiamo, altrimenti GITHUB_TOKEN
-      GPR_TOKEN: ${{ secrets.GPR_PAT != '' && secrets.GPR_PAT || github.token }}
-      NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
     steps:
       - name: Download nupkg
         uses: actions/download-artifact@v4
         with:
-          name: nuget
-          path: nuget
+          name: nupkg
+          path: ./nupkg
 
-      - name: Setup .NET SDK
+      - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 8.x
+          dotnet-version: '8.0.x'
 
-      - name: Install NuGet CLI (fallback)
+      # --- Publish to nuget.org ------------------------------------------------
+      - name: Publish to NuGet.org
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
         run: |
-          dotnet tool install --global NuGet.CommandLine
-          echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
-
-      # ---------------- NuGet.org (opzionale) ----------------
-      - name: Push to NuGet.org
-        if: env.NUGET_API_KEY != ''
-        run: |
-          dotnet nuget push "nuget/*.nupkg" \
+          dotnet nuget push "./nupkg/*.nupkg" \
             --source "https://api.nuget.org/v3/index.json" \
-            --api-key "${{ env.NUGET_API_KEY }}" \
+            --api-key "$NUGET_API_KEY" \
             --skip-duplicate
 
-      # --------------- GitHub Packages (GPR) -----------------
-      - name: Configure GPR source for dotnet & nuget
+      # --- Configure GitHub Packages source -----------------------------------
+      - name: Configure GitHub Packages source (GPR)
+        env:
+          GITHUB_ACTOR: ${{ github.actor }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OWNER: ${{ github.repository_owner }}
         run: |
-          SRC="https://nuget.pkg.github.com/${{ env.OWNER }}/index.json"
-
-          # Config per dotnet
           dotnet nuget remove source github || true
-          dotnet nuget add source "$SRC" \
+          dotnet nuget add source "https://nuget.pkg.github.com/$OWNER/index.json" \
             --name "github" \
-            --username "${{ env.OWNER }}" \
-            --password "${{ env.GPR_TOKEN }}" \
+            --username "$GITHUB_ACTOR" \
+            --password "$GITHUB_TOKEN" \
             --store-password-in-clear-text
+          dotnet nuget list source
 
-          # Config per NuGet CLI
-          nuget sources Remove -Name "github" || true
-          nuget sources Add -Name "github" -Source "$SRC" \
-            -UserName "${{ env.OWNER }}" \
-            -Password "${{ env.GPR_TOKEN }}" \
-            -StorePasswordInClearText
-
-          echo "Sorgente configurata: $SRC"
-
-      - name: Push to GitHub Packages (try dotnet, then nuget)
-        shell: bash
+      # --- Publish to GitHub Packages -----------------------------------------
+      - name: Publish to GitHub Packages
         run: |
-          set -eo pipefail
-          echo "Tentativo con dotnet nuget push sulla source 'github'..."
-          if dotnet nuget push "nuget/*.nupkg" --source "github" --api-key "${GPR_TOKEN}" --skip-duplicate; then
-            echo "dotnet push riuscito."
-          else
-            echo "dotnet push fallito, provo con NuGet CLI..."
-            nuget push "nuget/*.nupkg" -Source "github" -ApiKey "${GPR_TOKEN}" -NonInteractive -SkipDuplicate
-            echo "nuget push riuscito."
-          fi
+          dotnet nuget push "./nupkg/*.nupkg" \
+            --source "github" \
+            --skip-duplicate
 
-      # ---------------- GitHub Release -----------------------
+      # --- Crea la GitHub Release con gli artifacts ----------------------------
       - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2
         with:
-          files: nuget/*.nupkg
-          generate_release_notes: true
+          files: ./nupkg/*.nupkg
