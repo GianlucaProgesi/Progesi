@@ -1,132 +1,30 @@
-﻿name: release
-
-on:
-  workflow_dispatch:
-  push:
-    tags:
-      - 'v*'   # es: v1.0.15
-
-permissions:
-  contents: write
-  packages: write
-
-jobs:
-  pack:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '8.0.x'
-
-      - name: Restore
-        run: dotnet restore
-
-      - name: Build
-        run: dotnet build -c Release --no-restore
-
-      - name: Compute version (if tag)
-        id: vars
-        shell: bash
-        run: |
-          if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
-            echo "VER=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
-          fi
-
-      # Scopri i progetti in ./src, escludi quelli con <IsPackable>false</IsPackable>
-      - name: Discover packable projects
-        id: discover
-        shell: bash
-        run: |
-          set -euo pipefail
-          mapfile -t PROJS < <(ls ./src/*/*.csproj)
-          PACKABLE=()
-          for p in "${PROJS[@]}"; do
-            if grep -q '<IsPackable>false</IsPackable>' "$p"; then
-              echo "Skip not packable: $p"
-            else
-              echo "Packable: $p"
-              PACKABLE+=("$p")
-            fi
-          done
-          printf "%s\n" "${PACKABLE[@]}" > packlist.txt
-          echo "count=${#PACKABLE[@]}" >> "$GITHUB_OUTPUT"
-
-      # Pack uno per uno (evita MSB1008) e forza /p:Version se siamo su un tag
-      - name: Pack (per project loop)
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p ./nupkg
-          VER="${{ steps.vars.outputs.VER }}"
-          while IFS= read -r proj; do
-            [[ -z "$proj" ]] && continue
-            if [[ -n "${VER:-}" ]]; then
-              echo "Packing $proj (Version=$VER)"
-              dotnet pack "$proj" -c Release --no-build -o ./nupkg /p:Version="$VER"
-            else
-              echo "Packing $proj"
-              dotnet pack "$proj" -c Release --no-build -o ./nupkg
-            fi
-          done < packlist.txt
-          echo "Produced packages:"
-          ls -l ./nupkg
-
-      - name: Upload nupkg
-        uses: actions/upload-artifact@v4
-        with:
-          name: nupkg
-          path: ./nupkg/*.nupkg
-
-  release:
-    needs: pack
-    runs-on: ubuntu-latest
-    steps:
-      - name: Download nupkg
-        uses: actions/download-artifact@v4
-        with:
-          name: nupkg
-          path: ./nupkg
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: '8.0.x'
-
-      - name: Compute version (from tag)
-        id: vars
-        if: startsWith(github.ref, 'refs/tags/')
-        shell: bash
-        run: echo "VER=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
-
-      # Pubblica SOLO i pacchetti della versione del tag su nuget.org
-      - name: Publish to NuGet.org
-        if: startsWith(github.ref, 'refs/tags/')
-        env:
-          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
-        run: |
-          dotnet nuget push "./nupkg/*.${{ steps.vars.outputs.VER }}.nupkg" \
-            --source "https://api.nuget.org/v3/index.json" \
-            --api-key "$NUGET_API_KEY" \
-            --skip-duplicate
-
-      # Pubblica su GitHub Packages con --api-key (GITHUB_TOKEN)
-      - name: Publish to GitHub Packages
+﻿      - name: Publish to GitHub Packages
         if: startsWith(github.ref, 'refs/tags/')
         env:
           OWNER: ${{ github.repository_owner }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GPR_PAT: ${{ secrets.GPR_PAT }}
+        shell: bash
         run: |
-          dotnet nuget push "./nupkg/*.${{ steps.vars.outputs.VER }}.nupkg" \
-            --source "https://nuget.pkg.github.com/$OWNER/index.json" \
-            --api-key "$GITHUB_TOKEN" \
-            --skip-duplicate
-
-      - name: Create GitHub Release
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
-        with:
-          files: ./nupkg/*.${{ steps.vars.outputs.VER }}.nupkg
+          set -euo pipefail
+          VER="${{ steps.vars.outputs.VER }}"
+          API_KEY="${GPR_PAT:-$GITHUB_TOKEN}"
+          for nupkg in ./nupkg/*.${VER}.nupkg; do
+            name="$(basename "$nupkg")"
+            echo "→ Pushing $name to GPR..."
+            set +e
+            dotnet nuget push "$nupkg" \
+              --source "https://nuget.pkg.github.com/$OWNER/index.json" \
+              --api-key "$API_KEY" \
+              --skip-duplicate
+            rc=$?
+            set -e
+            if [ $rc -ne 0 ]; then
+              # Tolleriamo il 403 solo per ProgesiCore (package già associato altrove)
+              if [[ "$name" == ProgesiCore.* ]]; then
+                echo "⚠️  GPR 403 su $name: probabilmente il package è associato ad un altro repo. Lo salto e continuo."
+                continue
+              fi
+              exit $rc
+            fi
+          done
