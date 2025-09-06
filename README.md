@@ -1,3 +1,20 @@
+<!-- PROGESI:HERO:START -->
+<p align="center">
+  <img src="docs/assets/progesi-logo.jpg" alt="Progesi Logo" width="400"/>
+</p>
+
+<h1 align="center">Progesi Engineering Toolchain</h1>
+
+<p align="center">
+  <a href="https://github.com/GianlucaProgesi/Progesi/actions/workflows/release.yml"><img src="https://github.com/GianlucaProgesi/Progesi/actions/workflows/release.yml/badge.svg" alt="Build"/></a>
+  <a href="https://www.nuget.org/packages/ProgesiCore"><img src="https://img.shields.io/nuget/v/ProgesiCore.svg" alt="NuGet"/></a>
+  <a href="https://www.nuget.org/packages/ProgesiCore"><img src="https://img.shields.io/nuget/dt/ProgesiCore.svg" alt="Downloads"/></a>
+  <a href="tools/Release-HealthCheck.ps1"><img src="https://img.shields.io/badge/Release%20Health-Run%20check-2ea44f?logo=powershell&logoColor=white" alt="Release Health"/></a>
+</p>
+
+---
+<!-- PROGESI:HERO:END -->
+
 <!-- PROGESI:GPR:START -->
 ## Using GitHub Packages (GPR)
 
