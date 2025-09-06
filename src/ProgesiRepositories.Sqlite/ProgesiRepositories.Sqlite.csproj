@@ -19,7 +19,7 @@
     <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="2.1.8" />
     <None Include="README.md" Pack="true" PackagePath="/" />
   </ItemGroup>
-  <!-- Escludi gli extra finchÃ© non li adeguiamo allâ€™interfaccia -->
+  <!-- Escludi gli extra finchÃƒÂ© non li adeguiamo allÃ¢â‚¬â„¢interfaccia -->
   <ItemGroup>
   </ItemGroup>
 </Project>

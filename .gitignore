@@ -66,3 +66,7 @@ tools/*.ps1
 src/ProgesiRepositories.Sqlite/**/bin/
 src/ProgesiRepositories.Sqlite/**/obj/
 
+
+!src/ProgesiRepositories.Sqlite/Logging.Extras.cs
+!src/ProgesiRepositories.Sqlite/Logging.Rolling.cs
+
