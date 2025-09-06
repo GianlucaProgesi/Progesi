@@ -111,10 +111,9 @@ jobs:
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
         run: |
           dotnet nuget push "./nupkg/*.${{ steps.vars.outputs.VER }}.nupkg" \
-  	    --source "https://api.nuget.org/v3/index.json" \
-  	    --api-key "$NUGET_API_KEY" \
+            --source "https://api.nuget.org/v3/index.json" \
+            --api-key "$NUGET_API_KEY" \
             --skip-duplicate
-
 
       # --- GitHub Packages: sempre con --api-key (usa GPR_PAT se c'?, altrimenti GITHUB_TOKEN)
       - name: Publish to GitHub Packages (GPR)
@@ -125,7 +124,7 @@ jobs:
         run: |
           set -euo pipefail
           for nupkg in ./nupkg/*.${{ steps.vars.outputs.VER }}.nupkg; do
-       	    echo "-> Pushing $(basename "$nupkg") to GPR..."
+            echo "? Pushing $(basename "$nupkg") to GPR..."
             dotnet nuget push "$nupkg" \
               --source "https://nuget.pkg.github.com/$OWNER/index.json" \
               --api-key "$TOKEN" \
@@ -137,3 +136,4 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: ./nupkg/*.${{ steps.vars.outputs.VER }}.nupkg
+
