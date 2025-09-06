@@ -2,12 +2,14 @@
 
 [*]
 charset = utf-8
-end_of_line = crlf
 insert_final_newline = true
-trim_trailing_whitespace = true
+end_of_line = lf
 
-[*.cs]
-indent_style = space
-indent_size = 4
-[tests/**/*.cs]
-dotnet_diagnostic.xUnit1042.severity = suggestion
+[*.ps1]
+end_of_line = crlf
+
+[*.bat]
+end_of_line = crlf
+
+[*.sln]
+end_of_line = crlf
