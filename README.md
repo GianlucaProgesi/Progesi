@@ -48,6 +48,29 @@ dotnet nuget remove source github >/dev/null 2>&1; dotnet nuget add source "http
 [![Release Health](https://img.shields.io/badge/Release%20Health-Run%20check-2ea44f?logo=powershell&logoColor=white)](tools/Release-HealthCheck.ps1)
 <!-- PROGESI:BADGES:END -->
 
+<!-- PROGESI:OVERVIEW:START -->
+
+## ℹ️ Overview
+
+**Progesi** – a modular toolchain for bridge and structural engineering:
+- 🧩 **Grasshopper/Rhino components** for variables, metadata, and repositories
+- 📦 Modular **NuGet packages** with SourceLink and built-in docs
+- 🚀 Automated **CI/CD pipeline** (NuGet.org + GitHub Packages)
+- 📝 Auto-generated **CHANGELOG** and **README** via PowerShell scripts
+- ✅ **Health check** and maintenance checklist for reliable releases
+
+---
+
+**Progesi** è una toolchain modulare per l’ingegneria dei ponti e delle strutture complesse:
+- 🧩 Componenti **Grasshopper/Rhino** per variabili, metadata e repository
+- 📦 Pacchetti **NuGet** modulari con SourceLink e documentazione integrata
+- 🚀 Pipeline **CI/CD** automatizzata (NuGet.org + GitHub Packages)
+- 📝 **CHANGELOG** e **README** generati automaticamente via script PowerShell
+- ✅ **Health check** e checklist di manutenzione per rilasci affidabili
+
+<!-- PROGESI:OVERVIEW:END -->
+
+
 ![Coverage](docs/coverage/badge_linecoverage.svg)
 
 [![CI](https://github.com/GianlucaProgesi/Progesi/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/GianlucaProgesi/Progesi/actions/workflows/ci.yml)
