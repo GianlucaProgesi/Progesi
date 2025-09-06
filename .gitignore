@@ -59,3 +59,4 @@ tools/*.ps1
 !src/ProgesiRepositories.Sqlite/**/*.cs
 !src/ProgesiRepositories.Sqlite/**/*.resx
 !src/ProgesiRepositories.Sqlite/README.md
+
