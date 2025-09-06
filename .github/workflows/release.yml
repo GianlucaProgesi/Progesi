@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     tags:
-      - 'v*'   # es: v1.0.26
+      - 'v*' # e.g. v1.0.30
 
 permissions:
   contents: write
@@ -45,7 +45,7 @@ jobs:
             -print | sort > packlist.txt
           echo "Pack list:" && cat packlist.txt
 
-      - name: Ensure per-project README (CI guard)
+      - name: Ensure per-project README placeholder (if missing)
         shell: bash
         run: |
           set -euo pipefail
@@ -54,7 +54,7 @@ jobs:
             dir="$(dirname "$proj")"
             if [[ ! -f "$dir/README.md" ]]; then
               name="$(basename "$dir")"
-              printf '# %s\n\nCI placeholder README to satisfy NuGet readme requirement.\n' "$name" > "$dir/README.md"
+              printf '# %s\n\nCI placeholder README.\n' "$name" > "$dir/README.md"
               echo "Created placeholder $dir/README.md"
             fi
           done < packlist.txt
@@ -64,7 +64,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p ./nupkg
-          VER="${{ steps.vars.outputs.VER || '' }}"
+          VER="${{ steps.vars.outputs.VER }}"
           while IFS= read -r proj; do
             [[ -z "${proj:-}" ]] && continue
             if [[ -n "${VER:-}" ]]; then
@@ -109,23 +109,33 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/')
         env:
           NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+        shell: bash
         run: |
+          set -euo pipefail
           dotnet nuget push "./nupkg/*.${{ steps.vars.outputs.VER }}.nupkg" \
-  	    --source "https://api.nuget.org/v3/index.json" \
-  	    --api-key "$NUGET_API_KEY" \
+            --source "https://api.nuget.org/v3/index.json" \
+            --api-key "$NUGET_API_KEY" \
             --skip-duplicate
 
-
-      # --- GitHub Packages: sempre con --api-key (usa GPR_PAT se c'?, altrimenti GITHUB_TOKEN)
+      # --- GitHub Packages (GPR) ---------------------------------------------
       - name: Publish to GitHub Packages (GPR)
         if: startsWith(github.ref, 'refs/tags/')
         env:
           OWNER: ${{ github.repository_owner }}
-          TOKEN: ${{ secrets.GPR_PAT != '' && secrets.GPR_PAT || secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GPR_PAT: ${{ secrets.GPR_PAT }}
+        shell: bash
         run: |
           set -euo pipefail
+
+          # seleziona token: usa PAT se presente, altrimenti GITHUB_TOKEN
+          TOKEN="${GPR_PAT:-}"
+          if [[ -z "${TOKEN}" ]]; then
+            TOKEN="${GITHUB_TOKEN}"
+          fi
+
           for nupkg in ./nupkg/*.${{ steps.vars.outputs.VER }}.nupkg; do
-       	    echo "-> Pushing $(basename "$nupkg") to GPR..."
+            echo "-> Pushing $(basename "$nupkg") to GPR..."
             dotnet nuget push "$nupkg" \
               --source "https://nuget.pkg.github.com/$OWNER/index.json" \
               --api-key "$TOKEN" \
@@ -137,3 +147,4 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: ./nupkg/*.${{ steps.vars.outputs.VER }}.nupkg
+          generate_release_notes: true
