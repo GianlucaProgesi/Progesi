@@ -45,17 +45,7 @@ dotnet nuget remove source github >/dev/null 2>&1; dotnet nuget add source "http
 <!-- PROGESI:PACKAGES:END -->
 
 <!-- PROGESI:BADGES:START -->
-[![Build](https://github.com/GianlucaProgesi/Progesi/actions/workflows/release.yml/badge.svg)](https://github.com/GianlucaProgesi/Progesi/actions/workflows/release.yml)
-
-[![NuGet ProgesiCore](https://img.shields.io/nuget/v/ProgesiCore.svg)](https://www.nuget.org/packages/ProgesiCore)
-[![NuGet ProgesiRepositories.InMemory](https://img.shields.io/nuget/v/ProgesiRepositories.InMemory.svg)](https://www.nuget.org/packages/ProgesiRepositories.InMemory)
-[![NuGet ProgesiRepositories.Rhino](https://img.shields.io/nuget/v/ProgesiRepositories.Rhino.svg)](https://www.nuget.org/packages/ProgesiRepositories.Rhino)
-[![NuGet ProgesiRepositories.Sqlite](https://img.shields.io/nuget/v/ProgesiRepositories.Sqlite.svg)](https://www.nuget.org/packages/ProgesiRepositories.Sqlite)
-
-![Downloads ProgesiCore](https://img.shields.io/nuget/dt/ProgesiCore)
-![Downloads ProgesiRepositories.InMemory](https://img.shields.io/nuget/dt/ProgesiRepositories.InMemory)
-![Downloads ProgesiRepositories.Rhino](https://img.shields.io/nuget/dt/ProgesiRepositories.Rhino)
-![Downloads ProgesiRepositories.Sqlite](https://img.shields.io/nuget/dt/ProgesiRepositories.Sqlite)
+[![Release Health](https://img.shields.io/badge/Release%20Health-Run%20check-2ea44f?logo=powershell&logoColor=white)](tools/Release-HealthCheck.ps1)
 <!-- PROGESI:BADGES:END -->
 
 ![Coverage](docs/coverage/badge_linecoverage.svg)
