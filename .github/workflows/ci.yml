@@ -1,4 +1,4 @@
-name: CI
+﻿name: CI
 
 on:
   workflow_dispatch:
@@ -80,7 +80,7 @@ jobs:
           }
 
       # ------------------ SOLUTION PATH ------------------
-      - name: Restore (solution) — auto locked-mode
+      - name: Restore (solution) â€” auto locked-mode
         if: ${{ env.CI_BUILD_TARGET != '' }}
         shell: pwsh
         run: |
@@ -135,7 +135,7 @@ jobs:
           Set-Content buildlist.txt ($projects -join "`n")
           Write-Host "Projects to build:`n$(Get-Content buildlist.txt -Raw)"
 
-      - name: Restore (discover) — auto locked-mode
+      - name: Restore (discover) â€” auto locked-mode
         if: ${{ env.CI_BUILD_TARGET == '' }}
         shell: pwsh
         run: |
@@ -193,7 +193,7 @@ jobs:
             Write-Host "No TestResults directory."
           }
 
-      - name: Guardrail — fail if no tests executed
+      - name: Guardrail â€” fail if no tests executed
         if: always() && env.RUN_TESTS == 'true'
         shell: pwsh
         run: |
@@ -266,7 +266,7 @@ jobs:
           if (-not $m) { Write-Host 'Riga "Line coverage" non trovata, salto.'; exit 0 }
           $pct = [double]$m.Matches[0].Groups[1].Value
           $min = [double]$env:MIN_COVERAGE
-          Write-Host ("Line coverage: {0}%  —  Threshold: {1}%" -f $pct, $min)
+          Write-Host ("Line coverage: {0}%  â€”  Threshold: {1}%" -f $pct, $min)
           if ($pct -lt $min) { throw ("Coverage {0}% < threshold {1}%" -f $pct, $min) }
 
       - name: Upload test & coverage artifacts
