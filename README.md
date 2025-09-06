@@ -73,4 +73,23 @@ dotnet nuget remove source github >/dev/null 2>&1; dotnet nuget add source "http
 ```
 <!-- PROGESI:QUICKSTART:END -->
 
+<!-- PROGESI:RELMAINT:START -->
 
+## 🔧 Release & Maintenance
+
+- 📖 **Release Flow:** vedi [docs/RELEASE-FLOW.md](docs/RELEASE-FLOW.md)  
+- 🛠️ **Maintenance Checklist:** vedi [docs/RELEASE-MAINTENANCE.md](docs/RELEASE-MAINTENANCE.md)  
+- 🚦 **Health Check (prima di un rilascio):
+  ```powershell
+  pwsh -File ./tools/Release-HealthCheck.ps1
+  ```
+- 🚀 **One-liner di rilascio:**
+  ```powershell
+  # simulazione
+  pwsh -File ./tools/End-to-End-Release.ps1 -DryRun
+
+  # rilascio reale
+  pwsh -File ./tools/End-to-End-Release.ps1
+  ```
+
+<!-- PROGESI:RELMAINT:END -->
