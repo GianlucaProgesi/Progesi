@@ -1,3 +1,38 @@
+<!-- PROGESI:GPR:START -->
+## Using GitHub Packages (GPR)
+
+### Option A — `nuget.config`
+
+Create a `nuget.config` next to your solution and set **GPR_PAT** env var with `read:packages` scope.
+
+```xml
+<configuration>
+  <packageSources>
+    <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
+    <add key="github" value="https://nuget.pkg.github.com/GianlucaProgesi/index.json" />
+  </packageSources>
+  <packageSourceCredentials>
+    <github>
+      <add key="Username" value="GianlucaProgesi" />
+      <add key="ClearTextPassword" value="%GPR_PAT%" />
+    </github>
+  </packageSourceCredentials>
+</configuration>
+```
+
+Windows (PowerShell):
+```powershell
+$Env:GPR_PAT = "<your PAT with read:packages>"
+dotnet nuget remove source github 2>$null; dotnet nuget add source "https://nuget.pkg.github.com/GianlucaProgesi/index.json" --name "github" --username "GianlucaProgesi" --password "$Env:GPR_PAT" --store-password-in-clear-text
+```
+
+macOS/Linux (bash):
+```bash
+export GPR_PAT="<your PAT with read:packages>"
+dotnet nuget remove source github >/dev/null 2>&1; dotnet nuget add source "https://nuget.pkg.github.com/GianlucaProgesi/index.json" --name "github" --username "GianlucaProgesi" --password "$GPR_PAT" --store-password-in-clear-text
+```
+<!-- PROGESI:GPR:END -->
+
 <!-- PROGESI:PACKAGES:START -->
 ## Packages
 
@@ -37,3 +72,4 @@
 // var v = new ProgesiVariable("Span", 35.0);
 ```
 <!-- PROGESI:QUICKSTART:END -->
+
