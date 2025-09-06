@@ -1,25 +1,25 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFramework>net48</TargetFramework>
     <LangVersion>8.0</LangVersion>
     <Nullable>enable</Nullable>
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
     <IsPackable>true</IsPackable>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <RepositoryUrl>https://github.com/GianlucaProgesi/Progesi</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
   </PropertyGroup>
-
   <ItemGroup>
     <ProjectReference Include="..\ProgesiCore\ProgesiCore.csproj" />
   </ItemGroup>
-
   <ItemGroup>
     <PackageReference Include="Microsoft.Data.Sqlite" Version="7.0.20" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="2.1.8" />
+    <None Include="README.md" Pack="true" PackagePath="/" />
   </ItemGroup>
-
-  <!-- Escludi gli extra finché non li adeguiamo all’interfaccia -->
+  <!-- Escludi gli extra finchÃ© non li adeguiamo allâ€™interfaccia -->
   <ItemGroup>
-    <Compile Remove="Logging.Extras.cs" />
-    <Compile Remove="Logging.Rolling.cs" />
   </ItemGroup>
 </Project>

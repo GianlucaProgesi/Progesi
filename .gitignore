@@ -51,12 +51,18 @@ TestResults/
 tools/*.ps1
 
 # Non ignorare i file di Sqlite
-!src/ProgesiRepositories.Sqlite/**
 
 # === Build artifacts ===
 # === Keep Sqlite project sources tracked (but NOT bin/obj) ===
 !src/ProgesiRepositories.Sqlite/*.csproj
+!src/ProgesiRepositories.Sqlite/README.md
+
+
+# === Build artifacts (global) ===
+# === Track Sqlite SOURCES (but keep outputs ignored) ===
 !src/ProgesiRepositories.Sqlite/**/*.cs
 !src/ProgesiRepositories.Sqlite/**/*.resx
-!src/ProgesiRepositories.Sqlite/README.md
+# Ignore its build outputs explicitly
+src/ProgesiRepositories.Sqlite/**/bin/
+src/ProgesiRepositories.Sqlite/**/obj/
 
