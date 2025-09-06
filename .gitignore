@@ -1,4 +1,4 @@
-# Build artefacts
+﻿# Build artefacts
 bin/
 obj/
 [Bb]uild/
@@ -49,3 +49,13 @@ TestResults/
 
 .github/workflows/ci.yml.bak
 tools/*.ps1
+
+# Non ignorare i file di Sqlite
+!src/ProgesiRepositories.Sqlite/**
+
+# === Build artifacts ===
+# === Keep Sqlite project sources tracked (but NOT bin/obj) ===
+!src/ProgesiRepositories.Sqlite/*.csproj
+!src/ProgesiRepositories.Sqlite/**/*.cs
+!src/ProgesiRepositories.Sqlite/**/*.resx
+!src/ProgesiRepositories.Sqlite/README.md
