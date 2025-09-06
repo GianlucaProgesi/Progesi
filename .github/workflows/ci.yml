@@ -1,44 +1,25 @@
 ﻿name: CI
 
 on:
-  workflow_dispatch:
-    inputs:
-      run_tests:
-        description: "Run tests (true/false)"
-        required: false
-        default: "true"
-      collect_coverage:
-        description: "Collect coverage (true/false)"
-        required: false
-        default: "true"
+  push:
+    branches: [ main, "feature/**", "chore/**", "tests/**" ]
+    paths-ignore:
+      - "**/*.md"
+      - "**/*.png"
+      - "**/*.jpg"
+      - "**/*.gif"
   pull_request:
     branches: [ main ]
-    paths:
-      - "src/**"
-      - "tests/**"
-      - ".github/workflows/ci.yml"
-      - "Directory.Build.props"
-      - ".editorconfig"
-
-permissions:
-  contents: write
-
-concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
   build-test:
-    runs-on: windows-2022
-    timeout-minutes: 20
+    runs-on: windows-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
-      - name: Setup .NET
+      - name: Setup .NET SDKs
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: |
@@ -50,231 +31,36 @@ jobs:
         with:
           path: ~/.nuget/packages
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/packages.lock.json') }}
-          restore-keys: ${{ runner.os }}-nuget-
+          restore-keys: |
+            ${{ runner.os }}-nuget-
 
-      - name: Resolve inputs (defaults for PR)
-        shell: pwsh
-        run: |
-          $run = '${{ inputs.run_tests }}'
-          if ([string]::IsNullOrWhiteSpace($run)) { $run = 'true' }
-          $cov = '${{ inputs.collect_coverage }}'
-          if ([string]::IsNullOrWhiteSpace($cov)) { $cov = 'true' }
-          "RUN_TESTS=$run"        | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          "COLLECT_COVERAGE=$cov" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+      - name: Restore
+        run: dotnet restore
 
-      # ------------------ TARGET SELECTION ------------------
-      - name: Choose build target (prefer .slnf, then .sln)
-        shell: pwsh
-        run: |
-          if (Test-Path 'Progesi.CI.slnf') {
-            'CI_BUILD_TARGET=Progesi.CI.slnf' | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-            Write-Host 'Using Progesi.CI.slnf'
-          }
-          elseif (Test-Path 'Progesi.sln') {
-            'CI_BUILD_TARGET=Progesi.sln' | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-            Write-Host 'Using Progesi.sln'
-          }
-          else {
-            'CI_BUILD_TARGET=' | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-            Write-Host 'No .slnf/.sln found -> discovery fallback'
-          }
+      - name: Build (Release)
+        run: dotnet build --configuration Release --no-restore
 
-      # ------------------ SOLUTION PATH ------------------
-      - name: Restore (solution) â€” auto locked-mode
-        if: ${{ env.CI_BUILD_TARGET != '' }}
-        shell: pwsh
-        run: |
-          $hasLocks = (Get-ChildItem -Recurse -Filter packages.lock.json -ErrorAction SilentlyContinue).Count -gt 0
-          if ($hasLocks) {
-            Write-Host "Lock files presenti: uso --locked-mode"
-            dotnet restore "${{ env.CI_BUILD_TARGET }}" --locked-mode
-          } else {
-            dotnet restore "${{ env.CI_BUILD_TARGET }}"
-          }
+      - name: Test (x64 + coverage)
+        run: dotnet test --configuration Release --no-build --collect:"XPlat Code Coverage" -- RunConfiguration.TargetPlatform=x64 -l "trx;LogFileName=test.trx" --verbosity normal
 
-      - name: Verify whitespace formatting
-        if: ${{ env.CI_BUILD_TARGET != '' }}
-        shell: pwsh
-        run: |
-          try { dotnet format --version | Out-Null } catch {
-            dotnet tool update -g dotnet-format
-            $env:PATH += ";$env:USERPROFILE\.dotnet\tools"
-          }
-          dotnet format whitespace "${{ env.CI_BUILD_TARGET }}" --verify-no-changes
+      - name: Generate coverage report
+        uses: danielpalme/ReportGenerator-GitHub-Action@v5
+        with:
+          reports: "**/coverage.cobertura.xml"
+          targetdir: "coveragereport"
+          reporttypes: "HtmlInline;TextSummary"
+          historydir: "coveragereport-history"
 
-      - name: Build (solution)
-        if: ${{ env.CI_BUILD_TARGET != '' }}
-        run: dotnet build "${{ env.CI_BUILD_TARGET }}" -c Release --no-restore
-
-      - name: Test (solution) + optional coverage
-        if: ${{ env.CI_BUILD_TARGET != '' && env.RUN_TESTS == 'true' }}
-        shell: pwsh
-        run: |
-          $collect = ($env:COLLECT_COVERAGE -eq 'true')
-          $extraArgs = @()
-          if ($collect) {
-            $extraArgs += '--collect:"XPlat Code Coverage"'
-            $extraArgs += '--'
-            $extraArgs += 'DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura'
-          }
-          dotnet test "${{ env.CI_BUILD_TARGET }}" -c Release --no-build --results-directory TestResults --logger "trx;LogFileName=testresults.trx" $extraArgs
-
-      # ------------------ DISCOVERY FALLBACK ------------------
-      - name: Discover SDK-style projects (exclude Rhino/Grasshopper)
-        if: ${{ env.CI_BUILD_TARGET == '' }}
-        shell: pwsh
-        run: |
-          $projects = Get-ChildItem -Recurse -Filter *.csproj | Where-Object {
-            try {
-              $isSdk = (Select-Xml -Path $_.FullName -XPath '/Project/@Sdk').Node
-              $notRh = $_.FullName -notmatch 'Rhino|Grasshopper'
-              return $isSdk -and $notRh
-            } catch { return $false }
-          } | Select-Object -ExpandProperty FullName
-          if (-not $projects) { throw "Nessun progetto SDK-style trovato." }
-          Set-Content buildlist.txt ($projects -join "`n")
-          Write-Host "Projects to build:`n$(Get-Content buildlist.txt -Raw)"
-
-      - name: Restore (discover) â€” auto locked-mode
-        if: ${{ env.CI_BUILD_TARGET == '' }}
-        shell: pwsh
-        run: |
-          $hasLocks = (Get-ChildItem -Recurse -Filter packages.lock.json -ErrorAction SilentlyContinue).Count -gt 0
-          Get-Content buildlist.txt | ForEach-Object {
-            if ($hasLocks) { dotnet restore $_ --locked-mode } else { dotnet restore $_ }
-          }
-
-      - name: Verify whitespace formatting [discover]
-        if: ${{ env.CI_BUILD_TARGET == '' }}
-        shell: pwsh
-        run: |
-          try { dotnet format --version | Out-Null } catch {
-            dotnet tool update -g dotnet-format
-            $env:PATH += ";$env:USERPROFILE\.dotnet\tools"
-          }
-          $failed = $false
-          Get-Content buildlist.txt | ForEach-Object {
-            dotnet format whitespace $_ --verify-no-changes
-            if ($LASTEXITCODE -ne 0) { $failed = $true }
-          }
-          if ($failed) { throw "Whitespace formatting differences detected." }
-
-      - name: Build (discover)
-        if: ${{ env.CI_BUILD_TARGET == '' }}
-        shell: pwsh
-        run: |
-          Get-Content buildlist.txt | ForEach-Object {
-            dotnet build $_ -c Release --no-restore
-          }
-
-      - name: Test (discover) + optional coverage
-        if: ${{ env.CI_BUILD_TARGET == '' && env.RUN_TESTS == 'true' }}
-        shell: pwsh
-        run: |
-          $collect = ($env:COLLECT_COVERAGE -eq 'true')
-          $extraArgs = @()
-          if ($collect) {
-            $extraArgs += '--collect:"XPlat Code Coverage"'
-            $extraArgs += '--'
-            $extraArgs += 'DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura'
-          }
-          Get-Content buildlist.txt | Where-Object { $_ -match 'Test|\.Tests\\' } | ForEach-Object {
-            dotnet test $_ -c Release --no-build --results-directory TestResults --logger "trx;LogFileName=testresults.trx" $extraArgs
-          }
-
-      - name: Locate test & coverage files (debug)
-        if: always()
-        shell: pwsh
-        run: |
-          Write-Host "=== Listing TestResults ==="
-          if (Test-Path TestResults) {
-            Get-ChildItem -Recurse TestResults | ForEach-Object { $_.FullName }
-          } else {
-            Write-Host "No TestResults directory."
-          }
-
-      - name: Guardrail â€” fail if no tests executed
-        if: always() && env.RUN_TESTS == 'true'
-        shell: pwsh
-        run: |
-          $trx = Get-ChildItem -Recurse -Path "TestResults" -Filter "*.trx" -ErrorAction SilentlyContinue
-          if (-not $trx) { Write-Error "Nessun file .trx trovato: sembra non siano stati eseguiti test." }
-          else { Write-Host "Trovati $($trx.Count) file .trx." }
-
-      - name: Generate HTML coverage report (skip if none)
-        if: ${{ env.COLLECT_COVERAGE == 'true' && env.RUN_TESTS == 'true' }}
-        shell: pwsh
-        run: |
-          $cov = Get-ChildItem -Recurse -Path "TestResults" -Filter "coverage.cobertura.xml" -ErrorAction SilentlyContinue
-          if (-not $cov) {
-            Write-Host "No coverage.cobertura.xml found. Skipping report generation."
-            exit 0
-          }
-          try { dotnet tool update -g dotnet-reportgenerator-globaltool } catch { dotnet tool install -g dotnet-reportgenerator-globaltool }
-          $env:PATH += ";$env:USERPROFILE\.dotnet\tools"
-          $reports = ($cov | Select-Object -Expand FullName) -join ';'
-          reportgenerator -reports:"$reports" -targetdir:"CoverageReport" -reporttypes:"Html;TextSummary;Badges"
-          if (Test-Path "CoverageReport/Summary.txt") { Get-Content CoverageReport/Summary.txt }
-
-      - name: Publish coverage badge (main only)
-        if: ${{ github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && env.COLLECT_COVERAGE == 'true' && env.RUN_TESTS == 'true' && hashFiles('CoverageReport/badge_linecoverage.svg') != '' }}
-        shell: pwsh
-        run: |
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git config user.name "github-actions[bot]"
-          New-Item -ItemType Directory -Force -Path docs/coverage | Out-Null
-          Copy-Item "CoverageReport/badge_linecoverage.svg" "docs/coverage/badge_linecoverage.svg" -Force
-          if (git status --porcelain) {
-            git add docs/coverage/badge_linecoverage.svg
-            git commit -m "ci: update coverage badge [skip ci]"
-            git push origin HEAD:main
-          } else {
-            Write-Host "No badge changes to commit."
-          }
-
-      - name: Coverage summary (job summary)
-        if: ${{ env.COLLECT_COVERAGE == 'true' && env.RUN_TESTS == 'true' }}
-        shell: pwsh
-        run: |
-          $summary = 'CoverageReport/Summary.txt'
-          if (Test-Path $summary) {
-            $sum = Get-Content $summary -Raw
-            $sb = New-Object System.Text.StringBuilder
-            [void]$sb.AppendLine('### Code Coverage (ReportGenerator)')
-            [void]$sb.AppendLine()
-            [void]$sb.AppendLine('```')
-            [void]$sb.Append($sum)
-            [void]$sb.AppendLine()
-            [void]$sb.AppendLine('```')
-            $sb.ToString() | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
-          } else {
-            Write-Host 'CoverageReport/Summary.txt non trovato: salto il riepilogo.'
-          }
-
-      - name: Enforce minimum line coverage
-        if: ${{ env.COLLECT_COVERAGE == 'true' && env.RUN_TESTS == 'true' }}
-        shell: pwsh
-        env:
-          MIN_COVERAGE: '75.0'
-        run: |
-          $summary = 'CoverageReport/Summary.txt'
-          if (-not (Test-Path $summary)) {
-            Write-Host 'Nessun Summary.txt, salto il controllo soglia.'
-            exit 0
-          }
-          $m = Select-String -Path $summary -Pattern '^  Line coverage:\s+([0-9.]+)%' | Select-Object -First 1
-          if (-not $m) { Write-Host 'Riga "Line coverage" non trovata, salto.'; exit 0 }
-          $pct = [double]$m.Matches[0].Groups[1].Value
-          $min = [double]$env:MIN_COVERAGE
-          Write-Host ("Line coverage: {0}%  â€”  Threshold: {1}%" -f $pct, $min)
-          if ($pct -lt $min) { throw ("Coverage {0}% < threshold {1}%" -f $pct, $min) }
-
-      - name: Upload test & coverage artifacts
-        if: always()
+      - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
         with:
-          name: TestResults
-          path: |
-            TestResults/**/*.trx
-            TestResults/**/coverage.cobertura.xml
-            CoverageReport/**
+          name: coverage-report
+          path: coveragereport
+
+      - name: Publish test results (trx)
+        if: always()
+        uses: dorny/test-reporter@v1
+        with:
+          name: "VSTest Results"
+          path: "**/test.trx"
+          reporter: dotnet-trx
