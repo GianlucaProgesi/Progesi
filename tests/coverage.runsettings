@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RunSettings>
+  <DataCollectionRunSettings>
+    <DataCollectors>
+      <DataCollector friendlyName="XPlat Code Coverage">
+        <Configuration>
+          <Include>
+            <ModulePath>.*ProgesiCore\.dll$</ModulePath>
+            <ModulePath>.*ProgesiRepositories\.Sqlite\.dll$</ModulePath>
+          </Include>
+          <Exclude>
+            <Source>.*\\ProgesiRepositories\.Sqlite\\.*Logger\.cs$</Source>
+            <Source>.*\\ProgesiRepositories\.Sqlite\\SqliteVariableRepositoryLegacyExtensions\.cs$</Source>
+          </Exclude>
+          <ExcludeByAttribute>System.Diagnostics.CodeAnalysis.ExcludeFromCodeCoverageAttribute</ExcludeByAttribute>
+        </Configuration>
+      </DataCollector>
+    </DataCollectors>
+  </DataCollectionRunSettings>
+</RunSettings>

@@ -1,43 +1,64 @@
 using System.Collections.Generic;
-using FluentAssertions;
 using Xunit;
 
 namespace ProgesiCore.Tests
 {
-    // VO minimale per esercitare la semantica del base ValueObject
-    public sealed class DummyVo : ValueObject
-    {
-        public int A { get; }
-        public string B { get; }
-
-        public DummyVo(int a, string b)
-        {
-            A = a;
-            B = b;
-        }
-
-        protected override IEnumerable<object> GetEqualityComponents()
-        {
-            yield return A;
-            yield return B ?? string.Empty;
-        }
-    }
-
     public class ValueObjectEqualityTests
     {
-        [Fact]
-        public void Equals_And_Hash_Work()
+        private sealed class SampleVO : ProgesiCore.ValueObject
         {
-            var x = new DummyVo(1, "k");
-            var y = new DummyVo(1, "k");
-            var z = new DummyVo(2, "k");
+            public int A { get; }
+            public string B { get; }
 
-            _ = x.Equals(y).Should().BeTrue();
-            _ = x.GetHashCode().Should().Be(y.GetHashCode());
-            _ = x.Equals(z).Should().BeFalse();
+            public SampleVO(int a, string b)
+            {
+                A = a;
+                B = b;
+            }
 
-            var set = new HashSet<DummyVo> { x, y, z };
-            _ = set.Should().HaveCount(2); // x e y si deduplicano
+            // NOTA: ritorna IEnumerable<object> (non nullable) per allinearsi alla firma base
+            protected override IEnumerable<object> GetEqualityComponents()
+            {
+                yield return A;
+                yield return B;
+            }
+        }
+
+        [Fact]
+        public void Equals_SameValues_True()
+        {
+            var x = new SampleVO(1, "x");
+            var y = new SampleVO(1, "x");
+            Assert.True(x.Equals(y));
+            Assert.True(y.Equals(x));
+            Assert.Equal(x.GetHashCode(), y.GetHashCode());
+        }
+
+        [Fact]
+        public void Equals_DifferentValues_False()
+        {
+            var x = new SampleVO(1, "x");
+            var y = new SampleVO(2, "x");
+            var z = new SampleVO(1, "y");
+
+            Assert.False(x.Equals(y));
+            Assert.False(x.Equals(z));
+        }
+
+        [Fact]
+        public void Equals_Null_False()
+        {
+            var x = new SampleVO(1, "x");
+            Assert.False(x.Equals(null));
+        }
+
+        [Fact]
+        public void HashCode_Stable_ForSameValues()
+        {
+            var x = new SampleVO(1, "x");
+            var h1 = x.GetHashCode();
+            var h2 = x.GetHashCode();
+            Assert.Equal(h1, h2);
         }
     }
 }
