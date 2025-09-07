@@ -31,26 +31,19 @@ jobs:
             8.0.x
             6.0.x
 
-      - name: Cache NuGet
-        uses: actions/cache@v4
-        with:
-          path: ~/.nuget/packages
-          # Evita ambiguità di quoting: usa doppi apici all'esterno
-          key: "${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}"
-          restore-keys: |
-            ${{ runner.os }}-nuget-
-
-      # Evitiamo di compilare l'intera solution (che includerebbe Rhino/Grasshopper):
-      # ripristiniamo e costruiamo SOLO il progetto di test mirato a net48.
-      - name: Restore tests
-        run: dotnet restore tests/ProgesiCore.Tests/ProgesiCore.Tests.csproj
+      - name: Restore (solution)
         shell: pwsh
+        run: dotnet restore Progesi.sln
 
-      - name: Build tests (Release x64)
-        run: dotnet build tests/ProgesiCore.Tests/ProgesiCore.Tests.csproj -c Release -p:Platform=x64 --no-restore
+      # ⬇️ COMPILA i test in Release SENZA forzare Platform=x64
+      #    (così l'output va in bin\Release\net48, dove VSTest si aspetta la DLL)
+      - name: Build tests (Release)
         shell: pwsh
+        run: dotnet build tests/ProgesiCore.Tests/ProgesiCore.Tests.csproj -c Release --no-restore
 
+      # ⬇️ ESEGUI i test a 64 bit SOLO a runtime; manteniamo --no-build
       - name: Run tests + coverage (TRX + XPlat)
+        shell: pwsh
         run: >
           dotnet test
           tests/ProgesiCore.Tests/ProgesiCore.Tests.csproj
@@ -60,7 +53,14 @@ jobs:
           -l "trx;LogFileName=ProgesiCore.trx"
           --
           RunConfiguration.TargetPlatform=x64
+
+      # (Facoltativo) Piccolo dump per debug se serve
+      - name: Debug: elenca output test
+        if: always()
         shell: pwsh
+        run: |
+          echo "=== Contenuto cartelle output ProgesiCore.Tests ==="
+          Get-ChildItem -Recurse -Path "tests/ProgesiCore.Tests/bin/Release" | Select-Object FullName,Length | Out-String | Write-Host
 
       - name: Upload test results (.trx)
         if: always()
