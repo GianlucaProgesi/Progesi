@@ -87,11 +87,68 @@ jobs:
             Write-Host "No Summary.txt found."
           }
 
-      - name: Compare coverage vs baseline (warn-only)
+      # Confronto inline vs baseline (WARN-ONLY, non blocca)
+      - name: Compare coverage vs baseline (inline, warn-only)
         if: always()
         shell: pwsh
-        run: pwsh -File tools/Compare-Coverage.ps1 -BaselinePath "tests/coverage-baseline.json" -WarnOnly
+        run: |
+          $summaryPath = "CoverageReport/Summary.txt"
+          if (-not (Test-Path $summaryPath)) {
+            Write-Host "Summary.txt non trovato; salto confronto."
+            exit 0
+          }
+          $txt = Get-Content -Raw $summaryPath
+          $curr = [ordered]@{ line=$null; branch=$null; method=$null }
+          if ($txt -match 'Line coverage:\s*([0-9]+(?:\.[0-9]+)?)%')   { $curr.line   = [double]$Matches[1] }
+          if ($txt -match 'Branch coverage:\s*([0-9]+(?:\.[0-9]+)?)%') { $curr.branch = [double]$Matches[1] }
+          if ($txt -match 'Method coverage:\s*([0-9]+(?:\.[0-9]+)?)%') { $curr.method = [double]$Matches[1] }
 
+          # Salva JSON corrente
+          New-Item -ItemType Directory -Force -Path "CoverageReport" | Out-Null
+          $json = [ordered]@{
+            line = $curr.line; branch = $curr.branch; method = $curr.method; generated = (Get-Date).ToString("s")
+          } | ConvertTo-Json -Depth 2
+          $json | Set-Content -Path "CoverageReport/CoverageCurrent.json" -NoNewline -Encoding UTF8
+
+          # Carica baseline (se presente)
+          $baselinePath = "tests/coverage-baseline.json"
+          if (-not (Test-Path $baselinePath)) {
+            Write-Host "Baseline non trovata ($baselinePath). Nessun confronto eseguito." -ForegroundColor DarkYellow
+            exit 0
+          }
+          try { $base = Get-Content -Raw $baselinePath | ConvertFrom-Json } catch { $base = $null }
+          if ($null -eq $base) {
+            Write-Host "Baseline JSON invalida; salto confronto." -ForegroundColor DarkYellow
+            exit 0
+          }
+
+          $dLine   = ($curr.line   ?? 0) - ([double]$base.line)
+          $dBranch = ($curr.branch ?? 0) - ([double]$base.branch)
+          $dMethod = ($curr.method ?? 0) - ([double]$base.method)
+
+          Write-Host "`n=== Confronto vs baseline ($baselinePath) ==="
+          "{0,-10} {1,8} {2,8} {3,10}" -f "Metric","Base(%)","Now(%)","Delta(pts)" | Write-Host
+          "{0,-10} {1,8:N1} {2,8:N1} {3,10:N1}" -f "Line",   [double]$base.line,   ($curr.line   ?? 0), $dLine   | Write-Host
+          "{0,-10} {1,8:N1} {2,8:N1} {3,10:N1}" -f "Branch", [double]$base.branch, ($curr.branch ?? 0), $dBranch | Write-Host
+          "{0,-10} {1,8:N1} {2,8:N1} {3,10:N1}" -f "Method", [double]$base.method, ($curr.method ?? 0), $dMethod | Write-Host
+
+          # Warn-only (non fallisce il job)
+          $tol = 0.05
+          $regress = (($dLine -lt -$tol) -or ($dBranch -lt -$tol) -or ($dMethod -lt -$tol))
+          if ($regress) {
+            Write-Warning "ATTENZIONE: regressione di coverage oltre la tolleranza ${tol}."
+          } else {
+            Write-Host "OK: nessuna regressione oltre la tolleranza." -ForegroundColor Green
+          }
+
+          # Riporta anche nel Job Summary
+          Add-Content $env:GITHUB_STEP_SUMMARY "`n### Coverage vs Baseline`n"
+          Add-Content $env:GITHUB_STEP_SUMMARY ("| Metric | Base(%) | Now(%) | Delta(pts) |`n|---|---:|---:|---:|")
+          Add-Content $env:GITHUB_STEP_SUMMARY ("| Line   | {0:N1} | {1:N1} | {2:N1} |" -f [double]$base.line,   ($curr.line   ?? 0), $dLine)
+          Add-Content $env:GITHUB_STEP_SUMMARY ("| Branch | {0:N1} | {1:N1} | {2:N1} |" -f [double]$base.branch, ($curr.branch ?? 0), $dBranch)
+          Add-Content $env:GITHUB_STEP_SUMMARY ("| Method | {0:N1} | {1:N1} | {2:N1} |" -f [double]$base.method, ($curr.method ?? 0), $dMethod)
+
+      # Artifacts utili
       - name: Upload coverage summary + html
         if: always()
         uses: actions/upload-artifact@v4
