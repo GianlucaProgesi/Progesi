@@ -37,11 +37,17 @@ jobs:
       - name: Restore
         run: dotnet restore
 
-      - name: Build (Release)
-        run: dotnet build --configuration Release --no-restore
+      - name: Build (Release - selective)
+        run: |
+          dotnet build src/ProgesiCore/ProgesiCore.csproj --configuration Release --no-restore
+          dotnet build src/ProgesiRepositories.InMemory/ProgesiRepositories.InMemory.csproj --configuration Release --no-restore
+          dotnet build src/ProgesiRepositories.Sqlite/ProgesiRepositories.Sqlite.csproj --configuration Release --no-restore
 
-      - name: Test (x64 + coverage)
-        run: dotnet test --configuration Release --no-build --collect:"XPlat Code Coverage" -- RunConfiguration.TargetPlatform=x64 -l "trx;LogFileName=test.trx" --verbosity normal
+      - name: Test ProgesiCore (x64 + coverage)
+        run: dotnet test tests/ProgesiCore.Tests/ProgesiCore.Tests.csproj --configuration Release --no-build --collect:"XPlat Code Coverage" -- RunConfiguration.TargetPlatform=x64 -l "trx;LogFileName=core.trx" --verbosity normal
+
+      - name: Test ProgesiRepositories.Sqlite (x64 + coverage)
+        run: dotnet test tests/ProgesiRepositories.Sqlite.Tests/ProgesiRepositories.Sqlite.Tests.csproj --configuration Release --no-build --collect:"XPlat Code Coverage" -- RunConfiguration.TargetPlatform=x64 -l "trx;LogFileName=sqlite.trx" --verbosity normal
 
       - name: Generate coverage report
         uses: danielpalme/ReportGenerator-GitHub-Action@v5
@@ -62,5 +68,5 @@ jobs:
         uses: dorny/test-reporter@v1
         with:
           name: "VSTest Results"
-          path: "**/test.trx"
+          path: "**/*.trx"
           reporter: dotnet-trx
