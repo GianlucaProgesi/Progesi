@@ -9,11 +9,11 @@ on:
       - fix/**
   pull_request:
     branches: [ main ]
-  workflow_dispatch:
+  workflow_dispatch: {}
 
 jobs:
   windows-tests:
-    name: CI: Windows x64 tests + coverage
+    name: "CI: Windows x64 tests + coverage"
     runs-on: windows-latest
 
     env:
@@ -35,7 +35,8 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          # Evita ambiguità di quoting: usa doppi apici all'esterno
+          key: "${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}"
           restore-keys: |
             ${{ runner.os }}-nuget-
 
@@ -43,9 +44,11 @@ jobs:
       # ripristiniamo e costruiamo SOLO il progetto di test mirato a net48.
       - name: Restore tests
         run: dotnet restore tests/ProgesiCore.Tests/ProgesiCore.Tests.csproj
+        shell: pwsh
 
       - name: Build tests (Release x64)
         run: dotnet build tests/ProgesiCore.Tests/ProgesiCore.Tests.csproj -c Release -p:Platform=x64 --no-restore
+        shell: pwsh
 
       - name: Run tests + coverage (TRX + XPlat)
         run: >
@@ -57,6 +60,7 @@ jobs:
           -l "trx;LogFileName=ProgesiCore.trx"
           --
           RunConfiguration.TargetPlatform=x64
+        shell: pwsh
 
       - name: Upload test results (.trx)
         if: always()
