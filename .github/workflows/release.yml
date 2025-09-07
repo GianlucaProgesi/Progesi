@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
   push:
     tags:
-      - 'v*' # e.g. v1.0.30
+      - 'v*' # e.g. v1.0.40
 
 permissions:
   contents: write
@@ -16,6 +16,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # raccomandato per MinVer e changelog
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
@@ -51,29 +53,44 @@ jobs:
             fi
           done < packlist.txt
 
-      - name: Pack (by packlist)
+      - name: Pack (by packlist) via MinVer (versione dai tag)
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p ./nupkg
-          VER="${{ steps.vars.outputs.VER }}"
           while IFS= read -r proj; do
             [[ -z "${proj:-}" ]] && continue
-            if [[ -n "${VER:-}" ]]; then
-              echo "Packing $proj (Version=$VER)"
-              dotnet pack "$proj" -c Release --no-build -o ./nupkg /p:Version="$VER"
-            else
-              echo "Packing $proj"
-              dotnet pack "$proj" -c Release --no-build -o ./nupkg
-            fi
+            echo "Packing $proj"
+            dotnet pack "$proj" -c Release --no-build -o ./nupkg
           done < packlist.txt
           echo "Produced packages:" && ls -l ./nupkg
+
+      - name: Install dotnet-sourcelink (optional)
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet tool update -g dotnet-sourcelink || true
+          echo "$HOME/.dotnet/tools" >> $GITHUB_PATH
+
+      - name: Verify packages (readme, snupkg, sourcelink)
+        shell: pwsh
+        run: pwsh -File ./tools/Verify-Packages.ps1 -NupkgDir ./nupkg
+
+      - name: Build changelog (latest section)
+        shell: pwsh
+        run: pwsh -File ./tools/Build-Changelog.ps1
 
       - name: Upload nupkg
         uses: actions/upload-artifact@v4
         with:
           name: nupkg
           path: ./nupkg/*.nupkg
+
+      - name: Upload latest changelog
+        uses: actions/upload-artifact@v4
+        with:
+          name: changelog
+          path: ./.changelog-LATEST.md
 
   release:
     needs: pack
@@ -85,10 +102,17 @@ jobs:
           name: nupkg
           path: ./nupkg
 
+      - name: Download latest changelog
+        uses: actions/download-artifact@v4
+        with:
+          name: changelog
+          path: .
+
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
+
       - name: Publish to NuGet.org
         if: startsWith(github.ref, 'refs/tags/')
         env:
@@ -101,7 +125,6 @@ jobs:
             --api-key "$NUGET_API_KEY" \
             --skip-duplicate
 
-      # --- GitHub Packages (GPR) ---------------------------------------------
       - name: Publish to GitHub Packages (GPR)
         if: startsWith(github.ref, 'refs/tags/')
         env:
@@ -111,13 +134,10 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-
-          # seleziona token: usa PAT se presente, altrimenti GITHUB_TOKEN
           TOKEN="${GPR_PAT:-}"
           if [[ -z "${TOKEN}" ]]; then
             TOKEN="${GITHUB_TOKEN}"
           fi
-
           for nupkg in ./nupkg/*.nupkg; do
             echo "-> Pushing $(basename "$nupkg") to GPR..."
             dotnet nuget push "$nupkg" \
@@ -131,5 +151,5 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: ./nupkg/*.nupkg
+          body_path: ./.changelog-LATEST.md
           generate_release_notes: true
-

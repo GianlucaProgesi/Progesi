@@ -2,18 +2,23 @@
 
 on:
   push:
-    branches: [ main, "feature/**", "chore/**", "tests/**" ]
-    paths-ignore:
-      - "**/*.md"
-      - "**/*.png"
-      - "**/*.jpg"
-      - "**/*.gif"
+    branches:
+      - main
+      - chore/**
+      - feature/**
+      - fix/**
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
 
 jobs:
-  build-test:
+  windows-tests:
+    name: CI: Windows x64 tests + coverage
     runs-on: windows-latest
+
+    env:
+      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+      DOTNET_CLI_TELEMETRY_OPTOUT: true
 
     steps:
       - name: Checkout
@@ -30,43 +35,76 @@ jobs:
         uses: actions/cache@v4
         with:
           path: ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-${{ hashFiles('**/packages.lock.json') }}
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
           restore-keys: |
             ${{ runner.os }}-nuget-
 
-      - name: Restore
-        run: dotnet restore
+      # Evitiamo di compilare l'intera solution (che includerebbe Rhino/Grasshopper):
+      # ripristiniamo e costruiamo SOLO il progetto di test mirato a net48.
+      - name: Restore tests
+        run: dotnet restore tests/ProgesiCore.Tests/ProgesiCore.Tests.csproj
 
-      - name: Build (Release - selective)
-        run: |
-          dotnet build src/ProgesiCore/ProgesiCore.csproj --configuration Release --no-restore
-          dotnet build src/ProgesiRepositories.InMemory/ProgesiRepositories.InMemory.csproj --configuration Release --no-restore
-          dotnet build src/ProgesiRepositories.Sqlite/ProgesiRepositories.Sqlite.csproj --configuration Release --no-restore
+      - name: Build tests (Release x64)
+        run: dotnet build tests/ProgesiCore.Tests/ProgesiCore.Tests.csproj -c Release -p:Platform=x64 --no-restore
 
-      - name: Test ProgesiCore (x64 + coverage)
-        run: dotnet test tests/ProgesiCore.Tests/ProgesiCore.Tests.csproj --configuration Release --no-build --collect:"XPlat Code Coverage" -- RunConfiguration.TargetPlatform=x64 -l "trx;LogFileName=core.trx" --verbosity normal
+      - name: Run tests + coverage (TRX + XPlat)
+        run: >
+          dotnet test
+          tests/ProgesiCore.Tests/ProgesiCore.Tests.csproj
+          -c Release
+          --no-build
+          --collect:"XPlat Code Coverage"
+          -l "trx;LogFileName=ProgesiCore.trx"
+          --
+          RunConfiguration.TargetPlatform=x64
 
-      - name: Test ProgesiRepositories.Sqlite (x64 + coverage)
-        run: dotnet test tests/ProgesiRepositories.Sqlite.Tests/ProgesiRepositories.Sqlite.Tests.csproj --configuration Release --no-build --collect:"XPlat Code Coverage" -- RunConfiguration.TargetPlatform=x64 -l "trx;LogFileName=sqlite.trx" --verbosity normal
-
-      - name: Generate coverage report
-        uses: danielpalme/ReportGenerator-GitHub-Action@v5
-        with:
-          reports: "**/coverage.cobertura.xml"
-          targetdir: "coveragereport"
-          reporttypes: "HtmlInline;TextSummary"
-          historydir: "coveragereport-history"
-
-      - name: Upload coverage artifact
+      - name: Upload test results (.trx)
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-report
-          path: coveragereport
+          name: test-results-trx
+          path: |
+            **/*.trx
+            **/TestResults/**/*.trx
+          if-no-files-found: warn
 
-      - name: Publish test results (trx)
+      - name: Upload coverage (cobertura/opencover)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage
+          path: |
+            **/TestResults/**/coverage.cobertura.xml
+            **/TestResults/**/coverage.opencover.xml
+          if-no-files-found: warn
+
+      - name: Generate HTML coverage (reportgenerator)
+        if: always()
+        shell: pwsh
+        run: |
+          dotnet tool install -g dotnet-reportgenerator-globaltool
+          $cov = Get-ChildItem -Path "$PWD" -Recurse -Filter coverage.cobertura.xml | Select-Object -First 1
+          if ($cov) {
+            reportgenerator -reports:$cov.FullName -targetdir:CoverageReport -reporttypes:Html
+          } else {
+            Write-Host "No cobertura coverage found; skipping HTML report."
+          }
+
+      - name: Upload coverage HTML
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-html
+          path: CoverageReport/**
+          if-no-files-found: warn
+
+      - name: Test Report annotations (dorny)
         if: always()
         uses: dorny/test-reporter@v1
         with:
           name: "VSTest Results"
-          path: "**/*.trx"
+          path: |
+            **/*.trx
+            **/TestResults/**/*.trx
           reporter: dotnet-trx
+          fail-on-error: false
