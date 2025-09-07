@@ -16,6 +16,10 @@ jobs:
     name: "CI: Windows x64 tests + coverage"
     runs-on: windows-latest
 
+    defaults:
+      run:
+        shell: pwsh
+
     env:
       DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
       DOTNET_CLI_TELEMETRY_OPTOUT: true
@@ -32,35 +36,19 @@ jobs:
             6.0.x
 
       - name: Restore (solution)
-        shell: pwsh
         run: dotnet restore Progesi.sln
 
-      # ⬇️ COMPILA i test in Release SENZA forzare Platform=x64
-      #    (così l'output va in bin\Release\net48, dove VSTest si aspetta la DLL)
+      # Build senza Platform=x64 → output in bin\Release\net48 dove VSTest si aspetta la DLL
       - name: Build tests (Release)
-        shell: pwsh
         run: dotnet build tests/ProgesiCore.Tests/ProgesiCore.Tests.csproj -c Release --no-restore
 
-      # ⬇️ ESEGUI i test a 64 bit SOLO a runtime; manteniamo --no-build
+      # Test a 64 bit solo a runtime
       - name: Run tests + coverage (TRX + XPlat)
-        shell: pwsh
-        run: >
-          dotnet test
-          tests/ProgesiCore.Tests/ProgesiCore.Tests.csproj
-          -c Release
-          --no-build
-          --collect:"XPlat Code Coverage"
-          -l "trx;LogFileName=ProgesiCore.trx"
-          --
-          RunConfiguration.TargetPlatform=x64
+        run: dotnet test tests/ProgesiCore.Tests/ProgesiCore.Tests.csproj -c Release --no-build --collect:"XPlat Code Coverage" -l "trx;LogFileName=ProgesiCore.trx" -- RunConfiguration.TargetPlatform=x64
 
-      # (Facoltativo) Piccolo dump per debug se serve
       - name: Debug: elenca output test
         if: always()
-        shell: pwsh
-        run: |
-          echo "=== Contenuto cartelle output ProgesiCore.Tests ==="
-          Get-ChildItem -Recurse -Path "tests/ProgesiCore.Tests/bin/Release" | Select-Object FullName,Length | Out-String | Write-Host
+        run: Get-ChildItem -Recurse -Path "tests/ProgesiCore.Tests/bin/Release" | Select-Object FullName,Length | Format-Table -AutoSize
 
       - name: Upload test results (.trx)
         if: always()
@@ -84,7 +72,6 @@ jobs:
 
       - name: Generate HTML coverage (reportgenerator)
         if: always()
-        shell: pwsh
         run: |
           dotnet tool install -g dotnet-reportgenerator-globaltool
           $cov = Get-ChildItem -Path "$PWD" -Recurse -Filter coverage.cobertura.xml | Select-Object -First 1
