@@ -7,7 +7,6 @@ on:
     branches: [ "**" ]
   workflow_dispatch:
 
-# serve per auto-commit del badge
 permissions:
   contents: write
   pull-requests: write
@@ -44,7 +43,6 @@ jobs:
         run: dotnet restore
 
       # ---------- BUILD ----------
-      # Su Ubuntu evitiamo i progetti Windows-only (Rhino, Grasshopper, tool win-x64)
       - name: Build (Release) — Windows (all)
         if: matrix.os == 'windows-latest'
         run: dotnet build --configuration Release --no-restore
@@ -119,7 +117,7 @@ jobs:
           $line   = if ($s -match 'Line coverage:\s*([\d\.]+)%')   { [double]$Matches[1] } else { 0 }
           $branch = if ($s -match 'Branch coverage:\s*([\d\.]+)%') { [double]$Matches[1] } else { 0 }
           $method = if ($s -match 'Method coverage:\s*([\d\.]+)%') { [double]$Matches[1] } else { 0 }
-          $minLine = 88.0; $minBranch = 65.0; $minMethod = 90.0
+          $minLine = 95.0; $minBranch = 80.0; $minMethod = 94.0
           Write-Host ("Thresholds -> Line≥{0} Branch≥{1} Method≥{2}" -f $minLine,$minBranch,$minMethod)
           $ok = ($line -ge $minLine) -and ($branch -ge $minBranch) -and ($method -ge $minMethod)
           if (-not $ok) {
@@ -128,7 +126,6 @@ jobs:
           }
           Write-Host ("OK: {0:N1}/{1:N1}/{2:N1} meet thresholds" -f $line,$branch,$method)
 
-      # ---------- BADGE (solo Windows, solo su default branch) ----------
       - name: Generate coverage badge (SVG)
         if: matrix.os == 'windows-latest' && github.ref == 'refs/heads/main'
         shell: pwsh
@@ -142,7 +139,6 @@ jobs:
           commit_message: "chore(badge): update coverage badge (ProgesiCore)"
           file_pattern: docs/badges/coverage-core.svg
 
-      # ---------- ARTIFACT & COMMENT PR ----------
       - name: Upload coverage artifact
         if: matrix.os == 'windows-latest'
         uses: actions/upload-artifact@v4
