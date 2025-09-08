@@ -18,12 +18,27 @@ namespace ProgesiCore.Tests
         }
 
         [Fact]
-        public void References_NoDuplicates_And_Remove()
+        public void Create_InvalidId_Throws()
         {
-            var m = ProgesiMetadata.Create("user-x", id: 1); // id > 0
-            var u = new Uri("http://example.com/a");
+            _ = Assert.Throws<ArgumentException>(() => ProgesiMetadata.Create("user-x", id: 0));
+            _ = Assert.Throws<ArgumentException>(() => ProgesiMetadata.Create("user-x", id: -1));
+        }
 
-            m.AddReference(u);
+        [Fact]
+        public void AdditionalInfo_Update_AllowsNull()
+        {
+            var m = ProgesiMetadata.Create("user-x", id: 1, additionalInfo: "ciao");
+            _ = m.AdditionalInfo.Should().Be("ciao");
+            m.UpdateAdditionalInfo(null);
+            _ = m.AdditionalInfo.Should().Be("");
+        }
+
+        [Fact]
+        public void References_Add_Remove()
+        {
+            var m = ProgesiMetadata.Create("user-x", id: 1);
+            var u = new Uri("http://a");
+
             m.AddReference(u);
             _ = m.References.Count.Should().Be(1);
 

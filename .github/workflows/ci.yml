@@ -7,13 +7,19 @@ on:
     branches: [ "**" ]
   workflow_dispatch:
 
+# serve per auto-commit del badge
 permissions:
-  contents: read
+  contents: write
   pull-requests: write
 
 jobs:
   build-test-coverage:
-    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+
+    runs-on: ${{ matrix.os }}
 
     steps:
       - name: Checkout
@@ -37,11 +43,26 @@ jobs:
       - name: Restore
         run: dotnet restore
 
-      - name: Build (Release)
+      # ---------- BUILD ----------
+      # Su Ubuntu evitiamo i progetti Windows-only (Rhino, Grasshopper, tool win-x64)
+      - name: Build (Release) — Windows (all)
+        if: matrix.os == 'windows-latest'
         run: dotnet build --configuration Release --no-restore
 
-      # ✅ Niente runsettings: raccogliamo le coperture standard
-      - name: Test + Coverage
+      - name: Build (Release) — Ubuntu (subset no-Windows)
+        if: matrix.os == 'ubuntu-latest'
+        run: |
+          dotnet build src/ProgesiCore/ProgesiCore.csproj --configuration Release --no-restore
+          dotnet build src/ProgesiRepositories.Sqlite/ProgesiRepositories.Sqlite.csproj --configuration Release --no-restore
+          dotnet build src/ProgesiRepositories.InMemory/ProgesiRepositories.InMemory.csproj --configuration Release --no-restore
+          # Skipped on Ubuntu:
+          # - src/ProgesiRepositories.Rhino
+          # - src/ProgesiGrasshopperAssembly
+          # - tools/ProgesiDbMaint
+
+      # ---------- TEST + COVERAGE (solo Windows) ----------
+      - name: Test + Coverage (XPlat)
+        if: matrix.os == 'windows-latest'
         run: >
           dotnet test
           --configuration Release
@@ -49,11 +70,12 @@ jobs:
           --collect:"XPlat Code Coverage"
           --results-directory TestResults
 
-      - name: Install reportgenerator tool
+      - name: Install reportgenerator
+        if: matrix.os == 'windows-latest'
         run: dotnet tool update --global dotnet-reportgenerator-globaltool
 
-      # ✅ Filtra nel report: includi solo ProgesiCore, escludi logger/legacy
-      - name: Generate Coverage Report (HTML + TextSummary)
+      - name: Generate Coverage Report (ProgesiCore only)
+        if: matrix.os == 'windows-latest'
         shell: pwsh
         run: |
           $reports = Get-ChildItem -Recurse -Path "TestResults" -Filter "coverage.cobertura.xml" | % { $_.FullName }
@@ -69,47 +91,36 @@ jobs:
           Write-Host "----- Coverage Summary (ProgesiCore only) -----"
           Get-Content "CoverageReport/Summary.txt" | Write-Host
 
-      # Confronto "soft" con baseline (warn-only)
       - name: Compare with baseline (warn-only)
-        if: always()
+        if: matrix.os == 'windows-latest'
         shell: pwsh
         run: |
           if (-not (Test-Path "CoverageReport/Summary.txt")) { Write-Warning "Summary.txt non trovato"; exit 0 }
           $summary = Get-Content -Raw "CoverageReport/Summary.txt"
-
           $line   = if ($summary -match 'Line coverage:\s*([\d\.]+)%')   { [double]$Matches[1] } else { 0 }
           $branch = if ($summary -match 'Branch coverage:\s*([\d\.]+)%') { [double]$Matches[1] } else { 0 }
           $method = if ($summary -match 'Method coverage:\s*([\d\.]+)%') { [double]$Matches[1] } else { 0 }
-
           if (Test-Path "tests/coverage-baseline.json") {
             $baseline = Get-Content -Raw "tests/coverage-baseline.json" | ConvertFrom-Json
             $dLine   = [math]::Round($line   - [double]$baseline.line,   1)
             $dBranch = [math]::Round($branch - [double]$baseline.branch, 1)
             $dMethod = [math]::Round($method - [double]$baseline.method, 1)
             Write-Host ("Δ vs baseline -> line {0:+0.0;-0.0;±0.0} / branch {1:+0.0;-0.0;±0.0} / method {2:+0.0;-0.0;±0.0}" -f $dLine,$dBranch,$dMethod)
-          }
-          else {
-            Write-Warning "Baseline non trovata (tests/coverage-baseline.json), salto il confronto."
+          } else {
+            Write-Warning "Baseline non trovata (tests/coverage-baseline.json)"
           }
 
-      # Gate minimi "blocking"
       - name: Enforce minimum coverage thresholds
-        if: always()
+        if: matrix.os == 'windows-latest'
         shell: pwsh
         run: |
-          if (-not (Test-Path "CoverageReport/Summary.txt")) { Write-Error "Summary.txt non trovato"; exit 1 }
           $s = Get-Content -Raw "CoverageReport/Summary.txt"
-
+          if (-not $s) { Write-Error "Summary.txt non trovato"; exit 1 }
           $line   = if ($s -match 'Line coverage:\s*([\d\.]+)%')   { [double]$Matches[1] } else { 0 }
           $branch = if ($s -match 'Branch coverage:\s*([\d\.]+)%') { [double]$Matches[1] } else { 0 }
           $method = if ($s -match 'Method coverage:\s*([\d\.]+)%') { [double]$Matches[1] } else { 0 }
-
-          $minLine = 88.0
-          $minBranch = 65.0
-          $minMethod = 90.0
-
+          $minLine = 88.0; $minBranch = 65.0; $minMethod = 90.0
           Write-Host ("Thresholds -> Line≥{0} Branch≥{1} Method≥{2}" -f $minLine,$minBranch,$minMethod)
-
           $ok = ($line -ge $minLine) -and ($branch -ge $minBranch) -and ($method -ge $minMethod)
           if (-not $ok) {
             Write-Error ("Coverage below thresholds: line={0:N1} branch={1:N1} method={2:N1}" -f $line,$branch,$method)
@@ -117,45 +128,55 @@ jobs:
           }
           Write-Host ("OK: {0:N1}/{1:N1}/{2:N1} meet thresholds" -f $line,$branch,$method)
 
+      # ---------- BADGE (solo Windows, solo su default branch) ----------
+      - name: Generate coverage badge (SVG)
+        if: matrix.os == 'windows-latest' && github.ref == 'refs/heads/main'
+        shell: pwsh
+        run: |
+          ./tools/Generate-CoverageBadge.ps1 -SummaryPath "CoverageReport/Summary.txt" -OutPath "docs/badges/coverage-core.svg"
+
+      - name: Commit badge to repo
+        if: matrix.os == 'windows-latest' && github.ref == 'refs/heads/main'
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "chore(badge): update coverage badge (ProgesiCore)"
+          file_pattern: docs/badges/coverage-core.svg
+
+      # ---------- ARTIFACT & COMMENT PR ----------
       - name: Upload coverage artifact
+        if: matrix.os == 'windows-latest'
         uses: actions/upload-artifact@v4
-        if: always()
         with:
           name: CoverageReport
           path: CoverageReport
 
       - name: Comment coverage summary on PR
-        if: github.event_name == 'pull_request'
+        if: matrix.os == 'windows-latest' && github.event_name == 'pull_request'
         shell: pwsh
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
-          if (-not (Test-Path "CoverageReport/Summary.txt")) { Write-Error "Summary.txt non trovato"; exit 1 }
           $s = Get-Content -Raw "CoverageReport/Summary.txt"
-
+          if (-not $s) { Write-Error "Summary.txt non trovato"; exit 1 }
           $line   = if ($s -match 'Line coverage:\s*([\d\.]+)%')   { [double]$Matches[1] } else { 0 }
           $branch = if ($s -match 'Branch coverage:\s*([\d\.]+)%') { [double]$Matches[1] } else { 0 }
           $method = if ($s -match 'Method coverage:\s*([\d\.]+)%') { [double]$Matches[1] } else { 0 }
-
           if (Test-Path "tests/coverage-baseline.json") {
             $baseline = Get-Content -Raw "tests/coverage-baseline.json" | ConvertFrom-Json
           } else {
             $baseline = @{ line = 0.0; branch = 0.0; method = 0.0 } | ConvertTo-Json | ConvertFrom-Json
           }
-
           $dLine   = [math]::Round($line   - [double]$baseline.line,   1)
           $dBranch = [math]::Round($branch - [double]$baseline.branch, 1)
           $dMethod = [math]::Round($method - [double]$baseline.method, 1)
-
           function FmtDelta([double]$v) {
             if     ($v -gt 0){ return "+$($v.ToString('0.0'))" }
             elseif ($v -lt 0){ return  $v.ToString('0.0') }
             else  { return "±0.0" }
           }
-
           $bodyLines = @(
-            "### ✅ Coverage summary",
+            "### ✅ Coverage summary (ProgesiCore)",
             "",
             ("**Line:**   {0:N1}% ({1} vs baseline {2:N1}%)" -f $line,   (FmtDelta $dLine),   $baseline.line),
             ("**Branch:** {0:N1}% ({1} vs baseline {2:N1}%)" -f $branch, (FmtDelta $dBranch), $baseline.branch),
@@ -164,7 +185,5 @@ jobs:
             "_Report from `CoverageReport/Summary.txt`._"
           )
           $body = $bodyLines -join [Environment]::NewLine
-
-          $path = "pr-comment.md"
-          Set-Content -Path $path -Value $body -NoNewline -Encoding UTF8
-          gh pr comment $env:PR_NUMBER --body-file $path
+          Set-Content -Path pr-comment.md -Value $body -NoNewline -Encoding UTF8
+          gh pr comment $env:PR_NUMBER --body-file pr-comment.md
