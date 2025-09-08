@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RunSettings>
+  <DataCollectionRunSettings>
+    <DataCollectors>
+      <DataCollector friendlyName="XPlat code coverage">
+        <Configuration>
+          <!-- INCLUDI solo il core -->
+          <Include>
+            [ProgesiCore]*
+          </Include>
+
+          <!-- ESCLUSIONI aggiuntive -->
+          <Exclude>
+            [ProgesiRepositories.Sqlite]*
+            [ProgesiRepositories.Rhino]*
+            [ProgesiGrasshopperAssembly]*
+            [ProgesiRepositories.InMemory]*
+            *.Generated*
+          </Exclude>
+
+          <ExcludeByFile>**/*Designer.cs,**/Migrations/*.cs,**/*.g.cs</ExcludeByFile>
+          <IncludeTestAssembly>false</IncludeTestAssembly>
+        </Configuration>
+      </DataCollector>
+    </DataCollectors>
+  </DataCollectionRunSettings>
+</RunSettings>

@@ -40,6 +40,7 @@ jobs:
       - name: Build (Release)
         run: dotnet build --configuration Release --no-restore
 
+      # Test + coverage con runsettings che include solo ProgesiCore
       - name: Test + Coverage
         run: >
           dotnet test
@@ -47,6 +48,7 @@ jobs:
           --no-build
           --collect:"XPlat Code Coverage"
           --results-directory TestResults
+          --settings tests/coverlet.runsettings
 
       - name: Install reportgenerator tool
         run: dotnet tool update --global dotnet-reportgenerator-globaltool
@@ -57,11 +59,15 @@ jobs:
           $reports = Get-ChildItem -Recurse -Path "TestResults" -Filter "coverage.cobertura.xml" | % { $_.FullName }
           if (-not $reports) { Write-Error "Nessun report Cobertura trovato in TestResults"; exit 1 }
           $reportsArg = ($reports -join ";")
-          reportgenerator -reports:$reportsArg -targetdir:"CoverageReport" -reporttypes:"Html;TextSummary;Cobertura"
+          reportgenerator `
+            -reports:$reportsArg `
+            -targetdir:"CoverageReport" `
+            -reporttypes:"Html;TextSummary;Cobertura"
           if (-not (Test-Path "CoverageReport/Summary.txt")) { Write-Error "Summary.txt non generato"; exit 1 }
-          Write-Host "----- Coverage Summary -----"
+          Write-Host "----- Coverage Summary (ProgesiCore only via runsettings) -----"
           Get-Content "CoverageReport/Summary.txt" | Write-Host
 
+      # Confronto "soft" con baseline (warn-only)
       - name: Compare with baseline (warn-only)
         if: always()
         shell: pwsh
@@ -84,6 +90,7 @@ jobs:
             Write-Warning "Baseline non trovata (tests/coverage-baseline.json), salto il confronto."
           }
 
+      # Gate minimi "blocking"
       - name: Enforce minimum coverage thresholds
         if: always()
         shell: pwsh
