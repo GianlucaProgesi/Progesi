@@ -40,7 +40,6 @@ jobs:
       - name: Build (Release)
         run: dotnet build --configuration Release --no-restore
 
-      # Esegue i test + coverage Cobertura per TUTTE le soluzioni/progetti
       - name: Test + Coverage
         run: >
           dotnet test
@@ -48,9 +47,6 @@ jobs:
           --no-build
           --collect:"XPlat Code Coverage"
           --results-directory TestResults
-          -p:CollectCoverage=true
-          -p:CoverletOutputFormat=cobertura
-          -p:MergeWith=$(pwd)/TestResults/coverage.cobertura.xml
 
       - name: Install reportgenerator tool
         run: dotnet tool update --global dotnet-reportgenerator-globaltool
@@ -66,7 +62,6 @@ jobs:
           Write-Host "----- Coverage Summary -----"
           Get-Content "CoverageReport/Summary.txt" | Write-Host
 
-      # Confronto "soft" con baseline (warning-only)
       - name: Compare with baseline (warn-only)
         if: always()
         shell: pwsh
@@ -89,7 +84,6 @@ jobs:
             Write-Warning "Baseline non trovata (tests/coverage-baseline.json), salto il confronto."
           }
 
-      # Gate MINIMI "blocking" — tarali come preferisci
       - name: Enforce minimum coverage thresholds
         if: always()
         shell: pwsh
@@ -101,7 +95,6 @@ jobs:
           $branch = if ($s -match 'Branch coverage:\s*([\d\.]+)%') { [double]$Matches[1] } else { 0 }
           $method = if ($s -match 'Method coverage:\s*([\d\.]+)%') { [double]$Matches[1] } else { 0 }
 
-          # 🔧 soglie modificabili
           $minLine = 88.0
           $minBranch = 65.0
           $minMethod = 90.0
@@ -152,17 +145,16 @@ jobs:
             else  { return "±0.0" }
           }
 
-          $body = @"
-### ✅ Coverage summary
-
-**Line:**   {0:N1}% ({1} vs baseline {2:N1}%)
-**Branch:** {3:N1}% ({4} vs baseline {5:N1}%)
-**Method:** {6:N1}% ({7} vs baseline {8:N1}%)
-
-_Report from \`CoverageReport/Summary.txt\`._
-"@ -f $line, (FmtDelta $dLine),   $baseline.line,
-      $branch, (FmtDelta $dBranch), $baseline.branch,
-      $method, (FmtDelta $dMethod), $baseline.method
+          $bodyLines = @(
+            "### ✅ Coverage summary",
+            "",
+            ("**Line:**   {0:N1}% ({1} vs baseline {2:N1}%)" -f $line,   (FmtDelta $dLine),   $baseline.line),
+            ("**Branch:** {0:N1}% ({1} vs baseline {2:N1}%)" -f $branch, (FmtDelta $dBranch), $baseline.branch),
+            ("**Method:** {0:N1}% ({1} vs baseline {2:N1}%)" -f $method, (FmtDelta $dMethod), $baseline.method),
+            "",
+            "_Report from `CoverageReport/Summary.txt`._"
+          )
+          $body = $bodyLines -join [Environment]::NewLine
 
           $path = "pr-comment.md"
           Set-Content -Path $path -Value $body -NoNewline -Encoding UTF8
