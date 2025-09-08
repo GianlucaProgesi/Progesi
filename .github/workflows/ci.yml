@@ -2,171 +2,168 @@
 
 on:
   push:
-    branches:
-      - main
-      - chore/**
-      - feature/**
-      - fix/**
+    branches: [ "**" ]
   pull_request:
-    branches:
-      - main
-  workflow_dispatch: {}
+    branches: [ "**" ]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
 
 jobs:
-  windows-tests:
-    name: "CI Windows x64 tests"
+  build-test-coverage:
     runs-on: windows-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup .NET SDKs
+      - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: |
             8.0.x
-            6.0.x
+            7.0.x
 
-      - name: Restore tests
-        run: dotnet restore tests/ProgesiCore.Tests/ProgesiCore.Tests.csproj
-
-      - name: Build tests (Release)
-        run: dotnet build tests/ProgesiCore.Tests/ProgesiCore.Tests.csproj -c Release --no-restore
-
-      # Pulisci output precedenti: evita MultiReport e vecchi Summary
-      - name: Clean previous outputs
-        shell: pwsh
-        run: |
-          Get-ChildItem -Path "tests" -Recurse -Directory -Filter "TestResults" -ErrorAction SilentlyContinue |
-            Remove-Item -Recurse -Force -ErrorAction SilentlyContinue
-          if (Test-Path "CoverageReport") {
-            Remove-Item -Recurse -Force "CoverageReport" -ErrorAction SilentlyContinue
-          }
-
-      # Test + coverage con controllo runsettings
-      - name: Test (TRX + XPlat Coverage, tolerant)
-        shell: pwsh
-        run: |
-          $args = @(
-            "test", "tests/ProgesiCore.Tests/ProgesiCore.Tests.csproj",
-            "-c", "Release",
-            "--no-build",
-            "--collect:XPlat Code Coverage",
-            "-l", "trx;LogFileName=ProgesiCore.trx"
-          )
-          if (Test-Path "tests/coverage.runsettings") {
-            $args += @("--settings", "tests/coverage.runsettings")
-          } else {
-            Write-Host "coverage.runsettings non trovato: eseguo senza filtri."
-          }
-          & dotnet @args
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-
-      # Genera summary SOLO dal file di coverage più recente
-      - name: Generate coverage summary (latest only)
-        shell: pwsh
-        run: |
-          dotnet tool install -g dotnet-reportgenerator-globaltool
-          $latest = Get-ChildItem -Recurse -File -Filter "coverage.cobertura.xml" | Sort-Object LastWriteTimeUtc -Descending | Select-Object -First 1
-          if (-not $latest) { Write-Host "No cobertura coverage found."; exit 0 }
-          $rg = (Get-Command reportgenerator -ErrorAction SilentlyContinue)
-          if ($null -eq $rg) { $rg = "$env:USERPROFILE\.dotnet\tools\reportgenerator.exe" }
-          & $rg -reports:$($latest.FullName) -targetdir:CoverageReport -reporttypes:"TextSummary;HtmlSummary;XmlSummary"
-
-      - name: Show coverage summary in logs and job summary
-        if: always()
-        shell: pwsh
-        run: |
-          if (Test-Path "CoverageReport/Summary.txt") {
-            Write-Host "=== Coverage Summary (Text) ==="
-            Get-Content "CoverageReport/Summary.txt"
-            Add-Content $env:GITHUB_STEP_SUMMARY "`n### Code Coverage Summary`n"
-            Get-Content "CoverageReport/Summary.txt" | ForEach-Object { Add-Content $env:GITHUB_STEP_SUMMARY $_ }
-          } else {
-            Write-Host "No Summary.txt found."
-          }
-
-      # Confronto inline vs baseline (WARN-ONLY, non blocca)
-      - name: Compare coverage vs baseline (inline, warn-only)
-        if: always()
-        shell: pwsh
-        run: |
-          $summaryPath = "CoverageReport/Summary.txt"
-          if (-not (Test-Path $summaryPath)) {
-            Write-Host "Summary.txt non trovato; salto confronto."
-            exit 0
-          }
-          $txt = Get-Content -Raw $summaryPath
-          $curr = [ordered]@{ line=$null; branch=$null; method=$null }
-          if ($txt -match 'Line coverage:\s*([0-9]+(?:\.[0-9]+)?)%')   { $curr.line   = [double]$Matches[1] }
-          if ($txt -match 'Branch coverage:\s*([0-9]+(?:\.[0-9]+)?)%') { $curr.branch = [double]$Matches[1] }
-          if ($txt -match 'Method coverage:\s*([0-9]+(?:\.[0-9]+)?)%') { $curr.method = [double]$Matches[1] }
-
-          # Salva JSON corrente
-          New-Item -ItemType Directory -Force -Path "CoverageReport" | Out-Null
-          $json = [ordered]@{
-            line = $curr.line; branch = $curr.branch; method = $curr.method; generated = (Get-Date).ToString("s")
-          } | ConvertTo-Json -Depth 2
-          $json | Set-Content -Path "CoverageReport/CoverageCurrent.json" -NoNewline -Encoding UTF8
-
-          # Carica baseline (se presente)
-          $baselinePath = "tests/coverage-baseline.json"
-          if (-not (Test-Path $baselinePath)) {
-            Write-Host "Baseline non trovata ($baselinePath). Nessun confronto eseguito." -ForegroundColor DarkYellow
-            exit 0
-          }
-          try { $base = Get-Content -Raw $baselinePath | ConvertFrom-Json } catch { $base = $null }
-          if ($null -eq $base) {
-            Write-Host "Baseline JSON invalida; salto confronto." -ForegroundColor DarkYellow
-            exit 0
-          }
-
-          $dLine   = ($curr.line   ?? 0) - ([double]$base.line)
-          $dBranch = ($curr.branch ?? 0) - ([double]$base.branch)
-          $dMethod = ($curr.method ?? 0) - ([double]$base.method)
-
-          Write-Host "`n=== Confronto vs baseline ($baselinePath) ==="
-          "{0,-10} {1,8} {2,8} {3,10}" -f "Metric","Base(%)","Now(%)","Delta(pts)" | Write-Host
-          "{0,-10} {1,8:N1} {2,8:N1} {3,10:N1}" -f "Line",   [double]$base.line,   ($curr.line   ?? 0), $dLine   | Write-Host
-          "{0,-10} {1,8:N1} {2,8:N1} {3,10:N1}" -f "Branch", [double]$base.branch, ($curr.branch ?? 0), $dBranch | Write-Host
-          "{0,-10} {1,8:N1} {2,8:N1} {3,10:N1}" -f "Method", [double]$base.method, ($curr.method ?? 0), $dMethod | Write-Host
-
-          # Warn-only (non fallisce il job)
-          $tol = 0.05
-          $regress = (($dLine -lt -$tol) -or ($dBranch -lt -$tol) -or ($dMethod -lt -$tol))
-          if ($regress) {
-            Write-Warning "ATTENZIONE: regressione di coverage oltre la tolleranza ${tol}."
-          } else {
-            Write-Host "OK: nessuna regressione oltre la tolleranza." -ForegroundColor Green
-          }
-
-          # Riporta anche nel Job Summary
-          Add-Content $env:GITHUB_STEP_SUMMARY "`n### Coverage vs Baseline`n"
-          Add-Content $env:GITHUB_STEP_SUMMARY ("| Metric | Base(%) | Now(%) | Delta(pts) |`n|---|---:|---:|---:|")
-          Add-Content $env:GITHUB_STEP_SUMMARY ("| Line   | {0:N1} | {1:N1} | {2:N1} |" -f [double]$base.line,   ($curr.line   ?? 0), $dLine)
-          Add-Content $env:GITHUB_STEP_SUMMARY ("| Branch | {0:N1} | {1:N1} | {2:N1} |" -f [double]$base.branch, ($curr.branch ?? 0), $dBranch)
-          Add-Content $env:GITHUB_STEP_SUMMARY ("| Method | {0:N1} | {1:N1} | {2:N1} |" -f [double]$base.method, ($curr.method ?? 0), $dMethod)
-
-      # Artifacts utili
-      - name: Upload coverage summary + html
-        if: always()
-        uses: actions/upload-artifact@v4
+      - name: Cache NuGet
+        uses: actions/cache@v4
         with:
-          name: coverage-report
-          path: |
-            CoverageReport/Summary.txt
-            CoverageReport/Summary.html
-            CoverageReport/CoverageCurrent.json
-          if-no-files-found: warn
+          path: ~/.nuget/packages
+          key: nuget-${{ runner.os }}-${{ hashFiles('**/packages.lock.json') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
 
-      - name: Upload test results (.trx) + raw coverage
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build (Release)
+        run: dotnet build --configuration Release --no-restore
+
+      # Esegue i test + coverage Cobertura per TUTTE le soluzioni/progetti
+      - name: Test + Coverage
+        run: >
+          dotnet test
+          --configuration Release
+          --no-build
+          --collect:"XPlat Code Coverage"
+          --results-directory TestResults
+          -p:CollectCoverage=true
+          -p:CoverletOutputFormat=cobertura
+          -p:MergeWith=$(pwd)/TestResults/coverage.cobertura.xml
+
+      - name: Install reportgenerator tool
+        run: dotnet tool update --global dotnet-reportgenerator-globaltool
+
+      - name: Generate Coverage Report (HTML + TextSummary)
+        shell: pwsh
+        run: |
+          $reports = Get-ChildItem -Recurse -Path "TestResults" -Filter "coverage.cobertura.xml" | % { $_.FullName }
+          if (-not $reports) { Write-Error "Nessun report Cobertura trovato in TestResults"; exit 1 }
+          $reportsArg = ($reports -join ";")
+          reportgenerator -reports:$reportsArg -targetdir:"CoverageReport" -reporttypes:"Html;TextSummary;Cobertura"
+          if (-not (Test-Path "CoverageReport/Summary.txt")) { Write-Error "Summary.txt non generato"; exit 1 }
+          Write-Host "----- Coverage Summary -----"
+          Get-Content "CoverageReport/Summary.txt" | Write-Host
+
+      # Confronto "soft" con baseline (warning-only)
+      - name: Compare with baseline (warn-only)
         if: always()
+        shell: pwsh
+        run: |
+          $summary = Get-Content -Raw "CoverageReport/Summary.txt"
+          if (-not $summary) { Write-Warning "Summary.txt non trovato"; exit 0 }
+
+          $line   = if ($summary -match 'Line coverage:\s*([\d\.]+)%')   { [double]$Matches[1] } else { 0 }
+          $branch = if ($summary -match 'Branch coverage:\s*([\d\.]+)%') { [double]$Matches[1] } else { 0 }
+          $method = if ($summary -match 'Method coverage:\s*([\d\.]+)%') { [double]$Matches[1] } else { 0 }
+
+          if (Test-Path "tests/coverage-baseline.json") {
+            $baseline = Get-Content -Raw "tests/coverage-baseline.json" | ConvertFrom-Json
+            $dLine   = [math]::Round($line   - [double]$baseline.line,   1)
+            $dBranch = [math]::Round($branch - [double]$baseline.branch, 1)
+            $dMethod = [math]::Round($method - [double]$baseline.method, 1)
+            Write-Host ("Δ vs baseline -> line {0:+0.0;-0.0;±0.0} / branch {1:+0.0;-0.0;±0.0} / method {2:+0.0;-0.0;±0.0}" -f $dLine,$dBranch,$dMethod)
+          }
+          else {
+            Write-Warning "Baseline non trovata (tests/coverage-baseline.json), salto il confronto."
+          }
+
+      # Gate MINIMI "blocking" — tarali come preferisci
+      - name: Enforce minimum coverage thresholds
+        if: always()
+        shell: pwsh
+        run: |
+          $s = Get-Content -Raw "CoverageReport/Summary.txt"
+          if (-not $s) { Write-Error "Summary.txt non trovato"; exit 1 }
+
+          $line   = if ($s -match 'Line coverage:\s*([\d\.]+)%')   { [double]$Matches[1] } else { 0 }
+          $branch = if ($s -match 'Branch coverage:\s*([\d\.]+)%') { [double]$Matches[1] } else { 0 }
+          $method = if ($s -match 'Method coverage:\s*([\d\.]+)%') { [double]$Matches[1] } else { 0 }
+
+          # 🔧 soglie modificabili
+          $minLine = 88.0
+          $minBranch = 65.0
+          $minMethod = 90.0
+
+          Write-Host ("Thresholds -> Line≥{0} Branch≥{1} Method≥{2}" -f $minLine,$minBranch,$minMethod)
+
+          $ok = ($line -ge $minLine) -and ($branch -ge $minBranch) -and ($method -ge $minMethod)
+          if (-not $ok) {
+            Write-Error ("Coverage below thresholds: line={0:N1} branch={1:N1} method={2:N1}" -f $line,$branch,$method)
+            exit 1
+          }
+          Write-Host ("OK: {0:N1}/{1:N1}/{2:N1} meet thresholds" -f $line,$branch,$method)
+
+      - name: Upload coverage artifact
         uses: actions/upload-artifact@v4
+        if: always()
         with:
-          name: test-and-raw-coverage
-          path: |
-            **/*.trx
-            **/TestResults/**/coverage.cobertura.xml
-            **/TestResults/**/coverage.opencover.xml
-          if-no-files-found: warn
+          name: CoverageReport
+          path: CoverageReport
+
+      - name: Comment coverage summary on PR
+        if: github.event_name == 'pull_request'
+        shell: pwsh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        run: |
+          $s = Get-Content -Raw "CoverageReport/Summary.txt"
+          if (-not $s) { Write-Error "Summary.txt non trovato"; exit 1 }
+
+          $line   = if ($s -match 'Line coverage:\s*([\d\.]+)%')   { [double]$Matches[1] } else { 0 }
+          $branch = if ($s -match 'Branch coverage:\s*([\d\.]+)%') { [double]$Matches[1] } else { 0 }
+          $method = if ($s -match 'Method coverage:\s*([\d\.]+)%') { [double]$Matches[1] } else { 0 }
+
+          if (Test-Path "tests/coverage-baseline.json") {
+            $baseline = Get-Content -Raw "tests/coverage-baseline.json" | ConvertFrom-Json
+          } else {
+            $baseline = @{ line = 0.0; branch = 0.0; method = 0.0 } | ConvertTo-Json | ConvertFrom-Json
+          }
+
+          $dLine   = [math]::Round($line   - [double]$baseline.line,   1)
+          $dBranch = [math]::Round($branch - [double]$baseline.branch, 1)
+          $dMethod = [math]::Round($method - [double]$baseline.method, 1)
+
+          function FmtDelta([double]$v) {
+            if     ($v -gt 0){ return "+$($v.ToString('0.0'))" }
+            elseif ($v -lt 0){ return  $v.ToString('0.0') }
+            else  { return "±0.0" }
+          }
+
+          $body = @"
+### ✅ Coverage summary
+
+**Line:**   {0:N1}% ({1} vs baseline {2:N1}%)
+**Branch:** {3:N1}% ({4} vs baseline {5:N1}%)
+**Method:** {6:N1}% ({7} vs baseline {8:N1}%)
+
+_Report from \`CoverageReport/Summary.txt\`._
+"@ -f $line, (FmtDelta $dLine),   $baseline.line,
+      $branch, (FmtDelta $dBranch), $baseline.branch,
+      $method, (FmtDelta $dMethod), $baseline.method
+
+          $path = "pr-comment.md"
+          Set-Content -Path $path -Value $body -NoNewline -Encoding UTF8
+          gh pr comment $env:PR_NUMBER --body-file $path
