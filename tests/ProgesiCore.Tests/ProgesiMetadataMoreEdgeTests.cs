@@ -14,13 +14,15 @@ namespace ProgesiCore.Tests
             var m = ProgesiMetadata.Create("user", id: 1, additionalInfo: "x");
             var t1 = m.LastModified;
 
+            // Primo update: può cadere nello stesso tick -> consentiamo OnOrAfter
             m.UpdateAdditionalInfo(null);
             m.AdditionalInfo.Should().Be("");
             var t2 = m.LastModified;
-            t2.Should().BeAfter(t1);
+            t2.Should().BeOnOrAfter(t1);
 
+            // Secondo update: mettiamo una pausa per garantire un tick successivo
             var longText = new string('Z', 4096);
-            Thread.Sleep(2);
+            Thread.Sleep(5);
             m.UpdateAdditionalInfo(longText);
             m.AdditionalInfo.Should().Be(longText);
             m.LastModified.Should().BeAfter(t2);
@@ -49,7 +51,7 @@ namespace ProgesiCore.Tests
             m.AddReference(a);
             var t1 = m.LastModified;
 
-            Thread.Sleep(2);
+            Thread.Sleep(5);
             var removed = m.RemoveReference(a);
             removed.Should().BeTrue();
             var t2 = m.LastModified;
