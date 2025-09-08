@@ -40,7 +40,7 @@ jobs:
       - name: Build (Release)
         run: dotnet build --configuration Release --no-restore
 
-      # Test + coverage con runsettings che include solo ProgesiCore
+      # ✅ Niente runsettings: raccogliamo le coperture standard
       - name: Test + Coverage
         run: >
           dotnet test
@@ -48,11 +48,11 @@ jobs:
           --no-build
           --collect:"XPlat Code Coverage"
           --results-directory TestResults
-          --settings tests/coverlet.runsettings
 
       - name: Install reportgenerator tool
         run: dotnet tool update --global dotnet-reportgenerator-globaltool
 
+      # ✅ Filtra nel report: includi solo ProgesiCore, escludi logger/legacy
       - name: Generate Coverage Report (HTML + TextSummary)
         shell: pwsh
         run: |
@@ -62,9 +62,11 @@ jobs:
           reportgenerator `
             -reports:$reportsArg `
             -targetdir:"CoverageReport" `
-            -reporttypes:"Html;TextSummary;Cobertura"
+            -reporttypes:"Html;TextSummary;Cobertura" `
+            -assemblyfilters:"+ProgesiCore" `
+            -classfilters:"-*Logger*;-*LegacyExtensions*;-*TraceLogger*"
           if (-not (Test-Path "CoverageReport/Summary.txt")) { Write-Error "Summary.txt non generato"; exit 1 }
-          Write-Host "----- Coverage Summary (ProgesiCore only via runsettings) -----"
+          Write-Host "----- Coverage Summary (ProgesiCore only) -----"
           Get-Content "CoverageReport/Summary.txt" | Write-Host
 
       # Confronto "soft" con baseline (warn-only)
@@ -72,8 +74,8 @@ jobs:
         if: always()
         shell: pwsh
         run: |
+          if (-not (Test-Path "CoverageReport/Summary.txt")) { Write-Warning "Summary.txt non trovato"; exit 0 }
           $summary = Get-Content -Raw "CoverageReport/Summary.txt"
-          if (-not $summary) { Write-Warning "Summary.txt non trovato"; exit 0 }
 
           $line   = if ($summary -match 'Line coverage:\s*([\d\.]+)%')   { [double]$Matches[1] } else { 0 }
           $branch = if ($summary -match 'Branch coverage:\s*([\d\.]+)%') { [double]$Matches[1] } else { 0 }
@@ -95,8 +97,8 @@ jobs:
         if: always()
         shell: pwsh
         run: |
+          if (-not (Test-Path "CoverageReport/Summary.txt")) { Write-Error "Summary.txt non trovato"; exit 1 }
           $s = Get-Content -Raw "CoverageReport/Summary.txt"
-          if (-not $s) { Write-Error "Summary.txt non trovato"; exit 1 }
 
           $line   = if ($s -match 'Line coverage:\s*([\d\.]+)%')   { [double]$Matches[1] } else { 0 }
           $branch = if ($s -match 'Branch coverage:\s*([\d\.]+)%') { [double]$Matches[1] } else { 0 }
@@ -129,8 +131,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
         run: |
+          if (-not (Test-Path "CoverageReport/Summary.txt")) { Write-Error "Summary.txt non trovato"; exit 1 }
           $s = Get-Content -Raw "CoverageReport/Summary.txt"
-          if (-not $s) { Write-Error "Summary.txt non trovato"; exit 1 }
 
           $line   = if ($s -match 'Line coverage:\s*([\d\.]+)%')   { [double]$Matches[1] } else { 0 }
           $branch = if ($s -match 'Branch coverage:\s*([\d\.]+)%') { [double]$Matches[1] } else { 0 }

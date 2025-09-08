@@ -4,12 +4,7 @@
     <DataCollectors>
       <DataCollector friendlyName="XPlat code coverage">
         <Configuration>
-          <!-- INCLUDI solo il core -->
-          <Include>
-            [ProgesiCore]*
-          </Include>
-
-          <!-- ESCLUSIONI aggiuntive -->
+          <Include>[ProgesiCore]*</Include>
           <Exclude>
             [ProgesiRepositories.Sqlite]*
             [ProgesiRepositories.Rhino]*
@@ -17,7 +12,6 @@
             [ProgesiRepositories.InMemory]*
             *.Generated*
           </Exclude>
-
           <ExcludeByFile>**/*Designer.cs,**/Migrations/*.cs,**/*.g.cs</ExcludeByFile>
           <IncludeTestAssembly>false</IncludeTestAssembly>
         </Configuration>
