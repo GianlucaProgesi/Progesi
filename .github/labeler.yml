@@ -1,0 +1,18 @@
+CI/CD:
+  - .github/**
+
+tests:
+  - tests/**
+
+core:
+  - src/ProgesiCore/**
+
+sqlite:
+  - src/ProgesiRepositories.Sqlite/**
+
+inmemory:
+  - src/ProgesiRepositories.InMemory/**
+
+windows-only:
+  - src/ProgesiRepositories.Rhino/**
+  - src/ProgesiGrasshopperAssembly/**

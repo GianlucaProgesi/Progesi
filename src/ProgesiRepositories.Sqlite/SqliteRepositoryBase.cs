@@ -1,4 +1,4 @@
-﻿#nullable enable
+#nullable enable
 using Microsoft.Data.Sqlite;
 using Newtonsoft.Json;
 using System;

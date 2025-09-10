@@ -90,7 +90,9 @@ dotnet nuget remove source github >/dev/null 2>&1; dotnet nuget add source "http
 
 ![Coverage](docs/coverage/badge_linecoverage.svg)
 
-[![CI](https://github.com/GianlucaProgesi/Progesi/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/GianlucaProgesi/Progesi/actions/workflows/ci.yml)
+[![CI](https://github.com/GianlucaProgesi/Progesi/actions/workflows/ci.yml/badge.svg)](https://github.com/GianlucaProgesi/Progesi/actions/workflows/ci.yml) ![Coverage](docs/badges/coverage-core.svg)
+
+(https://github.com/GianlucaProgesi/Progesi/actions/workflows/ci.yml)
 
 (incolla QUI tutto il contenuto markdown riportato sopra)
 

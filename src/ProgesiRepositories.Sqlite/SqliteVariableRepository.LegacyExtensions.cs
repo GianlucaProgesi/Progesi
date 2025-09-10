@@ -1,4 +1,4 @@
-﻿#nullable disable
+#nullable disable
 namespace ProgesiRepositories.Sqlite
 {
     public static class SqliteVariableRepositoryLegacyExtensions

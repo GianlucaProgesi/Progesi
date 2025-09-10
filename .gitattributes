@@ -1,18 +1,28 @@
-﻿*           text=auto eol=lf
+﻿# Rileva i file di testo automaticamente
+* text=auto
 
-# codice
-*.cs        text eol=lf
-*.csproj    text eol=lf
-*.props     text eol=lf
-*.targets   text eol=lf
-*.xaml      text eol=lf
-*.yml       text eol=lf
-*.yaml      text eol=lf
-*.md        text eol=lf
-*.json      text eol=lf
-*.xml       text eol=lf
+# Enforce CRLF per codice C#/MSBuild su Windows (coerente con i messaggi "Replace ... with \r\n")
+*.cs      text eol=crlf
+*.csproj  text eol=crlf
+*.sln     text eol=crlf
+*.props   text eol=crlf
+*.targets text eol=crlf
+*.ps1     text eol=crlf
 
-# Windows-only
-*.ps1       text eol=crlf
-*.bat       text eol=crlf
-*.sln       text eol=crlf
+# (Opzionale) LF per file unix-like
+*.sh      text eol=lf
+*.yml     text eol=lf
+*.yaml    text eol=lf
+
+# Binari sempre come binari
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.7z binary
+*.dll binary
+*.exe binary
+*.pdb binary
