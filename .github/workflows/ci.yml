@@ -8,6 +8,7 @@ on:
       - develop
       - release/**
   pull_request:
+  workflow_dispatch: {}
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -15,15 +16,12 @@ concurrency:
 
 permissions:
   contents: read
-  actions: read
-  checks: write
-  pull-requests: write
 
 jobs:
-  build-test-coverage:
-    name: build-test-coverage
+  build-test:
+    name: build-test
     runs-on: windows-latest
-    timeout-minutes: 45
+    timeout-minutes: 40
 
     steps:
       - name: Checkout
@@ -31,102 +29,97 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup .NET SDKs (8.x + 7.0.410)
+      - name: Setup .NET SDKs
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: |
-            8.x
-            7.0.410
-          cache: true
+            8.0.x
+            7.0.x
+            6.0.x
 
       - name: Cache NuGet
         uses: actions/cache@v4
         with:
           path: |
             ~/.nuget/packages
-          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.sln', '**/*.csproj', '**/packages.lock.json') }}
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.sln', '**/*.slnf', '**/*.csproj', '**/packages.lock.json') }}
           restore-keys: |
             ${{ runner.os }}-nuget-
 
-      # --- PATCH CHIRURGICA WHITESPACE (Windows) ---
-      - name: Normalize line endings (CRLF)
-        if: runner.os == 'Windows'
+      - name: Choose build target (prefer .slnf, then .sln)
+        id: sln
         shell: pwsh
         run: |
-          git config core.autocrlf true
-          $patterns = @("*.cs","*.csproj","*.sln","*.props","*.targets")
-          Get-ChildItem -Recurse -File -Include $patterns | ForEach-Object {
-            $p = $_.FullName
-            $txt = Get-Content -Raw -LiteralPath $p
-            # Uniforma qualsiasi combinazione di EOL in CRLF
-            $txt = $txt -replace "(`r)?`n","`r`n"
-            [System.IO.File]::WriteAllText($p, $txt, [System.Text.UTF8Encoding]::new($false))
+          $slnf = Get-ChildItem -Recurse -Filter *.slnf | Select-Object -First 1
+          if ($slnf) {
+            "path=$($slnf.FullName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+            exit 0
+          }
+          $sln = Get-ChildItem -Recurse -Filter *.sln | Select-Object -First 1
+          if ($sln) {
+            "path=$($sln.FullName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+            exit 0
+          }
+          Write-Error "Nessun file .slnf o .sln trovato"
+
+      - name: Restore (solution) — auto locked-mode
+        shell: pwsh
+        run: |
+          $path = "${{ steps.sln.outputs.path }}"
+          $hasLock = @(Get-ChildItem -Recurse -Filter packages.lock.json).Count -gt 0
+          if ($hasLock) {
+            dotnet restore "$path" --locked-mode
+          } else {
+            dotnet restore "$path"
           }
 
-      - name: dotnet format (autofix)
-        shell: pwsh
-        run: dotnet format --verbosity minimal
-
-      # Se vuoi far fallire i PR se non formattati, tieni questo step.
-      # Altrimenti puoi rimuoverlo.
-      - name: dotnet format (verify-only on PR)
-        if: github.event_name == 'pull_request'
-        shell: pwsh
-        run: dotnet format --verify-no-changes --verbosity minimal
-
-      - name: Restore
-        shell: pwsh
-        run: dotnet restore
-
-      - name: Build
-        shell: pwsh
-        run: dotnet build --configuration Release --no-restore
-
-      - name: Test (with coverage + runsettings)
-        shell: pwsh
-        run: >
-          dotnet test -r TestResults -l "trx;LogFileName=test.trx"
-          --configuration Release
-          --no-build
-          --collect:"XPlat Code Coverage"
-          --results-directory TestResults
-          --settings tests/coverlet.runsettings
-
-      - name: Install ReportGenerator
-        shell: pwsh
-        run: dotnet tool update -g dotnet-reportgenerator-globaltool
-
-      - name: Add .NET tools to PATH
-        shell: pwsh
-        run: echo "$env:USERPROFILE\.dotnet\tools" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-
-      - name: Generate CoverageReport (Html + TextSummary + Cobertura)
+      - name: Verify whitespace formatting
         shell: pwsh
         run: |
-          $reports = Get-ChildItem -Recurse -Path "TestResults" -Filter "coverage.cobertura.xml" | % { $_.FullName }
-          Write-Host "$(Get-Date -Format o): Arguments"
-          Write-Host " -reports:$($reports -join ';')"
-          Write-Host " -targetdir:CoverageReport"
-          Write-Host " -reporttypes:Html;TextSummary;Cobertura"
-          Write-Host " -assemblyfilters:+ProgesiCore"
-          Write-Host " -classfilters:-*Logger*;-*LegacyExtensions*;-*TraceLogger*"
-          reportgenerator `
-            -reports:$($reports -join ';') `
-            -targetdir:CoverageReport `
-            -reporttypes:Html;TextSummary;Cobertura `
-            -assemblyfilters:+ProgesiCore `
-            -classfilters:-*Logger*;-*LegacyExtensions*;-*TraceLogger*
+          dotnet tool install -g dotnet-format --version 8.*
+          $env:PATH += ";$([Environment]::GetFolderPath('UserProfile'))\.dotnet\tools"
+          dotnet format whitespace "${{ steps.sln.outputs.path }}" --verify-no-changes --severity info
 
-      - name: Publish coverage summary to Job Summary
+      - name: Build (solution)
+        run: dotnet build "${{ steps.sln.outputs.path }}" -c Release --no-restore
+
+      - name: Test (solution) + coverage
+        shell: pwsh
+        run: |
+          $results = "TestResults"
+          New-Item -ItemType Directory -Force -Path $results | Out-Null
+          dotnet test "${{ steps.sln.outputs.path }}" -c Release --no-build `
+            --logger "trx;LogFileName=test.trx" --results-directory $results `
+            --collect:"XPlat Code Coverage"
+
+      - name: Locate test & coverage files (debug)
         if: always()
         shell: pwsh
         run: |
-          if (Test-Path "CoverageReport/Summary.txt") {
-            "## Coverage (ProgesiCore only)`n" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
-            Get-Content -Raw "CoverageReport/Summary.txt" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
-          } else {
-            "Coverage summary non trovato." | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          Write-Host "Listing TestResults:"
+          Get-ChildItem -Recurse TestResults | ForEach-Object { Write-Host $_.FullName }
+          Write-Host "Listing coverage.cobertura.xml:"
+          Get-ChildItem -Recurse -Filter coverage.cobertura.xml | ForEach-Object { Write-Host $_.FullName }
+
+      - name: Guardrail — fail if no tests executed
+        shell: pwsh
+        run: |
+          $trx = Get-ChildItem -Recurse -Path "TestResults" -Filter "*.trx" -ErrorAction SilentlyContinue
+          if (-not $trx) {
+            Write-Error "Nessun file .trx trovato: sembra non siano stati eseguiti test."
+            exit 1
           }
+          $trx | ForEach-Object { Write-Host ("Found TRX: " + $_.FullName) }
+
+      - name: Generate HTML coverage report (skip if none)
+        if: always()
+        uses: danielpalme/ReportGenerator-GitHub-Action@v5
+        with:
+          reports: "**/TestResults/**/coverage.cobertura.xml"
+          targetdir: "CoverageReport"
+          reporttypes: "HtmlInline_AzurePipelines;Cobertura"
+          historydir: "CoverageHistory"
+        continue-on-error: true
 
       - name: Upload CoverageReport artifact
         if: always()
@@ -143,4 +136,3 @@ jobs:
           name: TestResults
           path: TestResults
           if-no-files-found: warn
-
