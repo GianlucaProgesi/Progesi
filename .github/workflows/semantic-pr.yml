@@ -1,35 +1,29 @@
 name: Semantic PR
-
 on:
-  pull_request:
-    types: [opened, edited, synchronize, reopened, ready_for_review, labeled]
+  pull_request_target:
+    types: [opened, edited, synchronize, reopened, ready_for_review]
 
 permissions:
   pull-requests: read
-
-concurrency:
-  group: semanticpr-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  statuses: write
 
 jobs:
-  check:
-    if: github.actor != 'dependabot[bot]' # bypass per Dependabot
+  lint:
     runs-on: ubuntu-latest
     steps:
       - uses: amannn/action-semantic-pull-request@v5
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          requireScope: false
-          subjectPattern: ".+"
           types: |
+            chore
+            ci
+            docs
             feat
             fix
-            chore
-            docs
-            style
-            refactor
             perf
+            refactor
             test
-            build
-            ci
+          requireScope: false
+          subjectPattern: ^.+$
+          wip: true
