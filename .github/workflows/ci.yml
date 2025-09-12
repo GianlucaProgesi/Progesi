@@ -2,12 +2,7 @@
 
 on:
   push:
-    branches:
-      - main
-      - master
-      - develop
-      - chore/**
-      - release/**
+    branches: [ main, master, develop, chore/**, release/** ]
   pull_request:
   workflow_dispatch: {}
 
@@ -27,8 +22,7 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+        with: { fetch-depth: 0 }
 
       - name: Setup .NET SDKs
         uses: actions/setup-dotnet@v4
@@ -39,27 +33,28 @@ jobs:
       - name: Cache NuGet
         uses: actions/cache@v4
         with:
-          path: |
-            ~/.nuget/packages
+          path: ~/.nuget/packages
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.sln', '**/*.slnf', '**/*.csproj', '**/packages.lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-nuget-
+          restore-keys: ${{ runner.os }}-nuget-
 
-      # Per coerenza con i numeri storici usiamo la .sln completa (poi fallback .slnf)
-      - name: Choose build target (prefer .sln, then .slnf)
+      # 🔁 Torniamo al comportamento "buono": preferisci .slnf, poi .sln
+      - name: Choose build target (prefer .slnf, then .sln)
         id: sln
         shell: pwsh
         run: |
-          $sln = Get-ChildItem -Recurse -Filter *.sln | Select-Object -First 1
-          if ($sln) { "path=$($sln.FullName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append; exit 0 }
           $slnf = Get-ChildItem -Recurse -Filter *.slnf | Select-Object -First 1
           if ($slnf) { "path=$($slnf.FullName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append; exit 0 }
-          Write-Error "Nessun file .sln o .slnf trovato"
+          $sln = Get-ChildItem -Recurse -Filter *.sln | Select-Object -First 1
+          if ($sln)  { "path=$($sln.FullName)"  | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append; exit 0 }
+          Write-Error "Nessun file .slnf o .sln trovato"
 
-      - name: Echo build target
+      - name: Echo build target & discover tests
         shell: pwsh
         run: |
           Write-Host "Using solution: ${{ steps.sln.outputs.path }}"
+          $tests = Get-ChildItem -Recurse -Filter '*Tests.csproj' | Select-Object -ExpandProperty FullName
+          Write-Host "Discovered test projects:"; $tests | ForEach-Object { Write-Host " - $_" }
+          if (-not $tests) { Write-Warning "Nessun progetto di test trovato." }
 
       - name: Restore (solution)
         shell: pwsh
@@ -70,13 +65,11 @@ jobs:
 
       - name: Verify whitespace formatting
         shell: pwsh
-        run: |
-          dotnet format whitespace '${{ steps.sln.outputs.path }}' --verify-no-changes
+        run: dotnet format whitespace '${{ steps.sln.outputs.path }}' --verify-no-changes
 
       - name: Build (solution)
         shell: pwsh
-        run: |
-          dotnet build '${{ steps.sln.outputs.path }}' -c Release --no-restore
+        run: dotnet build '${{ steps.sln.outputs.path }}' -c Release --no-restore
 
       - name: Test (solution) + coverage
         shell: pwsh
@@ -91,10 +84,8 @@ jobs:
         if: always()
         shell: pwsh
         run: |
-          Write-Host 'Listing TestResults:'
-          Get-ChildItem -Recurse TestResults | ForEach-Object { Write-Host $_.FullName }
-          Write-Host 'Listing coverage.cobertura.xml:'
-          Get-ChildItem -Recurse -Filter coverage.cobertura.xml | ForEach-Object { Write-Host $_.FullName }
+          Write-Host 'Listing TestResults:'; Get-ChildItem -Recurse TestResults | ForEach-Object { Write-Host $_.FullName }
+          Write-Host 'Listing coverage.cobertura.xml:'; Get-ChildItem -Recurse -Filter coverage.cobertura.xml | ForEach-Object { Write-Host $_.FullName }
 
       - name: Guardrail — fail if no tests executed
         shell: pwsh
@@ -103,7 +94,7 @@ jobs:
           if (-not $trx) { Write-Error 'Nessun file .trx trovato: sembra non siano stati eseguiti test.'; exit 1 }
           $trx | ForEach-Object { Write-Host ('Found TRX: ' + $_.FullName) }
 
-      # ReportGenerator con filtri ripristinati
+      # 📈 ReportGenerator con i FILTRI storici (stessa configurazione del run a 95.4%)
       - name: Generate coverage reports (filtered)
         if: always()
         uses: danielpalme/ReportGenerator-GitHub-Action@v5
@@ -134,4 +125,29 @@ jobs:
             Write-Host 'No TextSummary found.'
           }
 
-      # GATE: f
+      # ✅ Gate: fallisce se Line coverage < 90%
+      - name: Enforce coverage gate (>= 90% line)
+        if: always()
+        shell: pwsh
+        run: |
+          $summary = Get-ChildItem -Recurse -Filter 'Summary.txt' -Path 'CoverageReport' | Select-Object -First 1
+          if (-not $summary) { Write-Error 'Summary.txt non trovato (ReportGenerator non ha prodotto il TextSummary)'; exit 1 }
+          $line = Select-String -Path $summary.FullName -Pattern 'Line coverage:\s+([0-9\.]+)%' | ForEach-Object { [double]$_.Matches[0].Groups[1].Value }
+          Write-Host ('Line coverage rilevata: ' + $line + '%')
+          if ($line -lt 90) { Write-Error ('Coverage gate failed: ' + $line + '% < 90%'); exit 1 }
+
+      - name: Upload CoverageReport artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: CoverageReport
+          path: CoverageReport
+          if-no-files-found: warn
+
+      - name: Upload TestResults artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: TestResults
+          path: TestResults
+          if-no-files-found: warn
