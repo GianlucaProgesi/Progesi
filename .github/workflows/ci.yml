@@ -62,7 +62,6 @@ jobs:
           $hasLock = @(Get-ChildItem -Recurse -Filter packages.lock.json).Count -gt 0
           if ($hasLock) { dotnet restore "$path" --locked-mode } else { dotnet restore "$path" }
 
-      # Verifica formattazione (usa dotnet-format integrato in .NET 8)
       - name: Verify whitespace formatting
         shell: pwsh
         run: |
@@ -96,7 +95,6 @@ jobs:
           if (-not $trx) { Write-Error "Nessun file .trx trovato: sembra non siano stati eseguiti test."; exit 1 }
           $trx | ForEach-Object { Write-Host ("Found TRX: " + $_.FullName) }
 
-      # ReportGenerator: HTML + Cobertura + TextSummary (per log e Job Summary)
       - name: Generate coverage reports
         if: always()
         uses: danielpalme/ReportGenerator-GitHub-Action@v5
