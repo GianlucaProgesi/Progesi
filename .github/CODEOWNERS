@@ -1,0 +1,8 @@
+# Revisori default
+* @GianlucaProgesi
+
+# Aree
+/src/ProgesiCore/ @GianlucaProgesi
+/src/ProgesiRepositories.* @GianlucaProgesi
+/tests/ @GianlucaProgesi
+/.github/ @GianlucaProgesi

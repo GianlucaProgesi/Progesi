@@ -1,0 +1,140 @@
+{
+  "repo": null,
+  "workflows": null,
+  "recentRuns": [
+    {
+      "conclusion": "",
+      "createdAt": "2025-09-10T05:55:45Z",
+      "databaseId": 17604593470,
+      "displayTitle": "CI",
+      "headBranch": "chore/ci-trx",
+      "headSha": "7e4a4308df8d1391fffd2432f2207813dbc57751",
+      "status": "in_progress",
+      "updatedAt": "2025-09-10T05:55:48Z",
+      "url": "https://github.com/GianlucaProgesi/Progesi/actions/runs/17604593470",
+      "workflowName": "CI"
+    },
+    {
+      "conclusion": "success",
+      "createdAt": "2025-09-10T05:49:44Z",
+      "databaseId": 17604502616,
+      "displayTitle": "CI",
+      "headBranch": "chore/ci-trx",
+      "headSha": "7e4a4308df8d1391fffd2432f2207813dbc57751",
+      "status": "completed",
+      "updatedAt": "2025-09-10T05:51:55Z",
+      "url": "https://github.com/GianlucaProgesi/Progesi/actions/runs/17604502616",
+      "workflowName": "CI"
+    },
+    {
+      "conclusion": "cancelled",
+      "createdAt": "2025-09-10T05:49:44Z",
+      "databaseId": 17604502548,
+      "displayTitle": "ci: enable workflow_dispatch + stable format + TRX + coverage",
+      "headBranch": "chore/ci-trx",
+      "headSha": "7e4a4308df8d1391fffd2432f2207813dbc57751",
+      "status": "completed",
+      "updatedAt": "2025-09-10T05:49:45Z",
+      "url": "https://github.com/GianlucaProgesi/Progesi/actions/runs/17604502548",
+      "workflowName": "CI"
+    },
+    {
+      "conclusion": "failure",
+      "createdAt": "2025-09-10T05:32:39Z",
+      "databaseId": 17604232002,
+      "displayTitle": "CI",
+      "headBranch": "chore/ci-trx",
+      "headSha": "d8b7c50c59ed2c03ce0315a0ab77caf830ee02bc",
+      "status": "completed",
+      "updatedAt": "2025-09-10T05:35:24Z",
+      "url": "https://github.com/GianlucaProgesi/Progesi/actions/runs/17604232002",
+      "workflowName": "CI"
+    },
+    {
+      "conclusion": "failure",
+      "createdAt": "2025-09-10T04:55:57Z",
+      "databaseId": 17603619454,
+      "displayTitle": "CI",
+      "headBranch": "chore/maintenance-ci-hardening",
+      "headSha": "580ffb687581b21af2c2f405929c88d839408153",
+      "status": "completed",
+      "updatedAt": "2025-09-10T04:57:53Z",
+      "url": "https://github.com/GianlucaProgesi/Progesi/actions/runs/17603619454",
+      "workflowName": "CI"
+    },
+    {
+      "conclusion": "failure",
+      "createdAt": "2025-09-09T05:50:00Z",
+      "databaseId": 17573102158,
+      "displayTitle": "chore: maintenance (editorconfig, CODEOWNERS, release hardening)",
+      "headBranch": "chore/maintenance-ci-hardening",
+      "headSha": "580ffb687581b21af2c2f405929c88d839408153",
+      "status": "completed",
+      "updatedAt": "2025-09-09T05:55:20Z",
+      "url": "https://github.com/GianlucaProgesi/Progesi/actions/runs/17573102158",
+      "workflowName": "CodeQL"
+    },
+    {
+      "conclusion": "failure",
+      "createdAt": "2025-09-09T05:50:00Z",
+      "databaseId": 17573102151,
+      "displayTitle": "chore: maintenance (editorconfig, CODEOWNERS, release hardening)",
+      "headBranch": "chore/maintenance-ci-hardening",
+      "headSha": "580ffb687581b21af2c2f405929c88d839408153",
+      "status": "completed",
+      "updatedAt": "2025-09-09T05:51:22Z",
+      "url": "https://github.com/GianlucaProgesi/Progesi/actions/runs/17573102151",
+      "workflowName": "CI"
+    },
+    {
+      "conclusion": "success",
+      "createdAt": "2025-09-08T12:21:16Z",
+      "databaseId": 17550577093,
+      "displayTitle": "CI",
+      "headBranch": "chore/ci-fix-windows-x64",
+      "headSha": "8378461bc42390a2dd23f3d3d310d4b175166aaf",
+      "status": "completed",
+      "updatedAt": "2025-09-08T12:23:19Z",
+      "url": "https://github.com/GianlucaProgesi/Progesi/actions/runs/17550577093",
+      "workflowName": "CI"
+    },
+    {
+      "conclusion": "success",
+      "createdAt": "2025-09-08T12:19:45Z",
+      "databaseId": 17550536658,
+      "displayTitle": "CI: Windows x64 tests + coverage",
+      "headBranch": "chore/ci-fix-windows-x64",
+      "headSha": "8378461bc42390a2dd23f3d3d310d4b175166aaf",
+      "status": "completed",
+      "updatedAt": "2025-09-08T12:22:08Z",
+      "url": "https://github.com/GianlucaProgesi/Progesi/actions/runs/17550536658",
+      "workflowName": "CI"
+    },
+    {
+      "conclusion": "success",
+      "createdAt": "2025-09-08T12:19:43Z",
+      "databaseId": 17550535886,
+      "displayTitle": "CI",
+      "headBranch": "chore/ci-fix-windows-x64",
+      "headSha": "8378461bc42390a2dd23f3d3d310d4b175166aaf",
+      "status": "completed",
+      "updatedAt": "2025-09-08T12:21:52Z",
+      "url": "https://github.com/GianlucaProgesi/Progesi/actions/runs/17550535886",
+      "workflowName": "CI"
+    }
+  ],
+  "runsPerWorkflow": [],
+  "lastFailed": {
+    "conclusion": "failure",
+    "createdAt": "2025-09-10T05:32:39Z",
+    "databaseId": 17604232002,
+    "displayTitle": "CI",
+    "headBranch": "chore/ci-trx",
+    "headSha": "d8b7c50c59ed2c03ce0315a0ab77caf830ee02bc",
+    "status": "completed",
+    "updatedAt": "2025-09-10T05:35:24Z",
+    "url": "https://github.com/GianlucaProgesi/Progesi/actions/runs/17604232002",
+    "workflowName": "CI"
+  },
+  "lastFailedReport": null
+}
