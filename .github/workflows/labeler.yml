@@ -1,16 +1,23 @@
 name: PR Labeler
+
 on:
   pull_request_target:
     types: [opened, synchronize, reopened, edited]
 
 permissions:
+  contents: read
   pull-requests: write
+
+concurrency:
+  group: prlabeler-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   label:
+    if: github.actor != 'dependabot[bot]' # opzionale: niente label per Dependabot
     runs-on: ubuntu-latest
     steps:
       - uses: actions/labeler@v5
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
-          configuration-path: .github/labeler.yml
+          sync-labels: true

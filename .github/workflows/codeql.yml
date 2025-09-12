@@ -2,53 +2,38 @@ name: CodeQL
 
 on:
   push:
-    branches: [ main ]
+    branches: [ main, master, develop, chore/**, release/** ]
   pull_request:
-    branches: [ main ]
+    branches: [ main, master, develop ]
   schedule:
-    - cron: '20 1 * * 5'
+    - cron: '0 2 * * 0' # weekly
+  workflow_dispatch: {}
 
 permissions:
   contents: read
-  actions: read
   security-events: write
-  pull-requests: read
 
 concurrency:
-  group: codeql-${{ github.ref }}
+  group: codeql-${{ github.ref || github.run_id }}
   cancel-in-progress: true
 
 jobs:
   analyze:
     name: Analyze
-    runs-on: windows-latest
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
-
-    strategy:
-      fail-fast: false
-      matrix:
-        language: [ 'csharp' ]
-
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
-          languages: ${{ matrix.language }}
+          languages: csharp
 
-      # Autobuild di CodeQL (per C# in genere basta)
       - name: Autobuild
         uses: github/codeql-action/autobuild@v3
-
-      # Se mai servisse una build manuale, decommenta:
-      # - run: |
-      #     dotnet restore Progesi.sln
-      #     dotnet build Progesi.sln -c Release --no-restore
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
         with:
-          category: "/language:${{ matrix.language }}"
+          category: "/language:csharp"
