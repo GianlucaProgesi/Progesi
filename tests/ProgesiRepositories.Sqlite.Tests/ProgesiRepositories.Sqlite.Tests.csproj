@@ -24,7 +24,7 @@
     <PackageReference Include="xunit.runner.visualstudio" Version="2.4.5" />
     <PackageReference Include="FluentAssertions" Version="6.12.0" />
     <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="2.1.8" />
-    <PackageReference Include="SQLitePCLRaw.provider.e_sqlite3" Version="2.1.8" />
+    <PackageReference Include="SQLitePCLRaw.provider.e_sqlite3" Version="3.0.2" />
     <PackageReference Include="SQLitePCLRaw.lib.e_sqlite3" Version="2.1.8" />
   </ItemGroup>
 </Project>
