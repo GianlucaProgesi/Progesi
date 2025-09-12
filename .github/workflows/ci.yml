@@ -52,8 +52,9 @@ jobs:
         shell: pwsh
         run: |
           Write-Host "Using solution: ${{ steps.sln.outputs.path }}"
-          $tests = Get-ChildItem -Recurse -Filter '*Tests.csproj' | Select-Object -ExpandProperty FullName
-          Write-Host "Discovered test projects:"; $tests | ForEach-Object { Write-Host " - $_" }
+          $global:TestProjects = Get-ChildItem -Recurse -Filter '*Tests.csproj' | Select-Object -ExpandProperty FullName
+          if ($global:TestProjects) { Write-Host "Discovered test projects:"; $global:TestProjects | ForEach-Object { Write-Host " - $_" } }
+          else { Write-Warning "Nessun progetto di test trovato." }
 
       - name: Restore (solution)
         shell: pwsh
@@ -70,14 +71,21 @@ jobs:
         shell: pwsh
         run: dotnet build '${{ steps.sln.outputs.path }}' -c Release --no-restore
 
-      - name: Test (solution) + coverage
+      # 🔑 Testa TUTTI i progetti di test, non la solution: così gira anche Sqlite.Tests
+      - name: Test (each test project) + coverage
         shell: pwsh
         run: |
           $results = 'TestResults'
           New-Item -ItemType Directory -Force -Path $results | Out-Null
-          dotnet test '${{ steps.sln.outputs.path }}' -c Release --no-build `
-            --logger 'trx;LogFileName=test.trx' --results-directory $results `
-            --collect:'XPlat Code Coverage'
+          $tests = Get-ChildItem -Recurse -Filter '*Tests.csproj' | Select-Object -ExpandProperty FullName
+          if (-not $tests) { Write-Error "Nessun progetto *Tests.csproj trovato"; exit 1 }
+          foreach ($t in $tests) {
+            $name = [IO.Path]::GetFileNameWithoutExtension($t)
+            Write-Host "==> dotnet test $name"
+            dotnet test "$t" -c Release `
+              --logger "trx;LogFileName=$name.trx" --results-directory $results `
+              --collect:"XPlat Code Coverage"
+          }
 
       - name: Locate test & coverage files (debug)
         if: always()
@@ -93,8 +101,8 @@ jobs:
           if (-not $trx) { Write-Error 'Nessun file .trx trovato: sembra non siano stati eseguiti test.'; exit 1 }
           $trx | ForEach-Object { Write-Host ('Found TRX: ' + $_.FullName) }
 
-      # 🔎 ReportGenerator con filtri che includono Core + Repositories.*
-      - name: Generate coverage reports (filtered)
+      # Report FILTERED (Core + Repositories.*)
+      - name: Generate coverage reports (FILTERED)
         if: always()
         uses: danielpalme/ReportGenerator-GitHub-Action@v5
         with:
@@ -115,16 +123,11 @@ jobs:
             try {
               [xml]$x = Get-Content $cob.FullName
               $names = $x.coverage.packages.package | ForEach-Object { $_.name }
-              if ($names) {
-                Write-Host 'Assemblies in final report:'
-                $names | ForEach-Object { Write-Host " - $_" }
-              }
-            } catch {
-              Write-Host "Unable to parse Cobertura.xml for assembly names."
-            }
-          }
+              Write-Host 'Assemblies in final report:'; $names | ForEach-Object { Write-Host " - $_" }
+            } catch { Write-Host "Unable to parse Cobertura.xml" }
+          } else { Write-Warning 'Cobertura.xml non trovato.' }
 
-      - name: Print coverage summary
+      - name: Print coverage summary (FILTERED)
         if: always()
         shell: pwsh
         run: |
@@ -138,11 +141,9 @@ jobs:
               Get-Content $summary.FullName | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
               '```' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
             }
-          } else {
-            Write-Host 'No TextSummary found.'
-          }
+          } else { Write-Host 'No TextSummary found.' }
 
-      # ✅ Gate: Line coverage >= 90%
+      # Gate 90% (line)
       - name: Enforce coverage gate (>= 90% line)
         if: always()
         shell: pwsh
@@ -151,4 +152,20 @@ jobs:
           if (-not $summary) { Write-Error 'Summary.txt non trovato (ReportGenerator non ha prodotto il TextSummary)'; exit 1 }
           $line = Select-String -Path $summary.FullName -Pattern 'Line coverage:\s+([0-9\.]+)%' | ForEach-Object { [double]$_.Matches[0].Groups[1].Value }
           Write-Host ('Line coverage rilevata: ' + $line + '%')
-          if ($line -lt 90) { Write-Error (
+          if ($line -lt 90) { Write-Error ('Coverage gate failed: ' + $line + '% < 90%'); exit 1 }
+
+      - name: Upload CoverageReport artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: CoverageReport
+          path: CoverageReport
+          if-no-files-found: warn
+
+      - name: Upload TestResults artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: TestResults
+          path: TestResults
+          if-no-files-found: warn
