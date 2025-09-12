@@ -45,7 +45,7 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-nuget-
 
-      # Per coerenza con i numeri storici usiamo la .sln completa (non la .slnf)
+      # Per coerenza con i numeri storici usiamo la .sln completa (poi fallback .slnf)
       - name: Choose build target (prefer .sln, then .slnf)
         id: sln
         shell: pwsh
@@ -57,27 +57,81 @@ jobs:
           Write-Error "Nessun file .sln o .slnf trovato"
 
       - name: Echo build target
-        run: echo "Using solution: ${{ steps.sln.outputs.path }}"
+        shell: pwsh
+        run: |
+          Write-Host "Using solution: ${{ steps.sln.outputs.path }}"
 
       - name: Restore (solution)
         shell: pwsh
         run: |
-          $path = "${{ steps.sln.outputs.path }}"
+          $path = '${{ steps.sln.outputs.path }}'
           $hasLock = @(Get-ChildItem -Recurse -Filter packages.lock.json).Count -gt 0
           if ($hasLock) { dotnet restore "$path" --locked-mode } else { dotnet restore "$path" }
 
       - name: Verify whitespace formatting
         shell: pwsh
         run: |
-          dotnet format whitespace "${{ steps.sln.outputs.path }}" --verify-no-changes
+          dotnet format whitespace '${{ steps.sln.outputs.path }}' --verify-no-changes
 
       - name: Build (solution)
-        run: dotnet build "${{ steps.sln.outputs.path }}" -c Release --no-restore
+        shell: pwsh
+        run: |
+          dotnet build '${{ steps.sln.outputs.path }}' -c Release --no-restore
 
       - name: Test (solution) + coverage
         shell: pwsh
         run: |
-          $results = "TestResults"
+          $results = 'TestResults'
           New-Item -ItemType Directory -Force -Path $results | Out-Null
-          dotnet test "${{ steps.sln.outputs.path }}" -c Release --no-build `
-            --logger "trx;LogFileName=test.tr
+          dotnet test '${{ steps.sln.outputs.path }}' -c Release --no-build `
+            --logger 'trx;LogFileName=test.trx' --results-directory $results `
+            --collect:'XPlat Code Coverage'
+
+      - name: Locate test & coverage files (debug)
+        if: always()
+        shell: pwsh
+        run: |
+          Write-Host 'Listing TestResults:'
+          Get-ChildItem -Recurse TestResults | ForEach-Object { Write-Host $_.FullName }
+          Write-Host 'Listing coverage.cobertura.xml:'
+          Get-ChildItem -Recurse -Filter coverage.cobertura.xml | ForEach-Object { Write-Host $_.FullName }
+
+      - name: Guardrail — fail if no tests executed
+        shell: pwsh
+        run: |
+          $trx = Get-ChildItem -Recurse -Path 'TestResults' -Filter '*.trx' -ErrorAction SilentlyContinue
+          if (-not $trx) { Write-Error 'Nessun file .trx trovato: sembra non siano stati eseguiti test.'; exit 1 }
+          $trx | ForEach-Object { Write-Host ('Found TRX: ' + $_.FullName) }
+
+      # ReportGenerator con filtri ripristinati
+      - name: Generate coverage reports (filtered)
+        if: always()
+        uses: danielpalme/ReportGenerator-GitHub-Action@v5
+        with:
+          reports: '**/TestResults/**/coverage.cobertura.xml'
+          targetdir: 'CoverageReport'
+          reporttypes: 'Html;TextSummary;Cobertura'
+          assemblyfilters: '+ProgesiCore'
+          classfilters: '-*Logger*;-*LegacyExtensions*;-*TraceLogger*'
+          historydir: 'CoverageHistory'
+        continue-on-error: true
+
+      - name: Print coverage summary
+        if: always()
+        shell: pwsh
+        run: |
+          $summary = Get-ChildItem -Recurse -Filter 'Summary.txt' -Path 'CoverageReport' | Select-Object -First 1
+          if ($summary) {
+            Write-Host '===== Code Coverage Summary (filtered) ====='
+            Get-Content $summary.FullName | Write-Host
+            if ($env:GITHUB_STEP_SUMMARY) {
+              '## Code Coverage Summary (filtered)' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+              '```' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+              Get-Content $summary.FullName | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+              '```' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+            }
+          } else {
+            Write-Host 'No TextSummary found.'
+          }
+
+      # GATE: f
