@@ -1,40 +1,50 @@
-# tools/gha-dump.ps1
-[CmdletBinding()]
-param(
-    [string[]] $Vars = @(
-        'ImageOS','RUNNER_OS','PROCESSOR_ARCHITECTURE',
-        'DOTNET_ROOT','DOTNET_ROOT_x64','DOTNET_MULTILEVEL_LOOKUP',
-        'GITHUB_REF','GITHUB_SHA','GITHUB_EVENT_NAME','GITHUB_WORKFLOW',
-        'Configuration','SLNF'
-    )
-)
-
-function Write-Section($title) {
-    Write-Host ""
-    Write-Host "=============================="
-    Write-Host "== $title"
-    Write-Host "=============================="
-}
+# Utility di diagnostica per le run di GitHub Actions (Windows)
+# Safe per variabili dinamiche e percorsi con caratteri speciali.
 
 Set-StrictMode -Version Latest
-$ErrorActionPreference = 'Continue'
+$ErrorActionPreference = 'Stop'
 
-Write-Section "dotnet --info"
-dotnet --info
+Write-Host "==============================" 
+Write-Host "== dotnet --info"
+Write-Host "=============================="
+& dotnet --info
 
-Write-Section "Selected environment variables"
-$Vars | ForEach-Object {
-    $val = [Environment]::GetEnvironmentVariable($_)
-    "{0}={1}" -f $_, $val
+Write-Host ""
+Write-Host "=============================="
+Write-Host "== Selected environment variables"
+Write-Host "=============================="
+$vars = @(
+  'ImageOS','RUNNER_OS','PROCESSOR_ARCHITECTURE',
+  'DOTNET_ROOT','DOTNET_ROOT_x64','DOTNET_MULTILEVEL_LOOKUP',
+  'GITHUB_REF','GITHUB_SHA','GITHUB_EVENT_NAME','GITHUB_WORKFLOW',
+  'Configuration','SLNF'
+)
+foreach ($name in $vars) {
+  $val = [System.Environment]::GetEnvironmentVariable($name)
+  Write-Host ("{0}={1}" -f $name, $val)
 }
 
-Write-Section "Repository tree (first 2 levels)"
-Get-ChildItem -Recurse -Depth 2 | ForEach-Object {
-    $_.FullName.Replace((Get-Location).Path, '.')
+Write-Host ""
+Write-Host "=============================="
+Write-Host "== Repository tree (first 2 levels)"
+Write-Host "=============================="
+Get-ChildItem -Force -Depth 2 | ForEach-Object {
+  $p = $_.FullName.Replace((Get-Location).Path, ".")
+  Write-Host $p
 }
 
-Write-Section "TestResults (paths)"
-Get-ChildItem -Recurse -ErrorAction SilentlyContinue "TestResults" | ForEach-Object { $_.FullName }
+Write-Host ""
+Write-Host "=============================="
+Write-Host "== TestResults (paths)"
+Write-Host "=============================="
+Get-ChildItem -Recurse -Force "$PWD/TestResults" -ErrorAction SilentlyContinue | ForEach-Object {
+  Write-Host $_.FullName
+}
 
-Write-Section "Coverage files (cobertura)"
-Get-ChildItem -Recurse -ErrorAction SilentlyContinue "coverage.cobertura.xml" | ForEach-Object { $_.FullName }
+Write-Host ""
+Write-Host "=============================="
+Write-Host "== Coverage files (cobertura)"
+Write-Host "=============================="
+Get-ChildItem -Recurse -Force "$PWD/TestResults" -Filter "coverage.cobertura.xml" -ErrorAction SilentlyContinue | ForEach-Object {
+  Write-Host $_.FullName
+}

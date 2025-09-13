@@ -1,109 +1,102 @@
 name: build-test-coverage
 
 on:
-  push:
-    branches: [ main ]
-    paths-ignore: [ '**/*.md' ]
   pull_request:
+    branches: [ main ]
+  push:
     branches: [ main ]
   workflow_dispatch:
 
 jobs:
   build-test:
     runs-on: windows-latest
-    timeout-minutes: 30
+    env:
+      SLNF: ${{ github.workspace }}\Progesi.CI.slnf
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
-      - name: Setup .NET (runtime LTS + SDK 8)
+      - name: Setup .NET (LTS + 8.x)
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: |
             8.0.x
-          include-prerelease: false
 
-      # Cache dei pacchetti NuGet (non richiede packages.lock.json)
       - name: NuGet cache
         uses: actions/cache@v4
         with:
-          path: ~/.nuget/packages
-          key: Windows-nuget-${{ hashFiles('**/*.csproj') }}
+          path: |
+            ~/.nuget/packages
+          key: Windows-nuget-${{ hashFiles('**/packages.lock.json') }}
           restore-keys: |
             Windows-nuget-
 
-      - name: Locate solution filter (fallback a .sln)
-        id: sln
-        shell: pwsh
-        run: |
-          $slnf = Get-ChildItem -Recurse -Filter 'Progesi.CI.slnf' | Select-Object -First 1
-          if ($slnf) { $p=$slnf.FullName } else { $p=(Get-ChildItem -Recurse -Filter '*.sln' | Select-Object -First 1).FullName }
-          echo "SLNF=$p" | Out-File -FilePath $env:GITHUB_ENV -Append
-
-      - name: Restore
-        shell: pwsh
+      # Restore/Build SOLO della solution filter "leggera"
+      - name: Restore (solution filter)
         run: dotnet restore "$Env:SLNF"
 
-      - name: Enforce whitespace format
-        shell: pwsh
+      - name: Check formatting
         run: dotnet format whitespace "$Env:SLNF" --verify-no-changes
 
       - name: Build (Release)
-        shell: pwsh
         run: dotnet build "$Env:SLNF" -c Release --no-restore
 
-      - name: Test - ProgesiCore.Tests
+      # Test core (produce coverage Cobertura tramite Coverlet.Collector)
+      - name: Test – ProgesiCore.Tests
+        run: >
+          dotnet test tests/ProgesiCore.Tests/ProgesiCore.Tests.csproj
+          -c Release
+          --collect:"XPlat Code Coverage"
+          --logger "trx;LogFileName=ProgesiCore.Tests.trx"
+          -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura
+
+      # ===== FIX: Sqlite =====
+      # La solution filter non include i test Sqlite → restore dedicato + test
+      - name: Restore – ProgesiRepositories.Sqlite.Tests (RID win-x64)
+        run: dotnet restore tests/ProgesiRepositories.Sqlite.Tests/ProgesiRepositories.Sqlite.Tests.csproj -r win-x64
+
+      - name: Test – ProgesiRepositories.Sqlite.Tests (RID win-x64)
+        run: >
+          dotnet test tests/ProgesiRepositories.Sqlite.Tests/ProgesiRepositories.Sqlite.Tests.csproj
+          -c Release
+          -r win-x64
+          --no-build
+          --collect:"XPlat Code Coverage"
+          --logger "trx;LogFileName=ProgesiRepositories.Sqlite.Tests.trx"
+          -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura
+      # =======================
+
+      - name: Elenco TestResults (debug)
         shell: pwsh
         run: |
-          dotnet test tests/ProgesiCore.Tests/ProgesiCore.Tests.csproj `
-            -c Release --no-restore `
-            --logger "trx;LogFileName=ProgesiCore.Tests.trx" `
-            --collect "XPlat Code Coverage"
+          Write-Host 'Listing TestResults:'
+          Get-ChildItem -Recurse -Force "$PWD/TestResults" | ForEach-Object { Write-Host $_.FullName }
+          Write-Host 'Listing coverage.cobertura.xml:'
+          Get-ChildItem -Recurse -Force "$PWD/TestResults" -Filter coverage.cobertura.xml | ForEach-Object { Write-Host $_.FullName }
 
-      # **PUNTO CHIAVE**: pre-build + test per Sqlite con RID win-x64
-      - name: Build - ProgesiRepositories.Sqlite.Tests (win-x64)
-        shell: pwsh
-        run: |
-          dotnet build tests/ProgesiRepositories.Sqlite.Tests/ProgesiRepositories.Sqlite.Tests.csproj `
-            -c Release -r win-x64 --no-restore
-
-      - name: Test - ProgesiRepositories.Sqlite.Tests (win-x64)
-        shell: pwsh
-        run: |
-          dotnet test tests/ProgesiRepositories.Sqlite.Tests/ProgesiRepositories.Sqlite.Tests.csproj `
-            -c Release -r win-x64 --no-restore `
-            --logger "trx;LogFileName=ProgesiRepositories.Sqlite.Tests.trx" `
-            --collect "XPlat Code Coverage"
-
-      - name: ReportGenerator
+      - name: Generate coverage report
         uses: danielpalme/ReportGenerator-GitHub-Action@v5
         with:
-          reports: '**/TestResults/**/coverage.cobertura.xml'
+          reports: "**/TestResults/**/coverage.cobertura.xml"
           targetdir: CoverageReport
-          reporttypes: 'Html;TextSummary;Cobertura'
-          assemblyfilters: '+ProgesiCore;+ProgesiRepositories.*'
-          classfilters: '-*Logger*;-*LegacyExtensions*;-*TraceLogger*'
-
-      - name: Show summary
-        shell: pwsh
-        run: |
-          $summary = Get-ChildItem -Recurse -Filter 'Summary.txt' -Path 'CoverageReport' | Select-Object -First 1
-          if ($summary) { Get-Content $summary.FullName | Write-Host }
+          reporttypes: Html;TextSummary;Cobertura
+          historydir: CoverageHistory
+          assemblyfilters: "+ProgesiCore;+ProgesiRepositories.*"
+          classfilters: "-*Logger*;-*LegacyExtensions*;-*TraceLogger*"
+          filefilters: "+*"
+          verbosity: Info
 
       - name: Upload CoverageReport
         uses: actions/upload-artifact@v4
         with:
           name: CoverageReport
-          path: CoverageReport
+          path: CoverageReport/**
 
       - name: Upload TestResults
         uses: actions/upload-artifact@v4
         with:
           name: TestResults
-          path: TestResults
-
-      - name: Diagnostics dump (always)
-        if: always()
-        shell: pwsh
-        run: tools/gha-dump.ps1
+          path: TestResults/**
