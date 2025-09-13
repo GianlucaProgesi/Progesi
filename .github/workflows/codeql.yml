@@ -1,40 +1,50 @@
-name: "CodeQL"
+name: CodeQL
 
 on:
   push:
-    branches: [ "**" ]
+    branches: ['**']
   pull_request:
-    branches: [ "**" ]
-  schedule:
-    - cron: '33 2 * * 2'
+    branches: ['**']
+  workflow_dispatch:
 
 jobs:
-  analyze:
-    name: Analyze (csharp)
+  analyze-csharp:
+    name: Analyze (C#)
     runs-on: windows-latest
     permissions:
       actions: read
       contents: read
       security-events: write
 
-    strategy:
-      fail-fast: false
-      matrix:
-        language: [ 'csharp' ]
-
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: |
+            8.0.x
+            9.0.x
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
-          languages: ${{ matrix.language }}
+          languages: csharp
+          # queries: security-extended,security-and-quality  # opzionale
 
-      - name: Autobuild
-        uses: github/codeql-action/autobuild@v3
+      # Build manuale (autobuild non sempre capisce i solution filter)
+      - name: Restore & Build solution
+        shell: pwsh
+        run: |
+          $slnf = Get-ChildItem -Recurse -Filter 'Progesi.CI.slnf' | Select-Object -First 1
+          if (-not $slnf) { throw "Progesi.CI.slnf non trovato nella repo." }
+          dotnet restore "$($slnf.FullName)"
+          dotnet build   "$($slnf.FullName)" -c Release --no-restore
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
         with:
-          category: "/language:${{ matrix.language }}"
+          category: "/language:csharp"

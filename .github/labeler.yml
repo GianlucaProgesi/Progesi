@@ -1,18 +1,16 @@
-CI/CD:
-  - .github/**
+area:core:
+  - 'src/ProgesiCore/**'
 
-tests:
-  - tests/**
+area:sqlite:
+  - 'src/ProgesiRepositories.Sqlite/**'
+  - 'tests/ProgesiRepositories.Sqlite.Tests/**'
 
-core:
-  - src/ProgesiCore/**
+area:tests:
+  - 'tests/**'
 
-sqlite:
-  - src/ProgesiRepositories.Sqlite/**
+ci:
+  - '.github/workflows/**'
 
-inmemory:
-  - src/ProgesiRepositories.InMemory/**
-
-windows-only:
-  - src/ProgesiRepositories.Rhino/**
-  - src/ProgesiGrasshopperAssembly/**
+docs:
+  - 'README.md'
+  - 'docs/**'
