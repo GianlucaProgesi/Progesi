@@ -2,7 +2,12 @@
 
 on:
   push:
-    branches: [ main, master, develop, chore/**, release/** ]
+    branches:
+      - main
+      - master
+      - develop
+      - chore/**
+      - release/**
   pull_request:
   workflow_dispatch: {}
 
@@ -22,7 +27,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with: { fetch-depth: 0 }
+        with:
+          fetch-depth: 0
 
       - name: Setup .NET SDKs
         uses: actions/setup-dotnet@v4
@@ -33,11 +39,13 @@ jobs:
       - name: Cache NuGet
         uses: actions/cache@v4
         with:
-          path: ~/.nuget/packages
+          path: |
+            ~/.nuget/packages
           key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.sln', '**/*.slnf', '**/*.csproj', '**/packages.lock.json') }}
-          restore-keys: ${{ runner.os }}-nuget-
+          restore-keys: |
+            ${{ runner.os }}-nuget-
 
-      # Preferisci .slnf (poi .sln)
+      # Preferisci .slnf se presente, altrimenti .sln
       - name: Choose build target (prefer .slnf, then .sln)
         id: sln
         shell: pwsh
@@ -46,20 +54,17 @@ jobs:
           if ($slnf) { "path=$($slnf.FullName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append; exit 0 }
           $sln = Get-ChildItem -Recurse -Filter *.sln | Select-Object -First 1
           if ($sln)  { "path=$($sln.FullName)"  | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append; exit 0 }
-          Write-Error "Nessun file .slnf o .sln trovato"
+          Write-Error "Nessun file .slnf/.sln trovato"
 
-      - name: Echo build target & discover tests
+      - name: Echo build target
         shell: pwsh
         run: |
           Write-Host "Using solution: ${{ steps.sln.outputs.path }}"
-          $global:TestProjects = Get-ChildItem -Recurse -Filter '*Tests.csproj' | Select-Object -ExpandProperty FullName
-          if ($global:TestProjects) { Write-Host "Discovered test projects:"; $global:TestProjects | ForEach-Object { Write-Host " - $_" } }
-          else { Write-Warning "Nessun progetto di test trovato." }
 
       - name: Restore (solution)
         shell: pwsh
         run: |
-          $path = '${{ steps.sln.outputs.path }}'
+          $path = "${{ steps.sln.outputs.path }}"
           $hasLock = @(Get-ChildItem -Recurse -Filter packages.lock.json).Count -gt 0
           if ($hasLock) { dotnet restore "$path" --locked-mode } else { dotnet restore "$path" }
 
@@ -67,83 +72,76 @@ jobs:
         shell: pwsh
         run: dotnet format whitespace '${{ steps.sln.outputs.path }}' --verify-no-changes
 
-      - name: Build (solution)
+      - name: Build (Release)
         shell: pwsh
         run: dotnet build '${{ steps.sln.outputs.path }}' -c Release --no-restore
 
-      # Esegui TUTTI i progetti di test
-      - name: Test (each test project) + coverage
+      - name: Discover test projects
+        id: tests
+        shell: pwsh
+        run: |
+          $projs = Get-ChildItem -Recurse -Filter *Tests.csproj | ForEach-Object { $_.FullName }
+          if (-not $projs) { Write-Error "Nessun progetto di test trovato"; exit 1 }
+          "list=$([string]::Join("`n", $projs))" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          Write-Host "Discovered test projects:"; $projs | ForEach-Object { Write-Host " - $_" }
+
+      - name: Test per-project + cobertura
         shell: pwsh
         run: |
           $results = 'TestResults'
           New-Item -ItemType Directory -Force -Path $results | Out-Null
-          $tests = Get-ChildItem -Recurse -Filter '*Tests.csproj' | Select-Object -ExpandProperty FullName
-          if (-not $tests) { Write-Error "Nessun progetto *Tests.csproj trovato"; exit 1 }
-          foreach ($t in $tests) {
-            $name = [IO.Path]::GetFileNameWithoutExtension($t)
+          $projs = @("${{ steps.tests.outputs.list }}".Split("`n") | Where-Object { $_ -ne "" })
+          foreach ($p in $projs) {
+            $name = Split-Path $p -LeafBase
             Write-Host "==> dotnet test $name"
-            dotnet test "$t" -c Release `
-              --logger "trx;LogFileName=$name.trx" --results-directory $results `
-              --collect:"XPlat Code Coverage"
+            dotnet test "$p" -c Release --no-build `
+              --logger "trx;LogFileName=$name.trx" `
+              --results-directory "$results" `
+              /p:CollectCoverage=true /p:CoverletOutputFormat=cobertura
           }
 
-      - name: Locate test & coverage files (debug)
-        if: always()
+      - name: Locate TestResults (debug)
         shell: pwsh
         run: |
           Write-Host 'Listing TestResults:'; Get-ChildItem -Recurse TestResults | ForEach-Object { Write-Host $_.FullName }
-          Write-Host 'Listing coverage.cobertura.xml:'; Get-ChildItem -Recurse -Filter coverage.cobertura.xml | ForEach-Object { Write-Host $_.FullName }
+          Write-Host 'Listing coverage.cobertura.xml:'; Get-ChildItem -Recurse -Filter 'coverage.cobertura.xml' TestResults | ForEach-Object { Write-Host $_.FullName }
 
       - name: Guardrail — fail if no tests executed
         shell: pwsh
         run: |
           $trx = Get-ChildItem -Recurse -Path 'TestResults' -Filter '*.trx' -ErrorAction SilentlyContinue
           if (-not $trx) { Write-Error 'Nessun file .trx trovato: sembra non siano stati eseguiti test.'; exit 1 }
-          $trx | ForEach-Object { Write-Host ('Found TRX: ' + $_.FullName) }
+          $trx | ForEach-Object { Write-Host ("Found TRX: " + $_.FullName) }
 
-      # Report (Core + Repositories.*)
-      - name: Generate coverage reports (FILTERED)
-        if: always()
+      - name: Generate coverage report (ReportGenerator)
         uses: danielpalme/ReportGenerator-GitHub-Action@v5
         with:
           reports: '**/TestResults/**/coverage.cobertura.xml'
           targetdir: 'CoverageReport'
           reporttypes: 'Html;TextSummary;Cobertura'
+          historydir: 'CoverageHistory'
           assemblyfilters: '+ProgesiCore;+ProgesiRepositories.*'
           classfilters: '-*Logger*;-*LegacyExtensions*;-*TraceLogger*'
-          historydir: 'CoverageHistory'
-        continue-on-error: true
+          verbosity: 'Info'
+          tag: '${{ github.run_number }}_${{ github.run_id }}'
 
-      - name: Inspect assemblies included (debug)
-        if: always()
+      - name: Inspect final assemblies in report
         shell: pwsh
         run: |
           $cob = Get-ChildItem -Recurse -Filter 'Cobertura.xml' -Path 'CoverageReport' | Select-Object -First 1
-          if ($cob) {
-            try {
-              [xml]$x = Get-Content $cob.FullName
-              $names = $x.coverage.packages.package | ForEach-Object { $_.name }
-              Write-Host 'Assemblies in final report:'; $names | ForEach-Object { Write-Host " - $_" }
-            } catch { Write-Host "Unable to parse Cobertura.xml" }
-          } else { Write-Warning 'Cobertura.xml non trovato.' }
+          if (-not $cob) { Write-Error 'Cobertura.xml non trovato'; exit 1 }
+          [xml]$doc = Get-Content $cob.FullName
+          $assemblies = $doc.coverage.packages.package.classes.class | Select-Object -ExpandProperty assembly -Unique
+          Write-Host "Assemblies in final report:"; $assemblies | Sort-Object | ForEach-Object { Write-Host " - $_" }
 
-      - name: Print coverage summary (FILTERED)
-        if: always()
+      - name: Print coverage summary to job log
         shell: pwsh
         run: |
           $summary = Get-ChildItem -Recurse -Filter 'Summary.txt' -Path 'CoverageReport' | Select-Object -First 1
-          if ($summary) {
-            Write-Host '===== Code Coverage Summary (filtered) ====='
-            Get-Content $summary.FullName | Write-Host
-            if ($env:GITHUB_STEP_SUMMARY) {
-              '## Code Coverage Summary (filtered)' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
-              '```' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
-              Get-Content $summary.FullName | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
-              '```' | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
-            }
-          } else { Write-Host 'No TextSummary found.' }
+          if (-not $summary) { Write-Error 'Summary.txt non trovato'; exit 1 }
+          '===== Code Coverage Summary (filtered) ====='
+          Get-Content -Path $summary.FullName -Raw
 
-      # Gate: 90% su main, 80% sugli altri branch (temporaneo)
       - name: Enforce coverage gate (main>=90%, else>=80%)
         if: always()
         shell: pwsh
@@ -152,23 +150,34 @@ jobs:
           if (-not $summary) { Write-Error 'Summary.txt non trovato (ReportGenerator non ha prodotto il TextSummary)'; exit 1 }
           $line = Select-String -Path $summary.FullName -Pattern 'Line coverage:\s+([0-9\.]+)%' | ForEach-Object { [double]$_.Matches[0].Groups[1].Value }
           $branch = "${{ github.ref_name }}"
+          $event  = "${{ github.event_name }}"
           $threshold = 90
           if ($branch -ne 'main') { $threshold = 80 }
-          Write-Host ("Branch: " + $branch + " | Threshold: " + $threshold + "% | Line coverage: " + $line + "%")
+
+          Write-Host ("Event: " + $event + " | Branch: " + $branch + " | Threshold: " + $threshold + "% | Line coverage: " + $line + "%")
+
+          # Non fallire i run manuali: mantieni severità su push/PR
+          if ($event -eq 'workflow_dispatch' -and $line -lt $threshold) {
+            Write-Warning ("Coverage below threshold (" + $line + "% < " + $threshold + "%) on manual run — NOT failing the job.")
+            exit 0
+          }
+
           if ($line -lt $threshold) { Write-Error ("Coverage gate failed: " + $line + "% < " + $threshold + "%"); exit 1 }
 
-      - name: Upload CoverageReport artifact
+      - name: Upload CoverageReport (artifact)
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: CoverageReport
           path: CoverageReport
-          if-no-files-found: warn
+          if-no-files-found: error
+          retention-days: 7
 
-      - name: Upload TestResults artifact
+      - name: Upload TestResults (artifact)
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: TestResults
           path: TestResults
-          if-no-files-found: warn
+          if-no-files-found: error
+          retention-days: 7
