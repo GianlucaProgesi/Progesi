@@ -9,10 +9,10 @@ on:
     - cron: '0 2 * * 1'
   workflow_dispatch:
 
-# necessario per caricare i risultati su Code scanning
 permissions:
   contents: read
   security-events: write
+  actions: read
 
 concurrency:
   group: codeql-${{ github.ref }}
@@ -50,9 +50,13 @@ jobs:
           dotnet restore "$($slnf.FullName)"
           dotnet build "$($slnf.FullName)" -c Release --no-restore
 
-      # Finché non abiliti "Code scanning" nel repo, lasciamo best-effort
       - name: Perform CodeQL Analysis (best-effort)
         uses: github/codeql-action/analyze@v3
         with:
           category: '/language:csharp'
         continue-on-error: true
+
+      - name: Diagnostics on failure
+        if: failure()
+        shell: pwsh
+        run: tools/gha-dump.ps1

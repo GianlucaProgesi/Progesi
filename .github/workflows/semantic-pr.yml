@@ -1,4 +1,5 @@
 name: Semantic PR
+
 on:
   pull_request_target:
     types: [opened, edited, synchronize, reopened, ready_for_review]
@@ -8,22 +9,20 @@ permissions:
   statuses: write
 
 jobs:
-  lint:
+  semantic:
     runs-on: ubuntu-latest
     steps:
       - uses: amannn/action-semantic-pull-request@v5
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
+          validateSingleCommit: false
           types: |
-            chore
-            ci
-            docs
             feat
             fix
-            perf
+            chore
+            tests
             refactor
-            test
-          requireScope: false
-          subjectPattern: ^.+$
-          wip: true
+            docs
+            build
+            ci

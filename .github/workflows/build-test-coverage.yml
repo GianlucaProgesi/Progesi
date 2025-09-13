@@ -24,6 +24,7 @@ jobs:
         with:
           dotnet-version: |
             8.0.x
+          # Niente cache integrato: evita l'errore dei lock file mancanti
 
       - name: Restore & Build
         shell: pwsh
@@ -38,7 +39,10 @@ jobs:
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
-          $tests = @('tests/ProgesiCore.Tests/ProgesiCore.Tests.csproj') | Where-Object { Test-Path $_ }
+          $tests = @(
+            'tests/ProgesiCore.Tests/ProgesiCore.Tests.csproj',
+            'tests/ProgesiRepositories.Sqlite.Tests/ProgesiRepositories.Sqlite.Tests.csproj'
+          ) | Where-Object { Test-Path $_ }
           foreach ($t in $tests) {
             Write-Host "==> dotnet test $t"
             dotnet test $t -c Release --no-build --collect:"XPlat Code Coverage"
@@ -72,3 +76,8 @@ jobs:
         with:
           name: TestResults
           path: TestResults/**
+
+      - name: Diagnostics on failure
+        if: failure()
+        shell: pwsh
+        run: tools/gha-dump.ps1

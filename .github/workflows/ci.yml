@@ -50,8 +50,16 @@ jobs:
       - name: Test (quick)
         shell: pwsh
         run: |
-          $tests = @('tests/ProgesiCore.Tests/ProgesiCore.Tests.csproj') | Where-Object { Test-Path $_ }
+          $tests = @(
+            'tests/ProgesiCore.Tests/ProgesiCore.Tests.csproj',
+            'tests/ProgesiRepositories.Sqlite.Tests/ProgesiRepositories.Sqlite.Tests.csproj'
+          ) | Where-Object { Test-Path $_ }
           foreach ($t in $tests) {
             Write-Host "==> dotnet test $t"
             dotnet test $t -c Release --no-build
           }
+
+      - name: Diagnostics on failure
+        if: failure()
+        shell: pwsh
+        run: tools/gha-dump.ps1

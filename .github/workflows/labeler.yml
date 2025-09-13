@@ -1,16 +1,26 @@
-name: PR Labeler
-on:
-  pull_request_target:
-    types: [opened, synchronize, reopened, edited]
+area:core:
+  - 'src/ProgesiCore/**'
+  - 'tests/ProgesiCore.Tests/**'
 
-permissions:
-  pull-requests: write
+area:sqlite:
+  - 'src/ProgesiRepositories.Sqlite/**'
+  - 'tests/ProgesiRepositories.Sqlite.Tests/**'
 
-jobs:
-  label:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/labeler@v5
-        with:
-          repo-token: ${{ secrets.GITHUB_TOKEN }}
-          configuration-path: .github/labeler.yml
+area:inmemory:
+  - 'src/ProgesiRepositories.InMemory/**'
+
+ci:
+  - '.github/workflows/**'
+
+tests:
+  - 'tests/**'
+
+docs:
+  - 'README.md'
+  - 'docs/**'
+
+chore:
+  - '.editorconfig'
+  - '**/*.sln'
+  - '**/*.slnf'
+  - '.gitignore'
