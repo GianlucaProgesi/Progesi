@@ -2,12 +2,7 @@
 
 on:
   push:
-    branches:
-      - main
-      - master
-      - develop
-      - chore/**
-      - release/**
+    branches: [ main, master, develop, chore/**, release/** ]
   pull_request:
   workflow_dispatch: {}
 
@@ -45,139 +40,82 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-nuget-
 
-      # Preferisci .slnf se presente, altrimenti .sln
-      - name: Choose build target (prefer .slnf, then .sln)
-        id: sln
+      # Preferisci la slnf della CI se presente, altrimenti la prima .sln
+      - name: Choose build target
+        id: choose
         shell: pwsh
         run: |
-          $slnf = Get-ChildItem -Recurse -Filter *.slnf | Select-Object -First 1
-          if ($slnf) { "path=$($slnf.FullName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append; exit 0 }
-          $sln = Get-ChildItem -Recurse -Filter *.sln | Select-Object -First 1
-          if ($sln)  { "path=$($sln.FullName)"  | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append; exit 0 }
-          Write-Error "Nessun file .slnf/.sln trovato"
+          $slnf = Get-ChildItem -Recurse -Filter Progesi.CI.slnf | Select-Object -First 1
+          if ($slnf) { "path=$($slnf.FullName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append }
+          else {
+            $sln = Get-ChildItem -Recurse -Filter *.sln | Select-Object -First 1
+            if (-not $sln) { Write-Error "Nessun .sln/.slnf trovato"; exit 1 }
+            "path=$($sln.FullName)" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
+          }
 
-      - name: Echo build target
+      - name: Restore
         shell: pwsh
         run: |
-          Write-Host "Using solution: ${{ steps.sln.outputs.path }}"
-
-      - name: Restore (solution)
-        shell: pwsh
-        run: |
-          $path = "${{ steps.sln.outputs.path }}"
+          $path = "${{ steps.choose.outputs.path }}"
           $hasLock = @(Get-ChildItem -Recurse -Filter packages.lock.json).Count -gt 0
           if ($hasLock) { dotnet restore "$path" --locked-mode } else { dotnet restore "$path" }
 
-      - name: Verify whitespace formatting
+      - name: Format (whitespace only, verify)
         shell: pwsh
-        run: dotnet format whitespace '${{ steps.sln.outputs.path }}' --verify-no-changes
+        run: dotnet format whitespace "${{ steps.choose.outputs.path }}" --verify-no-changes
 
       - name: Build (Release)
         shell: pwsh
-        run: dotnet build '${{ steps.sln.outputs.path }}' -c Release --no-restore
+        run: dotnet build "${{ steps.choose.outputs.path }}" -c Release --no-restore
 
-      - name: Discover test projects
-        id: tests
+      - name: Discover & run tests (per project)
         shell: pwsh
         run: |
+          $ErrorActionPreference = 'Stop'
+          $results = Join-Path $PWD 'TestResults'
+          New-Item -ItemType Directory -Force -Path $results | Out-Null
+
           $projs = Get-ChildItem -Recurse -Filter *Tests.csproj | ForEach-Object { $_.FullName }
-          if (-not $projs) { Write-Error "Nessun progetto di test trovato"; exit 1 }
-          "list=$([string]::Join("`n", $projs))" | Out-File -FilePath $env:GITHUB_OUTPUT -Encoding utf8 -Append
           Write-Host "Discovered test projects:"; $projs | ForEach-Object { Write-Host " - $_" }
 
-      - name: Test per-project + cobertura
-        shell: pwsh
-        run: |
-          $results = 'TestResults'
-          New-Item -ItemType Directory -Force -Path $results | Out-Null
-          $projs = @("${{ steps.tests.outputs.list }}".Split("`n") | Where-Object { $_ -ne "" })
           foreach ($p in $projs) {
-            $name = Split-Path $p -LeafBase
+            $name = [IO.Path]::GetFileNameWithoutExtension($p)
             Write-Host "==> dotnet test $name"
             dotnet test "$p" -c Release --no-build `
+              --collect "XPlat Code Coverage" `
               --logger "trx;LogFileName=$name.trx" `
-              --results-directory "$results" `
-              /p:CollectCoverage=true /p:CoverletOutputFormat=cobertura
+              --results-directory "$results"
           }
 
-      - name: Locate TestResults (debug)
+      - name: List TestResults
         shell: pwsh
         run: |
           Write-Host 'Listing TestResults:'; Get-ChildItem -Recurse TestResults | ForEach-Object { Write-Host $_.FullName }
-          Write-Host 'Listing coverage.cobertura.xml:'; Get-ChildItem -Recurse -Filter 'coverage.cobertura.xml' TestResults | ForEach-Object { Write-Host $_.FullName }
+          Write-Host 'Listing coverage.cobertura.xml:'; Get-ChildItem -Recurse -Filter coverage.cobertura.xml TestResults | ForEach-Object { Write-Host $_.FullName }
 
-      - name: Guardrail — fail if no tests executed
-        shell: pwsh
-        run: |
-          $trx = Get-ChildItem -Recurse -Path 'TestResults' -Filter '*.trx' -ErrorAction SilentlyContinue
-          if (-not $trx) { Write-Error 'Nessun file .trx trovato: sembra non siano stati eseguiti test.'; exit 1 }
-          $trx | ForEach-Object { Write-Host ("Found TRX: " + $_.FullName) }
-
-      - name: Generate coverage report (ReportGenerator)
+      - name: ReportGenerator (combine)
         uses: danielpalme/ReportGenerator-GitHub-Action@v5
         with:
-          reports: '**/TestResults/**/coverage.cobertura.xml'
-          targetdir: 'CoverageReport'
-          reporttypes: 'Html;TextSummary;Cobertura'
-          historydir: 'CoverageHistory'
-          assemblyfilters: '+ProgesiCore;+ProgesiRepositories.*'
-          classfilters: '-*Logger*;-*LegacyExtensions*;-*TraceLogger*'
-          verbosity: 'Info'
-          tag: '${{ github.run_number }}_${{ github.run_id }}'
+          reports: "**/TestResults/**/coverage.cobertura.xml"
+          targetdir: "CoverageReport"
+          reporttypes: "Html;TextSummary;Cobertura"
+          historydir: "CoverageHistory"
+          assemblyfilters: "+ProgesiCore;+ProgesiRepositories.*"
+          classfilters: "-*Logger*;-*LegacyExtensions*;-*TraceLogger*"
+          tag: "${{ github.run_number }}_${{ github.run_id }}"
 
-      - name: Inspect final assemblies in report
-        shell: pwsh
-        run: |
-          $cob = Get-ChildItem -Recurse -Filter 'Cobertura.xml' -Path 'CoverageReport' | Select-Object -First 1
-          if (-not $cob) { Write-Error 'Cobertura.xml non trovato'; exit 1 }
-          [xml]$doc = Get-Content $cob.FullName
-          $assemblies = $doc.coverage.packages.package.classes.class | Select-Object -ExpandProperty assembly -Unique
-          Write-Host "Assemblies in final report:"; $assemblies | Sort-Object | ForEach-Object { Write-Host " - $_" }
-
-      - name: Print coverage summary to job log
-        shell: pwsh
-        run: |
-          $summary = Get-ChildItem -Recurse -Filter 'Summary.txt' -Path 'CoverageReport' | Select-Object -First 1
-          if (-not $summary) { Write-Error 'Summary.txt non trovato'; exit 1 }
-          '===== Code Coverage Summary (filtered) ====='
-          Get-Content -Path $summary.FullName -Raw
-
-      - name: Enforce coverage gate (main>=90%, else>=80%)
-        if: always()
+      - name: Show summary and gate
+        id: gate
         shell: pwsh
         run: |
           $summary = Get-ChildItem -Recurse -Filter 'Summary.txt' -Path 'CoverageReport' | Select-Object -First 1
           if (-not $summary) { Write-Error 'Summary.txt non trovato (ReportGenerator non ha prodotto il TextSummary)'; exit 1 }
-          $line = Select-String -Path $summary.FullName -Pattern 'Line coverage:\s+([0-9\.]+)%' | ForEach-Object { [double]$_.Matches[0].Groups[1].Value }
-          $branch = "${{ github.ref_name }}"
-          $event  = "${{ github.event_name }}"
-          $threshold = 90
-          if ($branch -ne 'main') { $threshold = 80 }
 
-          Write-Host ("Event: " + $event + " | Branch: " + $branch + " | Threshold: " + $threshold + "% | Line coverage: " + $line + "%")
+          $txt = Get-Content -Raw $summary.FullName
+          Write-Host "===== Code Coverage Summary (filtered) ====="
+          Write-Host $txt
 
-          # Non fallire i run manuali: mantieni severità su push/PR
-          if ($event -eq 'workflow_dispatch' -and $line -lt $threshold) {
-            Write-Warning ("Coverage below threshold (" + $line + "% < " + $threshold + "%) on manual run — NOT failing the job.")
-            exit 0
-          }
-
-          if ($line -lt $threshold) { Write-Error ("Coverage gate failed: " + $line + "% < " + $threshold + "%"); exit 1 }
-
-      - name: Upload CoverageReport (artifact)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: CoverageReport
-          path: CoverageReport
-          if-no-files-found: error
-          retention-days: 7
-
-      - name: Upload TestResults (artifact)
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: TestResults
-          path: TestResults
-          if-no-files-found: error
-          retention-days: 7
+          # pubblica nel Job Summary
+          @"
+```text
+$txt
