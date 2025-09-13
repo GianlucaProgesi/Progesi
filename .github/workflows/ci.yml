@@ -81,7 +81,7 @@ jobs:
           foreach ($p in $projs) {
             $name = [IO.Path]::GetFileNameWithoutExtension($p)
             Write-Host "==> dotnet test $name"
-            dotnet test "$p" -c Release --no-build `
+            dotnet test "$p" -c Release `
               --collect "XPlat Code Coverage" `
               --logger "trx;LogFileName=$name.trx" `
               --results-directory "$results"
