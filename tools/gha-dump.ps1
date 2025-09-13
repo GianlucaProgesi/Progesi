@@ -1,10 +1,7 @@
-# Utility di diagnostica per le run di GitHub Actions (Windows)
-# Safe per variabili dinamiche e percorsi con caratteri speciali.
-
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
-Write-Host "==============================" 
+Write-Host "=============================="
 Write-Host "== dotnet --info"
 Write-Host "=============================="
 & dotnet --info

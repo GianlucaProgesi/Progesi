@@ -1,9 +1,9 @@
 name: CodeQL
 
 on:
-  push:
-    branches: [ main ]
   pull_request:
+    branches: [ main ]
+  push:
     branches: [ main ]
   workflow_dispatch:
 
@@ -14,29 +14,30 @@ permissions:
 jobs:
   analyze:
     runs-on: windows-latest
-    timeout-minutes: 25
+    continue-on-error: true   # evita “rosso” se l’upload non è permesso
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
 
-      # niente cache con lockfile obbligatorio
-      - uses: actions/setup-dotnet@v4
+      - name: Setup .NET (8.x)
+        uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
 
-      - name: Init CodeQL
+      - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
           languages: csharp
 
-      - name: Build for CodeQL
+      - name: Autobuild (light)
         shell: pwsh
         run: |
           $slnf = Get-ChildItem -Recurse -Filter 'Progesi.CI.slnf' | Select-Object -First 1
-          if ($slnf) { $p=$slnf.FullName } else { $p=(Get-ChildItem -Recurse -Filter '*.sln' | Select-Object -First 1).FullName }
-          dotnet restore "$p"
-          dotnet build "$p" -c Release --no-restore
+          dotnet restore "$($slnf.FullName)"
+          dotnet build "$($slnf.FullName)" -c Release --no-restore
 
-      - name: Analyze
+      - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
-        continue-on-error: true
+        with:
+          category: "/language:csharp"

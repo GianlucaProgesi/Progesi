@@ -19,7 +19,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup .NET (LTS + 8.x)
+      - name: Setup .NET (8.x)
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: |
@@ -34,7 +34,6 @@ jobs:
           restore-keys: |
             Windows-nuget-
 
-      # Restore/Build SOLO della solution filter "leggera"
       - name: Restore (solution filter)
         run: dotnet restore "$Env:SLNF"
 
@@ -44,8 +43,8 @@ jobs:
       - name: Build (Release)
         run: dotnet build "$Env:SLNF" -c Release --no-restore
 
-      # Test core (produce coverage Cobertura tramite Coverlet.Collector)
-      - name: Test – ProgesiCore.Tests
+      # Coverage sui test Core
+      - name: Test – ProgesiCore.Tests (coverage)
         run: >
           dotnet test tests/ProgesiCore.Tests/ProgesiCore.Tests.csproj
           -c Release
@@ -53,21 +52,23 @@ jobs:
           --logger "trx;LogFileName=ProgesiCore.Tests.trx"
           -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura
 
-      # ===== FIX: Sqlite =====
-      # La solution filter non include i test Sqlite → restore dedicato + test
+      # ===== Sqlite: restore + build + test (RID) =====
       - name: Restore – ProgesiRepositories.Sqlite.Tests (RID win-x64)
         run: dotnet restore tests/ProgesiRepositories.Sqlite.Tests/ProgesiRepositories.Sqlite.Tests.csproj -r win-x64
 
-      - name: Test – ProgesiRepositories.Sqlite.Tests (RID win-x64)
+      - name: Build – ProgesiRepositories.Sqlite.Tests (RID win-x64)
+        run: >
+          dotnet build tests/ProgesiRepositories.Sqlite.Tests/ProgesiRepositories.Sqlite.Tests.csproj
+          -c Release -r win-x64 --no-restore
+
+      - name: Test – ProgesiRepositories.Sqlite.Tests (coverage, RID win-x64)
         run: >
           dotnet test tests/ProgesiRepositories.Sqlite.Tests/ProgesiRepositories.Sqlite.Tests.csproj
-          -c Release
-          -r win-x64
-          --no-build
+          -c Release -r win-x64 --no-build
           --collect:"XPlat Code Coverage"
           --logger "trx;LogFileName=ProgesiRepositories.Sqlite.Tests.trx"
           -- DataCollectionRunSettings.DataCollectors.DataCollector.Configuration.Format=cobertura
-      # =======================
+      # ================================================
 
       - name: Elenco TestResults (debug)
         shell: pwsh
