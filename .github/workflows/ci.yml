@@ -1,4 +1,4 @@
-﻿name: CI
+name: CI
 
 on:
   push:
@@ -120,7 +120,7 @@ jobs:
           Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value '```'
 
           # --- GATE TEMPORANEO: 70% ovunque ---
-          $threshold = 70
+          $threshold = 85
           $line = Select-String -Path $summary.FullName -Pattern 'Line coverage:\s+([0-9\.]+)%' | ForEach-Object { [double]$_.Matches[0].Groups[1].Value }
           Write-Host ("Branch: {0} | Threshold: {1}% | Line coverage: {2}%" -f $env:GITHUB_REF_NAME, $threshold, $line)
           if ($line -lt $threshold) {
@@ -138,3 +138,4 @@ jobs:
         with:
           name: TestResults
           path: TestResults
+
