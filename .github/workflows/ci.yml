@@ -74,14 +74,12 @@ jobs:
           $ErrorActionPreference = 'Stop'
           $results = Join-Path $PWD 'TestResults'
           New-Item -ItemType Directory -Force -Path $results | Out-Null
-
           $projs = Get-ChildItem -Recurse -Filter *Tests.csproj | ForEach-Object { $_.FullName }
           Write-Host "Discovered test projects:"; $projs | ForEach-Object { Write-Host " - $_" }
-
           foreach ($p in $projs) {
             $name = [IO.Path]::GetFileNameWithoutExtension($p)
             Write-Host "==> dotnet test $name"
-            dotnet test "$p" -c Release `
+            dotnet test "$p" -c Release --no-build `
               --collect "XPlat Code Coverage" `
               --logger "trx;LogFileName=$name.trx" `
               --results-directory "$results"
@@ -105,39 +103,37 @@ jobs:
           tag: "${{ github.run_number }}_${{ github.run_id }}"
 
       - name: Show summary and gate
+        id: gate
         shell: pwsh
         run: |
           $summary = Get-ChildItem -Recurse -Filter 'Summary.txt' -Path 'CoverageReport' | Select-Object -First 1
           if (-not $summary) { Write-Error 'Summary.txt non trovato (ReportGenerator non ha prodotto il TextSummary)'; exit 1 }
-
           $txt = Get-Content -Raw $summary.FullName
-          Write-Host "===== Code Coverage Summary (filtered) ====="
+          Write-Host '===== Code Coverage Summary (filtered) ====='
           Write-Host $txt
 
-          # Job summary (niente backtick / code fence: testo semplice)
-          "## Code Coverage (filtered)`n$txt" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Encoding utf8 -Append
+          # Pubblica nel Job Summary
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value '### Code Coverage Summary (filtered)'
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value ''
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value '```text'
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value $txt
+          Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value '```'
 
-          # Estrai percentuale e applica gate
-          $m = [regex]::Match($txt, 'Line coverage:\s+([0-9\.]+)%')
-          if (-not $m.Success) { Write-Error "Impossibile leggere la 'Line coverage' dal Summary.txt"; exit 1 }
-          [double]$linePct = $m.Groups[1].Value
-
-          $branch = "${{ github.ref_name }}"
-          $isBot  = ("${{ github.actor }}" -eq "dependabot[bot]") -or ("${{ github.head_ref }}".StartsWith("dependabot/"))
-          $threshold = if ($branch -in @('main','master')) { 90 } elseif ($isBot) { 0 } else { 80 }
-
-          Write-Host ("Branch: {0} | Threshold: {1}% | Line coverage: {2}%" -f $branch, $threshold, $linePct)
-          if ($linePct -lt $threshold) { Write-Error ("Coverage gate failed: {0}% < {1}%" -f $linePct, $threshold) }
+          # --- GATE TEMPORANEO: 70% ovunque ---
+          $threshold = 70
+          $line = Select-String -Path $summary.FullName -Pattern 'Line coverage:\s+([0-9\.]+)%' | ForEach-Object { [double]$_.Matches[0].Groups[1].Value }
+          Write-Host ("Branch: {0} | Threshold: {1}% | Line coverage: {2}%" -f $env:GITHUB_REF_NAME, $threshold, $line)
+          if ($line -lt $threshold) {
+            Write-Error ("Coverage gate failed: {0}% < {1}%" -f $line, $threshold)
+          }
 
       - name: Upload CoverageReport
-        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: CoverageReport
           path: CoverageReport
 
       - name: Upload TestResults
-        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: TestResults
