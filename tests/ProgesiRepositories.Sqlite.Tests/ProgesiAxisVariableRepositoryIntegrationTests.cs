@@ -1,5 +1,5 @@
 using System.Data.Common;
-using System.Data.SQLite;  // <-- provider per .NET Framework
+using Microsoft.Data.Sqlite;  // <-- provider per .NET Framework
 using Xunit;
 using ProgesiCore.Persistence;
 
@@ -10,7 +10,7 @@ namespace ProgesiCore.Tests
         private static DbConnection CreateInMemoryDb()
         {
             // In-memory per System.Data.SQLite: vive finché la connessione resta aperta
-            var conn = new SQLiteConnection("Data Source=:memory:;Version=3;New=True;");
+            var conn = new SqliteConnection("Data Source=:memory:;Version=3;New=True;");
             conn.Open();
             return conn;
         }
