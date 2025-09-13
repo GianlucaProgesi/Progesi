@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -33,7 +33,7 @@ namespace ProgesiRepositories.Sqlite.Tests
 
       _dbPath = Path.Combine(Path.GetTempPath(), $"progesi-test-{Guid.NewGuid():N}.db");
 
-      // resetSchema:true → copriamo i rami di creazione/cleanup schema nella base
+      // resetSchema:true ? copriamo i rami di creazione/cleanup schema nella base
       _vars = new SqliteVariableRepository(_dbPath, resetSchema: true, logger: new NoopLogger<SqliteVariableRepository>());
       _meta = new SqliteMetadataRepository(_dbPath, resetSchema: false);
     }
@@ -54,7 +54,7 @@ namespace ProgesiRepositories.Sqlite.Tests
     [Fact]
     public async Task Variable_Deduplicates_By_ContentHash()
     {
-      // Due variabili con stesso contenuto ma ID diverso → stesso ContentHash
+      // Due variabili con stesso contenuto ma ID diverso ? stesso ContentHash
       var v1 = MakeVar(1, "alpha", "A=1", 10, 11);
       var v2 = MakeVar(2, "alpha", "A=1", 10, 11); // dup
 
