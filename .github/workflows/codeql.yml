@@ -5,16 +5,24 @@ on:
     branches: ['**']
   pull_request:
     branches: ['**']
+  schedule:
+    - cron: '0 2 * * 1'
   workflow_dispatch:
 
+# necessario per caricare i risultati su Code scanning
+permissions:
+  contents: read
+  security-events: write
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  analyze-csharp:
+  analyze:
     name: Analyze (C#)
     runs-on: windows-latest
-    permissions:
-      actions: read
-      contents: read
-      security-events: write
+    timeout-minutes: 60
 
     steps:
       - name: Checkout
@@ -22,29 +30,29 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup .NET SDK
+      - name: Setup .NET (8.x)
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: |
             8.0.x
-            9.0.x
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
           languages: csharp
-          # queries: security-extended,security-and-quality  # opzionale
+          queries: security-and-quality
 
-      # Build manuale (autobuild non sempre capisce i solution filter)
-      - name: Restore & Build solution
+      - name: Build solution (slnf)
         shell: pwsh
         run: |
           $slnf = Get-ChildItem -Recurse -Filter 'Progesi.CI.slnf' | Select-Object -First 1
-          if (-not $slnf) { throw "Progesi.CI.slnf non trovato nella repo." }
+          if (-not $slnf) { throw "Progesi.CI.slnf not found" }
           dotnet restore "$($slnf.FullName)"
-          dotnet build   "$($slnf.FullName)" -c Release --no-restore
+          dotnet build "$($slnf.FullName)" -c Release --no-restore
 
-      - name: Perform CodeQL Analysis
+      # Finché non abiliti "Code scanning" nel repo, lasciamo best-effort
+      - name: Perform CodeQL Analysis (best-effort)
         uses: github/codeql-action/analyze@v3
         with:
-          category: "/language:csharp"
+          category: '/language:csharp'
+        continue-on-error: true
