@@ -1,26 +1,18 @@
-area:core:
-  - 'src/ProgesiCore/**'
-  - 'tests/ProgesiCore.Tests/**'
-
-area:sqlite:
-  - 'src/ProgesiRepositories.Sqlite/**'
-  - 'tests/ProgesiRepositories.Sqlite.Tests/**'
-
-area:inmemory:
-  - 'src/ProgesiRepositories.InMemory/**'
+# .github/labeler.yml
+tests:
+  - changed-files:
+      - any-glob-to-any-file: 'tests/**'
 
 ci:
-  - '.github/workflows/**'
+  - changed-files:
+      - any-glob-to-any-file: '.github/**'
 
-tests:
-  - 'tests/**'
+repo:sqlite:
+  - changed-files:
+      - any-glob-to-any-file: 'src/ProgesiRepositories.Sqlite/**'
+      - any-glob-to-any-file: 'tests/ProgesiRepositories.Sqlite.Tests/**'
 
-docs:
-  - 'README.md'
-  - 'docs/**'
-
-chore:
-  - '.editorconfig'
-  - '**/*.sln'
-  - '**/*.slnf'
-  - '.gitignore'
+repo:core:
+  - changed-files:
+      - any-glob-to-any-file: 'src/ProgesiCore/**'
+      - any-glob-to-any-file: 'tests/ProgesiCore.Tests/**'

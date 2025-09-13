@@ -1,29 +1,40 @@
 # tools/gha-dump.ps1
+[CmdletBinding()]
+param(
+    [string[]] $Vars = @(
+        'ImageOS','RUNNER_OS','PROCESSOR_ARCHITECTURE',
+        'DOTNET_ROOT','DOTNET_ROOT_x64','DOTNET_MULTILEVEL_LOOKUP',
+        'GITHUB_REF','GITHUB_SHA','GITHUB_EVENT_NAME','GITHUB_WORKFLOW',
+        'Configuration','SLNF'
+    )
+)
+
+function Write-Section($title) {
+    Write-Host ""
+    Write-Host "=============================="
+    Write-Host "== $title"
+    Write-Host "=============================="
+}
+
+Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Continue'
 
-Write-Host "=== DOTNET INFO ==="
+Write-Section "dotnet --info"
 dotnet --info
-dotnet --list-sdks
-dotnet --list-runtimes
 
-Write-Host "`n=== REPO LAYOUT (depth 2) ==="
-Get-ChildItem -Recurse -Depth 2 | Select-Object -ExpandProperty FullName
+Write-Section "Selected environment variables"
+$Vars | ForEach-Object {
+    $val = [Environment]::GetEnvironmentVariable($_)
+    "{0}={1}" -f $_, $val
+}
 
-Write-Host "`n=== SLNF / SLN ==="
-Get-ChildItem -Recurse -Filter *.sln,*.slnf | ForEach-Object { $_.FullName }
+Write-Section "Repository tree (first 2 levels)"
+Get-ChildItem -Recurse -Depth 2 | ForEach-Object {
+    $_.FullName.Replace((Get-Location).Path, '.')
+}
 
-Write-Host "`n=== LOCK FILES ==="
-Get-ChildItem -Recurse -Filter packages.lock.json | ForEach-Object { $_.FullName }
+Write-Section "TestResults (paths)"
+Get-ChildItem -Recurse -ErrorAction SilentlyContinue "TestResults" | ForEach-Object { $_.FullName }
 
-Write-Host "`n=== TEST RESULTS ==="
-Get-ChildItem -Recurse TestResults -ErrorAction SilentlyContinue | ForEach-Object { $_.FullName }
-
-Write-Host "`n=== GITHUB CONTEXT (BASIC) ==="
-$vars = @(
-  "GITHUB_WORKFLOW","GITHUB_RUN_ID","GITHUB_RUN_NUMBER","GITHUB_JOB",
-  "GITHUB_EVENT_NAME","GITHUB_REF","GITHUB_SHA","GITHUB_REPOSITORY",
-  "GITHUB_ACTOR","RUNNER_OS","RUNNER_TEMP","RUNNER_WORKSPACE"
-)
-$vars | ForEach-Object { "{0}={1}" -f $_, $Env:$_ } | ForEach-Object { Write-Host $_ }
-
-Write-Host "`n=== DONE ==="
+Write-Section "Coverage files (cobertura)"
+Get-ChildItem -Recurse -ErrorAction SilentlyContinue "coverage.cobertura.xml" | ForEach-Object { $_.FullName }

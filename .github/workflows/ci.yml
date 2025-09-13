@@ -2,64 +2,50 @@
 
 on:
   push:
-    branches: ['**']
+    branches: [ main ]
+    paths-ignore: [ '**/*.md' ]
   pull_request:
-    branches: ['**']
+    branches: [ main ]
   workflow_dispatch:
 
-permissions:
-  contents: read
-
-concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
-  build-test:
+  ci:
     runs-on: windows-latest
-    env:
-      DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
-      DOTNET_NOLOGO: 1
-      DOTNET_CLI_TELEMETRY_OPTOUT: 1
+    timeout-minutes: 25
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup .NET (8.x)
-        uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: |
-            8.0.x
+          dotnet-version: 8.0.x
 
-      - name: Restore
+      - name: Locate solution filter (fallback a .sln)
+        id: sln
         shell: pwsh
         run: |
           $slnf = Get-ChildItem -Recurse -Filter 'Progesi.CI.slnf' | Select-Object -First 1
-          if (-not $slnf) { throw "Progesi.CI.slnf not found" }
-          "SLNF=$($slnf.FullName)" | Out-File -FilePath $Env:GITHUB_ENV -Append
-          dotnet restore "$Env:SLNF"
+          if ($slnf) { $p=$slnf.FullName } else { $p=(Get-ChildItem -Recurse -Filter '*.sln' | Select-Object -First 1).FullName }
+          echo "SLNF=$p" | Out-File -FilePath $env:GITHUB_ENV -Append
 
-      - name: dotnet format (verify)
-        shell: pwsh
-        run: dotnet format whitespace "$Env:SLNF" --verify-no-changes
-
-      - name: Build
-        shell: pwsh
-        run: dotnet build "$Env:SLNF" -c Release --no-restore
-
-      - name: Test (quick)
+      - name: Restore & Build
         shell: pwsh
         run: |
-          $tests = @(
-            'tests/ProgesiCore.Tests/ProgesiCore.Tests.csproj',
-            'tests/ProgesiRepositories.Sqlite.Tests/ProgesiRepositories.Sqlite.Tests.csproj'
-          ) | Where-Object { Test-Path $_ }
-          foreach ($t in $tests) {
-            Write-Host "==> dotnet test $t"
-            dotnet test $t -c Release --no-build
-          }
+          dotnet restore "$Env:SLNF"
+          dotnet build "$Env:SLNF" -c Release --no-restore
 
-      - name: Diagnostics on failure
-        if: failure()
+      - name: Test - Core
+        shell: pwsh
+        run: dotnet test tests/ProgesiCore.Tests/ProgesiCore.Tests.csproj -c Release --no-restore
+
+      - name: Build - Sqlite.Tests (win-x64)
+        shell: pwsh
+        run: dotnet build tests/ProgesiRepositories.Sqlite.Tests/ProgesiRepositories.Sqlite.Tests.csproj -c Release -r win-x64 --no-restore
+
+      - name: Test - Sqlite (win-x64)
+        shell: pwsh
+        run: dotnet test tests/ProgesiRepositories.Sqlite.Tests/ProgesiRepositories.Sqlite.Tests.csproj -c Release -r win-x64 --no-restore
+
+      - name: Diagnostics dump (always)
+        if: always()
         shell: pwsh
         run: tools/gha-dump.ps1

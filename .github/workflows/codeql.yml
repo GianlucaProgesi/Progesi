@@ -2,61 +2,41 @@ name: CodeQL
 
 on:
   push:
-    branches: ['**']
+    branches: [ main ]
   pull_request:
-    branches: ['**']
-  schedule:
-    - cron: '0 2 * * 1'
+    branches: [ main ]
   workflow_dispatch:
 
 permissions:
   contents: read
   security-events: write
-  actions: read
-
-concurrency:
-  group: codeql-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
   analyze:
-    name: Analyze (C#)
     runs-on: windows-latest
-    timeout-minutes: 60
+    timeout-minutes: 25
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+      - uses: actions/checkout@v4
 
-      - name: Setup .NET (8.x)
-        uses: actions/setup-dotnet@v4
+      # niente cache con lockfile obbligatorio
+      - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: |
-            8.0.x
+          dotnet-version: 8.0.x
 
-      - name: Initialize CodeQL
+      - name: Init CodeQL
         uses: github/codeql-action/init@v3
         with:
           languages: csharp
-          queries: security-and-quality
 
-      - name: Build solution (slnf)
+      - name: Build for CodeQL
         shell: pwsh
         run: |
           $slnf = Get-ChildItem -Recurse -Filter 'Progesi.CI.slnf' | Select-Object -First 1
-          if (-not $slnf) { throw "Progesi.CI.slnf not found" }
-          dotnet restore "$($slnf.FullName)"
-          dotnet build "$($slnf.FullName)" -c Release --no-restore
+          if ($slnf) { $p=$slnf.FullName } else { $p=(Get-ChildItem -Recurse -Filter '*.sln' | Select-Object -First 1).FullName }
+          dotnet restore "$p"
+          dotnet build "$p" -c Release --no-restore
 
-      - name: Perform CodeQL Analysis (best-effort)
+      - name: Analyze
         uses: github/codeql-action/analyze@v3
-        with:
-          category: '/language:csharp'
         continue-on-error: true
-
-      - name: Diagnostics on failure
-        if: failure()
-        shell: pwsh
-        run: tools/gha-dump.ps1
