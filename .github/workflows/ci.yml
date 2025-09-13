@@ -1,4 +1,4 @@
-name: CI
+﻿name: CI
 
 on:
   push:
@@ -120,8 +120,7 @@ jobs:
           Add-Content -Path $env:GITHUB_STEP_SUMMARY -Value '```'
 
           # --- GATE TEMPORANEO: 70% ovunque ---
-          $threshold = 85
-          $line = Select-String -Path $summary.FullName -Pattern 'Line coverage:\s+([0-9\.]+)%' | ForEach-Object { [double]$_.Matches[0].Groups[1].Value }
+          \$threshold\ =\ 80\n\$ref="\$env:GITHUB_REF"\n\$refName="\$env:GITHUB_REF_NAME"\n\$event="\$env:GITHUB_EVENT_NAME"\n\n\#\ PR\ \(anche\ refs/pull/<n>/merge\|head\)\ =>\ 80\nif\ \(\$ref\ -match\ '\^refs/pull/\\d\+/\(merge\|head\)\$line = Select-String -Path $summary.FullName -Pattern 'Line coverage:\s+([0-9\.]+)%' | ForEach-Object { [double]$_.Matches[0].Groups[1].Value }
           Write-Host ("Branch: {0} | Threshold: {1}% | Line coverage: {2}%" -f $env:GITHUB_REF_NAME, $threshold, $line)
           if ($line -lt $threshold) {
             Write-Error ("Coverage gate failed: {0}% < {1}%" -f $line, $threshold)
@@ -138,4 +137,23 @@ jobs:
         with:
           name: TestResults
           path: TestResults
+
+\ -or\ \$event\ -eq\ 'pull_request'\)\ \{\n\ \ \$threshold\ =\ 80\n}\n\#\ main/master\ =>\ 90\nelseif\ \(\$refName\ -in\ @\('main','master'\)\)\ \{\n\ \ \$threshold\ =\ 90\n}\n\#\ altri\ branch\ =>\ 80\nelse\ \{\n\ \ \$threshold\ =\ 80\n}$line = Select-String -Path $summary.FullName -Pattern 'Line coverage:\s+([0-9\.]+)%' | ForEach-Object { [double]$_.Matches[0].Groups[1].Value }
+          Write-Host ("Branch: {0} | Threshold: {1}% | Line coverage: {2}%" -f $env:GITHUB_REF_NAME, $threshold, $line)
+          if ($line -lt $threshold) {
+            Write-Error ("Coverage gate failed: {0}% < {1}%" -f $line, $threshold)
+          }
+
+      - name: Upload CoverageReport
+        uses: actions/upload-artifact@v4
+        with:
+          name: CoverageReport
+          path: CoverageReport
+
+      - name: Upload TestResults
+        uses: actions/upload-artifact@v4
+        with:
+          name: TestResults
+          path: TestResults
+
 
