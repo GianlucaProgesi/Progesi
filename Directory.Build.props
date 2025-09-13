@@ -1,13 +1,5 @@
 <Project>
   <PropertyGroup>
-    <MinVerTagPrefix>v</MinVerTagPrefix>
-    <MinVerDefaultPreReleasePhase></MinVerDefaultPreReleasePhase>
-    <MinVerAutoIncrement>patch</MinVerAutoIncrement>
-    <MinVerBuildMetadata>build.{0:yyyyMMdd-HHmmss}</MinVerBuildMetadata>
-    <Deterministic>true</Deterministic>
-    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
   </PropertyGroup>
-  <ItemGroup>
-    <PackageReference Include="MinVer" Version="5.0.0" PrivateAssets="All" />
-  </ItemGroup>
 </Project>
