@@ -1,7 +1,9 @@
-﻿<#
+﻿@'
+<#
 .SYNOPSIS
-Aggiunge "workflow_dispatch:" ai workflow YAML in .github/workflows se manca.
-Gestisce i casi comuni "on:" su riga propria o con eventi multilinea.
+Aggiunge "workflow_dispatch:" ai workflow in .github/workflows se manca.
+- Gestisce in automatico il caso con "on:" su riga propria (blocco multilinea).
+- Se il workflow usa forme inline (es. "on: [push, pull_request]" o "{...}"), stampa un WARNING e ti dice cosa fare a mano.
 #>
 [CmdletBinding()]
 param()
@@ -12,29 +14,63 @@ if (-not (Test-Path $dir)) {
   exit 0
 }
 
-Get-ChildItem -Path $dir -File -Include *.yml,*.yaml | ForEach-Object {
-  $p = $_.FullName
+# TROVA i file correttamente (niente -Include senza wildcard)
+$files = Get-ChildItem -Path "$dir\*.yml","$dir\*.yaml" -File -ErrorAction SilentlyContinue
+if (-not $files) {
+  Write-Warning "Nessun file workflow trovato in $dir."
+  exit 0
+}
+
+foreach ($f in $files) {
+  $p = $f.FullName
   $txt = Get-Content -LiteralPath $p -Raw
 
   if ($txt -match '(?im)^\s*workflow_dispatch\s*:') {
-    Write-Host "OK    $($_.Name)"
-    return
+    Write-Host "OK     $($f.Name)"
+    continue
   }
 
+  # Caso semplice: "on:" su riga propria -> inserisco subito sotto
   if ($txt -match '(?im)^\s*on\s*:\s*$') {
-    # "on:" da solo
-    $txt = $txt -replace '(?im)^\s*on\s*:\s*$', "on:`r`n  workflow_dispatch:`r`n"
-  }
-  elseif ($txt -match '(?im)^\s*on\s*:\s*[\r\n]+') {
-    # "on:" seguito da eventi su righe successive
-    $txt = $txt -replace '(?im)^\s*on\s*:\s*', "on:`r`n  workflow_dispatch:`r`n"
-  }
-  else {
-    # Nessun "on:" classico trovato: come fallback, preprendo un blocco on:
-    # (evita casi esotici; se necessario si ritocca a mano)
-    $txt = "on:`r`n  workflow_dispatch:`r`n$txt"
+    $txt = [regex]::Replace($txt,'(?im)^(\s*on\s*:\s*)$',"`$1`r`n  workflow_dispatch:")
+    Set-Content -LiteralPath $p -Value $txt -Encoding UTF8
+    Write-Host "ADDED  workflow_dispatch -> $($f.Name)  (inserito dopo 'on:')"
+    continue
   }
 
-  Set-Content -LiteralPath $p -Value $txt -Encoding UTF8
-  Write-Host "ADDED workflow_dispatch -> $($_.Name)"
+  # Forme inline: avviso e istruzioni manuali (più sicuro)
+  if ($txt -match '(?im)^\s*on\s*:\s*\[') {
+    Write-Warning "Formato inline array in $($f.Name): cambia
+on: [push, pull_request]
+in:
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+"
+    continue
+  }
+  if ($txt -match '(?im)^\s*on\s*:\s*\w+') {
+    Write-Warning "Formato inline scalare in $($f.Name): cambia
+on: push
+in:
+on:
+  push:
+  workflow_dispatch:
+"
+    continue
+  }
+  if ($txt -match '(?im)^\s*on\s*:\s*\{') {
+    Write-Warning "Formato inline mappa in $($f.Name): espandi a blocco e aggiungi:
+on:
+  push: {}
+  pull_request: {}
+  workflow_dispatch:
+"
+    continue
+  }
+
+  # Fallback prudente
+  Write-Warning "Schema 'on:' non riconosciuto in $($f.Name). Apri il file e aggiungi 'workflow_dispatch:' sotto il blocco 'on:'."
 }
+'@ | Set-Content -LiteralPath .\tools\enable-workflow-dispatch.ps1 -Encoding UTF8
