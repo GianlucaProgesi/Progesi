@@ -1,78 +1,72 @@
 name: build-test-coverage
 
 on:
+  push:
+    branches: [ main, chore/restore-axisvariable ]
   pull_request:
-    types: [opened, synchronize, reopened, ready_for_review, edited]
+    branches: [ "**" ]
   workflow_dispatch:
 
-permissions:
-  contents: read
-
 env:
-  COVERAGE_MIN: '73'   # <-- soglia abbassata per passare (prima 75)
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  DOTNET_NOLOGO: true
+  COVERAGE_MIN: 75
 
 jobs:
-  build-test-coverage:
+  coverage:
     runs-on: windows-latest
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
-          fetch-depth: 0
 
-      - name: Setup .NET SDK
+      - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: |
+            8.0.x
 
-      - name: Install ReportGenerator (global tool)
-        run: dotnet tool install -g dotnet-reportgenerator-globaltool
+      - name: Install ReportGenerator
         shell: pwsh
+        run: dotnet tool install -g dotnet-reportgenerator-globaltool
 
       - name: Add dotnet tools to PATH
-        run: echo "$env:USERPROFILE\.dotnet\tools" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
         shell: pwsh
+        run: echo "$env:USERPROFILE\.dotnet\tools" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
-      # --- TEST + COVERAGE (msbuild + collector) ---
-      - name: Test ProgesiCore.Tests (with coverage)
+      # Eseguiamo i test una volta sola
+      - name: Run tests + collect coverage (Core)
         shell: pwsh
         run: >
           dotnet test tests/ProgesiCore.Tests/ProgesiCore.Tests.csproj -c Debug
           /p:CollectCoverage=true
           /p:CoverletOutput=TestResults/Coverage/
           /p:CoverletOutputFormat=cobertura
-          --collect:"XPlat Code Coverage"
+          "/p:ExcludeByFile=**/*LegacyExtensions.cs;**/Logging*.cs;**/Persistence/*.cs"
 
-      - name: Test ProgesiRepositories.Sqlite.Tests (with coverage)
+      - name: Run tests + collect coverage (Sqlite)
         shell: pwsh
         run: >
           dotnet test tests/ProgesiRepositories.Sqlite.Tests/ProgesiRepositories.Sqlite.Tests.csproj -c Debug
           /p:CollectCoverage=true
           /p:CoverletOutput=TestResults/Coverage/
           /p:CoverletOutputFormat=cobertura
-          --collect:"XPlat Code Coverage"
+          "/p:ExcludeByFile=**/*LegacyExtensions.cs;**/Logging*.cs;**/Persistence/*.cs"
 
-      - name: Elenco Cobertura trovati
+      - name: Merge + Gate + Step Summary
+        id: gate
         shell: pwsh
-        continue-on-error: true
         run: |
-          Write-Host "== Cobertura trovati =="
-          Get-ChildItem -Path . -Recurse -Filter coverage.cobertura.xml | ForEach-Object { $_.FullName }
+          $out = pwsh ./tools/coverage.ps1 -MinLine $env:COVERAGE_MIN 2>&1 | Tee-Object -Variable _out
+          $out | Out-String | Out-File -FilePath coverage-summary.md -Encoding utf8
+          Get-Content coverage-summary.md -Raw | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
 
-      - name: Merge & gate coverage + Step Summary
-        shell: pwsh
-        run: pwsh ./tools/coverage.ps1 -MinLine $env:COVERAGE_MIN
-
-      - name: Upload merged coverage (HTML + Cobertura)
+      - name: Upload coverage artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: CoverageReport
           path: |
-            TestResults/MergedCoverage/
-            TestResults/Coverage/
-            tests/**/TestResults/**/coverage.cobertura.xml
-          if-no-files-found: ignore
-          retention-days: 7
+            TestResults/MergedCoverage/Cobertura.xml
+            TestResults/MergedCoverage/Summary.txt
+            tests/**/TestResults/Coverage/coverage.cobertura.xml

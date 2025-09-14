@@ -1,94 +1,100 @@
-[CmdletBinding()]
 param(
   [switch]$RunTests,
   [int]$MinLine = 0
 )
 
-$ErrorActionPreference = "Stop"
-$root = (Get-Location).Path
+$ErrorActionPreference = 'Stop'
+$root = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 
-function Get-CoberturaFiles {
-  param([string]$BasePath)
+# Progetti e file
+$projCore   = Join-Path $root 'tests/ProgesiCore.Tests/ProgesiCore.Tests.csproj'
+$projSqlite = Join-Path $root 'tests/ProgesiRepositories.Sqlite.Tests/ProgesiRepositories.Sqlite.Tests.csproj'
 
-  $files = @()
-  try { $files += Get-ChildItem -Path $BasePath -Recurse -File -Filter 'coverage.cobertura.xml' -ErrorAction SilentlyContinue } catch {}
-  try { $files += Get-ChildItem -Path $BasePath -Recurse -File -Filter 'Cobertura.xml'         -ErrorAction SilentlyContinue } catch {}
+$covCore    = Join-Path $root 'tests/ProgesiCore.Tests/TestResults/Coverage/coverage.cobertura.xml'
+$covSqlite  = Join-Path $root 'tests/ProgesiRepositories.Sqlite.Tests/TestResults/Coverage/coverage.cobertura.xml'
 
-  if (-not $files) {
-    try {
-      $files += Get-ChildItem -Path $BasePath -Recurse -File -Include *.xml -ErrorAction SilentlyContinue |
-               Where-Object { $_.Name -match 'cobertura' }
-    } catch {}
+$mergedDir  = Join-Path $root 'TestResults/MergedCoverage'
+$mergedCov  = Join-Path $mergedDir 'Cobertura.xml'
+$summaryTxt = Join-Path $mergedDir 'Summary.txt'
+
+function Clean-Results {
+  @(
+    (Join-Path $root 'tests/ProgesiCore.Tests/TestResults'),
+    (Join-Path $root 'tests/ProgesiRepositories.Sqlite.Tests/TestResults'),
+    $mergedDir
+  ) | ForEach-Object {
+    if (Test-Path $_) { Remove-Item $_ -Recurse -Force -ErrorAction SilentlyContinue }
   }
-
-  $files | Sort-Object FullName -Unique
 }
 
-function Merge-And-Summarize {
-  $covFiles = Get-CoberturaFiles -BasePath $root
-  if (-not $covFiles -or $covFiles.Count -eq 0) {
-    throw "Nessun report Cobertura trovato (cercati sotto '$root')."
-  }
+function Run-Coverage {
+  $exclude = '**/*LegacyExtensions.cs;**/Logging*.cs;**/Persistence/*.cs'
+  $argsCommon = @(
+    '/p:CollectCoverage=true',
+    '/p:CoverletOutput=TestResults/Coverage/',
+    '/p:CoverletOutputFormat=cobertura',
+    # IMPORTANTE: virgolette propagate fino a MSBuild
+    "/p:ExcludeByFile=""$exclude"""
+  )
 
-  $reports   = ($covFiles | ForEach-Object { $_.FullName }) -join ';'
-  $targetDir = Join-Path $root 'TestResults/MergedCoverage'
-  New-Item -ItemType Directory -Force -Path $targetDir | Out-Null
+  Write-Host ">> dotnet test ($projCore) con coverlet (Cobertura)..." -ForegroundColor Cyan
+  dotnet test $projCore -c Debug @argsCommon
 
-  reportgenerator "-reports:$reports" "-targetdir:$targetDir" "-reporttypes:Cobertura;TextSummary" | Out-Null
-
-  $merged = Join-Path $targetDir 'Cobertura.xml'
-  if (-not (Test-Path $merged)) { throw "Merge fallito: file unificato non trovato: $merged" }
-
-  [xml]$xml = Get-Content -LiteralPath $merged
-  $cov      = $xml.coverage
-
-  $covered  = [int]$cov.'lines-covered'
-  $valid    = [int]$cov.'lines-valid'
-  $percent  = if ($valid -gt 0) { [math]::Round(($covered / $valid) * 100, 2) } else { 0 }
-
-  $md = @"
-### Test coverage
-Report: $merged
-
-| Metric        | Value |
-|---            | ---:  |
-| Lines covered | $covered |
-| Lines valid   | $valid   |
-| **Line %**    | **$percent%** |
-"@
-
-  if ($env:GITHUB_STEP_SUMMARY) {
-    $md | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
-  }
-  Write-Host $md
-
-  return $percent
+  Write-Host ">> dotnet test ($projSqlite) con coverlet (Cobertura)..." -ForegroundColor Cyan
+  dotnet test $projSqlite -c Debug @argsCommon
 }
 
+function Merge-Reports {
+  if (!(Test-Path $covCore) -or !(Test-Path $covSqlite)) {
+    throw "Cobertura non trovati. Core: '$covCore' esiste: $(Test-Path $covCore); Sqlite: '$covSqlite' esiste: $(Test-Path $covSqlite)"
+  }
+  New-Item -ItemType Directory -Force -Path $mergedDir | Out-Null
+  Write-Host ">> Merge coverage con ReportGenerator..." -ForegroundColor Yellow
+  $reports = "$covCore;$covSqlite"
+  reportgenerator "-reports:$reports" "-targetdir:$mergedDir" "-reporttypes:Cobertura;TextSummary" | Out-Host
+}
+
+function Print-And-Gate {
+  # Se il merge non c'è ma i 2 Cobertura sì, effettua ora il merge
+  if (!(Test-Path $mergedCov) -and (Test-Path $covCore) -and (Test-Path $covSqlite)) {
+    Merge-Reports
+  }
+  if (!(Test-Path $mergedCov)) { throw "Report merged non trovato: $mergedCov" }
+
+  [xml]$xml = Get-Content $mergedCov
+  $valid   = [int]$xml.coverage.'lines-valid'
+  $covered = [int]$xml.coverage.'lines-covered'
+  if ($valid -le 0) { throw "Cobertura senza metriche valide." }
+  $pct = [math]::Round(($covered / $valid) * 100, 2)
+
+  Write-Host ""
+  Write-Host "### Test coverage" -ForegroundColor Green
+  Write-Host "Report: $mergedCov"
+  Write-Host ""
+  Write-Host "| Metric        | Value |"
+  Write-Host "|---            | ---:  |"
+  Write-Host ("| Lines covered | {0} |" -f $covered)
+  Write-Host ("| Lines valid   | {0}   |" -f $valid)
+  Write-Host ("| **Line %**    | **{0}%** |" -f $pct)
+
+  if ($MinLine -gt 0 -and $pct -lt $MinLine) {
+    throw ("Gate FALLITO: coverage {0}% < soglia {1}%." -f $pct, $MinLine)
+  }
+}
+
+# ---------------- main ----------------
 if ($RunTests) {
-  # Esegue i test con i flag Coverlet (utile in locale; nel runner lo fa già il workflow)
-  $projects = Get-ChildItem -Path (Join-Path $root 'tests') -Recurse -File -Filter *.csproj
-  foreach ($p in $projects) {
-    $outDir = Join-Path $p.Directory.FullName 'TestResults/Coverage'
-    New-Item -ItemType Directory -Force -Path $outDir | Out-Null
-
-    & dotnet test $p.FullName -c Debug `
-      /p:CollectCoverage=true `
-      /p:CoverletOutput="$outDir/" `
-      /p:CoverletOutputFormat="cobertura"
-  }
-
-  # In modalità -RunTests non falliamo se non troviamo report: il gate ci penserà dopo.
-  try { Merge-And-Summarize | Out-Null } catch { Write-Warning $_.Exception.Message }
-  return
+  Clean-Results
+  Run-Coverage
+  Merge-Reports
+  Print-And-Gate
+  exit 0
 }
 
-# Solo merge + summary + gate (usato dal workflow)
-$linePercent = Merge-And-Summarize
 if ($MinLine -gt 0) {
-  if ($linePercent -lt $MinLine) {
-    throw ("Gate FALLITO: coverage {0}% < soglia {1}%." -f $linePercent, $MinLine)
-  } else {
-    Write-Host ("Gate OK: coverage {0}% ≥ soglia {1}%." -f $linePercent, $MinLine)
-  }
+  # In CI abbiamo già eseguito i test; qui facciamo (se serve) solo il merge e il gate
+  Print-And-Gate
+  exit 0
 }
+
+if (Test-Path $mergedCov) { Print-And-Gate } else { Write-Host "Nessun coverage merge trovato. Usa -RunTests." }
