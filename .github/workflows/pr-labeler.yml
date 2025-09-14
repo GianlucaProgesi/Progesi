@@ -1,23 +1,18 @@
 ﻿name: PR Labeler
-
 on:
   pull_request:
     types: [opened, synchronize, reopened, edited, ready_for_review]
-
 permissions:
-  contents: read          # serve per leggere .github/labeler.yml via API
-  pull-requests: write    # serve per applicare/rimuovere label
-
+  contents: read
+  pull-requests: write
 jobs:
   label:
     runs-on: ubuntu-latest
     steps:
-      # avere il file anche localmente evita il fallback via API
       - name: Checkout PR head
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.head.sha }}
-
       - name: Apply labels
         uses: actions/labeler@v5
         with:
