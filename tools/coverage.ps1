@@ -124,3 +124,4 @@ if ($RunTests) {
 if ($PSBoundParameters.ContainsKey('MinLine')) {
   Gate $MinLine
 }
+
