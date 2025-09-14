@@ -1,6 +1,5 @@
-name: PR Labeler
+﻿name: PR Labeler
 on:
-  workflow_dispatch:
   pull_request:
     types: [opened, synchronize, reopened, edited, ready_for_review]
 
@@ -24,4 +23,3 @@ jobs:
           configuration-path: .github/labeler.yml
           sync-labels: false
           dot: true
-

@@ -1,7 +1,6 @@
 name: build-test-coverage
 
 on:
-  workflow_dispatch:
   push:
     branches: [ "**" ]
   pull_request:
@@ -67,4 +66,3 @@ jobs:
             TestResults/MergedCoverage/Cobertura.xml
             TestResults/MergedCoverage/Summary.txt
             CoverageReport/**
-
