@@ -1,4 +1,3 @@
-﻿@'
 <#
 .SYNOPSIS
 Aggiunge "workflow_dispatch:" ai workflow in .github/workflows se manca.
@@ -73,4 +72,3 @@ on:
   # Fallback prudente
   Write-Warning "Schema 'on:' non riconosciuto in $($f.Name). Apri il file e aggiungi 'workflow_dispatch:' sotto il blocco 'on:'."
 }
-'@ | Set-Content -LiteralPath .\tools\enable-workflow-dispatch.ps1 -Encoding UTF8
