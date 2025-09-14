@@ -1,17 +1,45 @@
-name: PR Labeler
-on:
-  pull_request_target:
-    types: [opened, synchronize, reopened, ready_for_review]
+﻿"repo: ci":
+  - changed-files:
+      - any-glob-to-any-file:
+          - ".github/workflows/**"
+          - ".github/labeler.yml"
 
-permissions:
-  contents: read
-  pull-requests: write
+"area: core":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/ProgesiCore/**"
+          - "tests/ProgesiCore.Tests/**"
 
-jobs:
-  label:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/labeler@v5
-        with:
-          configuration-path: .github/labeler.yml
-          sync-labels: false
+"pkg: in-memory":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/ProgesiRepositories.InMemory/**"
+
+"db: sqlite":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "src/ProgesiRepositories.Sqlite/**"
+          - "tests/ProgesiRepositories.Sqlite.Tests/**"
+
+"tests":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "tests/**"
+
+"lang: csharp":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "**/*.cs"
+          - "**/*.csproj"
+          - "**/*.sln"
+
+"dependencies":
+  - head-branch:
+      - starts-with: "dependabot/"
+  - commits:
+      - message: "/^build\\(deps\\)/"
+
+"docs":
+  - changed-files:
+      - any-glob-to-any-file:
+          - "**/*.md"
