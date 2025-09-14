@@ -2,71 +2,67 @@ name: build-test-coverage
 
 on:
   push:
-    branches: [ main, chore/restore-axisvariable ]
+    branches: [ "**" ]
   pull_request:
     branches: [ "**" ]
-  workflow_dispatch:
-
-env:
-  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
-  DOTNET_NOLOGO: true
-  COVERAGE_MIN: 75
 
 jobs:
   coverage:
+    name: build-test-coverage
     runs-on: windows-latest
+    env:
+      # Soglia CI. Ora 79% per far passare stabilmente (attuale ~79.4%).
+      # Quando saliamo oltre 80% in modo consistente, porta questo valore a 80.
+      COVERAGE_MIN: "79"
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Setup .NET
+      - name: Setup .NET (LTS runtime + SDK 8.x)
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: |
             8.0.x
+          dotnet-quality: ga
 
-      - name: Install ReportGenerator
-        shell: pwsh
+      - name: Install ReportGenerator (global tool)
         run: dotnet tool install -g dotnet-reportgenerator-globaltool
 
-      - name: Add dotnet tools to PATH
-        shell: pwsh
+      - name: Add .dotnet tools to PATH
         run: echo "$env:USERPROFILE\.dotnet\tools" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
-      # Eseguiamo i test una volta sola
-      - name: Run tests + collect coverage (Core)
+      - name: Run tests + merge coverage (Cobertura + TextSummary)
         shell: pwsh
-        run: >
-          dotnet test tests/ProgesiCore.Tests/ProgesiCore.Tests.csproj -c Debug
-          /p:CollectCoverage=true
-          /p:CoverletOutput=TestResults/Coverage/
-          /p:CoverletOutputFormat=cobertura
-          "/p:ExcludeByFile=**/*LegacyExtensions.cs;**/Logging*.cs;**/Persistence/*.cs"
+        run: pwsh ./tools/coverage.ps1 -RunTests
 
-      - name: Run tests + collect coverage (Sqlite)
+      - name: Gate coverage
         shell: pwsh
-        run: >
-          dotnet test tests/ProgesiRepositories.Sqlite.Tests/ProgesiRepositories.Sqlite.Tests.csproj -c Debug
-          /p:CollectCoverage=true
-          /p:CoverletOutput=TestResults/Coverage/
-          /p:CoverletOutputFormat=cobertura
-          "/p:ExcludeByFile=**/*LegacyExtensions.cs;**/Logging*.cs;**/Persistence/*.cs"
+        run: pwsh ./tools/coverage.ps1 -MinLine $env:COVERAGE_MIN
 
-      - name: Merge + Gate + Step Summary
-        id: gate
+      - name: Hotspots (Top 20) → Step Summary
+        if: always()
         shell: pwsh
         run: |
-          $out = pwsh ./tools/coverage.ps1 -MinLine $env:COVERAGE_MIN 2>&1 | Tee-Object -Variable _out
-          $out | Out-String | Out-File -FilePath coverage-summary.md -Encoding utf8
-          Get-Content coverage-summary.md -Raw | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          "## Coverage hotspots (Top 20)" | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+          pwsh ./tools/coverage-hotspots.ps1 -Cobertura "TestResults/MergedCoverage/Cobertura.xml" -Top 20 | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append
+
+      - name: Generate HTML coverage report
+        if: always()
+        shell: pwsh
+        run: |
+          reportgenerator `
+            -reports:"TestResults/MergedCoverage/Cobertura.xml" `
+            -targetdir:"CoverageReport" `
+            -reporttypes:"HtmlInline_AzurePipelines"
 
       - name: Upload coverage artifacts
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: CoverageReport
+          if-no-files-found: warn
           path: |
             TestResults/MergedCoverage/Cobertura.xml
             TestResults/MergedCoverage/Summary.txt
-            tests/**/TestResults/Coverage/coverage.cobertura.xml
+            CoverageReport/**
