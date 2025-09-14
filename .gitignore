@@ -43,3 +43,18 @@ run-report-*/
 
 # If you keep local artifacts, ignore them
 artifacts/
+
+# === Progesi local artifacts ===
+**/bin/
+**/obj/
+.vs/
+**/.vs/
+
+# Test runs
+**/TestResults/
+!**/TestResults/**/MergedCoverage/
+
+# Local reports/logs
+CoverageReport/
+run-report-*/
+diagnostics-*/
