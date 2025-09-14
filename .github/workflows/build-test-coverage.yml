@@ -1,12 +1,16 @@
 name: build-test-coverage
 
 on:
-  push:
-    branches: [ main ]
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review, edited]
+  workflow_dispatch:
 
 permissions:
   contents: read
+
+env:
+  # Soglia temporanea; quando tutto è stabile possiamo riportarla a 80
+  COVERAGE_MIN: '75'
 
 jobs:
   build-test-coverage:
@@ -15,56 +19,44 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # usa l'HEAD del PR se presente, altrimenti il commit corrente (push/dispatch)
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          fetch-depth: 0
 
-      - name: Setup .NET
+      - name: Setup .NET SDK
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: |
-            8.0.x
+          dotnet-version: '8.0.x'
 
-      - name: Install ReportGenerator tool
-        shell: pwsh
+      - name: Install ReportGenerator (global tool)
         run: dotnet tool install -g dotnet-reportgenerator-globaltool
+        shell: pwsh
 
       - name: Add dotnet tools to PATH
-        shell: pwsh
         run: echo "$env:USERPROFILE\.dotnet\tools" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+        shell: pwsh
 
-      # 👉 Genera SEMPRE i report Cobertura nel runner
+      # --- MONORIGA: nessun backtick/continuazione, niente ambiguità ---
       - name: Run tests and collect coverage (Coverlet)
         shell: pwsh
         run: |
-          dotnet test tests/ProgesiCore.Tests/ProgesiCore.Tests.csproj -c Debug `
-            /p:CollectCoverage=true `
-            /p:CoverletOutput=TestResults/Coverage/ `
-            /p:CoverletOutputFormat=cobertura
+          dotnet test tests/ProgesiCore.Tests/ProgesiCore.Tests.csproj -c Debug /p:CollectCoverage=true /p:CoverletOutput=TestResults/Coverage/ /p:CoverletOutputFormat=cobertura
+          dotnet test tests/ProgesiRepositories.Sqlite.Tests/ProgesiRepositories.Sqlite.Tests.csproj -c Debug /p:CollectCoverage=true /p:CoverletOutput=TestResults/Coverage/ /p:CoverletOutputFormat=cobertura
 
-          dotnet test tests/ProgesiRepositories.Sqlite.Tests/ProgesiRepositories.Sqlite.Tests.csproj -c Debug `
-            /p:CollectCoverage=true `
-            /p:CoverletOutput=TestResults/Coverage/ `
-            /p:CoverletOutputFormat=cobertura
-
-      - name: Coverage gate & summary
+      # Lo script unifica i Cobertura trovati, genera HTML, scrive Step Summary e applica il gate
+      - name: Merge & gate coverage + Step Summary
         shell: pwsh
-        env:
-          COVERAGE_MIN: '75'   # alziamo a 80 quando siamo stabili
         run: pwsh ./tools/coverage.ps1 -MinLine $env:COVERAGE_MIN
 
-      - name: Generate HTML coverage (optional)
-        if: always()
-        shell: pwsh
-        run: |
-          $merged = Join-Path $PWD "TestResults/MergedCoverage/Cobertura.xml"
-          if (Test-Path $merged) {
-            reportgenerator "-reports:$merged" "-targetdir:TestResults/CoverageHtml" "-reporttypes:HtmlInline_AzurePipelines"
-          }
-
-      - name: Upload coverage artifacts
+      - name: Upload merged coverage (HTML + Cobertura)
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: coverage
+          name: CoverageReport
           path: |
-            TestResults/MergedCoverage/**
-            TestResults/CoverageHtml/**
+            TestResults/MergedCoverage/
+            TestResults/Coverage/
+            tests/**/TestResults/Coverage/
           if-no-files-found: ignore
+          retention-days: 7
