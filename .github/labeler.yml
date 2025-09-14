@@ -1,19 +1,17 @@
-# .github/labeler.yml
+name: PR Labeler
+on:
+  pull_request_target:
+    types: [opened, synchronize, reopened, ready_for_review]
 
-tests:
-  - changed-files:
-      - any-glob-to-any-file: 'tests/**'
+permissions:
+  contents: read
+  pull-requests: write
 
-ci:
-  - changed-files:
-      - any-glob-to-any-file: '.github/**'
-
-repo:sqlite:
-  - changed-files:
-      - any-glob-to-any-file: 'src/ProgesiRepositories.Sqlite/**'
-      - any-glob-to-any-file: 'tests/ProgesiRepositories.Sqlite.Tests/**'
-
-repo:core:
-  - changed-files:
-      - any-glob-to-any-file: 'src/ProgesiCore/**'
-      - any-glob-to-any-file: 'tests/ProgesiCore.Tests/**'
+jobs:
+  label:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/labeler@v5
+        with:
+          configuration-path: .github/labeler.yml
+          sync-labels: false

@@ -1,11 +1,14 @@
 ﻿name: PR Labeler
+
 on:
   pull_request_target:
     types: [opened, synchronize, reopened, edited, ready_for_review]
+
 permissions:
   contents: read
   issues: write
   pull-requests: write
+
 jobs:
   label:
     runs-on: ubuntu-latest
@@ -14,12 +17,14 @@ jobs:
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.pull_request.base.sha }}
+
       - name: Verify config exists
         run: |
-          test -f .github/labeler.yml || { echo "❌ .github/labeler.yml NON presente sul branch base (${GITHUB_BASE_REF})."; exit 1; }
-          echo "✅ Trovato .github/labeler.yml sul branch base (${GITHUB_BASE_REF})."
+          test -f .github/labeler.yml || { echo "❌ .github/labeler.yml NON presente su ${GITHUB_BASE_REF}"; exit 1; }
+          echo "✅ Trovato .github/labeler.yml su ${GITHUB_BASE_REF}"
         env:
           GITHUB_BASE_REF: ${{ github.event.pull_request.base.ref }}
+
       - name: Run labeler
         uses: actions/labeler@v5
         with:
