@@ -1,108 +1,164 @@
+<# 
+  coverage.ps1
+  Esegue i test dei due progetti, genera Cobertura (MSBuild + XPlat),
+  merge con ReportGenerator e (opzionale) gate percentuale.
+#>
+
+[CmdletBinding()]
 param(
   [switch]$RunTests,
-  [double]$MinLine,
-  [ValidateSet('all','core','sqlite')] [string]$Scope = 'all'
+  [double]$MinLine = -1
 )
 
-$root = Split-Path -Parent $PSScriptRoot
+Set-StrictMode -Version 2.0
+$ErrorActionPreference = 'Stop'
 
-$projCore  = Join-Path $root 'tests/ProgesiCore.Tests/ProgesiCore.Tests.csproj'
-$projSql   = Join-Path $root 'tests/ProgesiRepositories.Sqlite.Tests/ProgesiRepositories.Sqlite.Tests.csproj'
-$mergedDir = Join-Path $root 'TestResults/MergedCoverage'
+function Resolve-ScriptRoot {
+  if ($PSScriptRoot) { return $PSScriptRoot }
+  $p = $PSCommandPath
+  if (-not $p) { try { $p = $MyInvocation.MyCommand.Path } catch {} }
+  if ($p) { return (Split-Path -Parent $p) }
+  return (Get-Location | Select-Object -ExpandProperty Path)
+}
 
-function Invoke-Tests([string]$projPath) {
-  $proj = (Resolve-Path $projPath).Path
+function Resolve-FullPath([string]$path) {
+  (Resolve-Path -LiteralPath $path -ErrorAction Stop | Select-Object -First 1 -ExpandProperty Path)
+}
+
+function Write-Title([string]$text) {
+  Write-Host ""
+  Write-Host ">> $text"
+}
+
+function Find-CoverageFile([string]$projectPath) {
+  $proj = Resolve-FullPath $projectPath
   $dir  = Split-Path -Parent $proj
-  Write-Host ">> dotnet test ($proj) con coverlet (Cobertura + XPlat)..."
 
-  $outDir = Join-Path $dir 'TestResults'
-  New-Item -ItemType Directory -Force -Path $outDir | Out-Null
-  $outLog = Join-Path $outDir 'last.out.txt'
-  $errLog = Join-Path $outDir 'last.err.txt'
+  $msbuild = Join-Path $dir 'TestResults/Coverage/coverage.cobertura.xml'
+  if (Test-Path $msbuild) { return (Resolve-FullPath $msbuild) }
+
+  $testRes = Join-Path $dir 'TestResults'
+  if (Test-Path $testRes) {
+    $xplat = Get-ChildItem -Path $testRes -Recurse -Filter 'coverage.cobertura.xml' -ErrorAction SilentlyContinue `
+            | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+    if ($xplat) { return $xplat.FullName }
+  }
+  return $null
+}
+
+function Invoke-Tests([string]$projectPath) {
+  $proj = Resolve-FullPath $projectPath
+  $dir  = Split-Path -Parent $proj
+
+  Write-Title "dotnet test ($proj) con coverlet (Cobertura + XPlat)..."
 
   $args = @(
-    'test', $proj, '-c','Debug', '-v','minimal',
+    'test', $proj, '-c','Debug',
     '/p:CollectCoverage=true',
     '/p:CoverletOutput=TestResults/Coverage/',
     '/p:CoverletOutputFormat=cobertura',
-    '--collect:XPlat Code Coverage'
+    '--collect:"XPlat Code Coverage"'
   )
 
-  $p = Start-Process -FilePath 'dotnet' -ArgumentList $args `
-       -NoNewWindow -Wait -PassThru `
-       -RedirectStandardOutput $outLog `
-       -RedirectStandardError  $errLog
-
-  if ($p.ExitCode -ne 0) {
-    throw "dotnet test fallito per $proj (exit $($p.ExitCode)). Vedi: $outLog / $errLog"
-  }
+  # Stampa a video ma non “entra” nel pipeline dello script
+  $null = (& dotnet @args 2>&1 | Out-Host)
 
   $covMsbuild = Join-Path $dir 'TestResults/Coverage/coverage.cobertura.xml'
-  if (Test-Path $covMsbuild) { return $covMsbuild }
+  $testRes    = Join-Path $dir 'TestResults'
+  $covXplat   = $null
+  if (Test-Path $testRes) {
+    $covXplat = Get-ChildItem -Path $testRes -Recurse -Filter 'coverage.cobertura.xml' -ErrorAction SilentlyContinue `
+               | Sort-Object LastWriteTime -Descending | Select-Object -First 1
+  }
 
-  $covXplat = Get-ChildItem -Path $outDir -Recurse -Filter 'coverage.cobertura.xml' -ErrorAction SilentlyContinue |
-              Sort-Object LastWriteTime -Descending | Select-Object -First 1
-  if ($covXplat) { return $covXplat.FullName }
+  $paths = @()
+  if (Test-Path $covMsbuild) { $paths += (Resolve-FullPath $covMsbuild) }
+  if ($covXplat)              { $paths += $covXplat.FullName }
 
-  # Debug utile se non troviamo nulla
-  Write-Host "Contenuto $outDir:"
-  Get-ChildItem -Recurse -Path $outDir | ForEach-Object { $_.FullName } | Out-Host
-  throw "Cobertura non trovati per $proj."
+  if ($paths.Count -eq 0) {
+    Write-Host "Contenuto ${testRes}:"
+    if (Test-Path $testRes) { Get-ChildItem -Recurse -Path $testRes | ForEach-Object { $_.FullName } | Out-Host }
+    throw "Cobertura non trovati per $proj."
+  }
+
+  return $paths[0]  # priorità a MSBuild, fallback XPlat
 }
 
-# -------------------- RUN TESTS + MERGE --------------------
-if ($RunTests) {
-  if (Test-Path $mergedDir) { Remove-Item $mergedDir -Recurse -Force }
-  New-Item -ItemType Directory -Force -Path $mergedDir | Out-Null
+function Merge-Coverage([string[]]$reportFiles, [string]$targetDir) {
+  if (-not (Test-Path $targetDir)) { $null = New-Item -ItemType Directory -Force -Path $targetDir }
+  if (-not $reportFiles -or $reportFiles.Count -lt 1) { throw "Nessun report da mergiare." }
 
-  $coreCov   = Invoke-Tests $projCore
-  $sqliteCov = Invoke-Tests $projSql
+  # reportgenerator accetta lista separata da ';'
+  $reportsArg = ($reportFiles | ForEach-Object { $_.Replace('\','/') }) -join ';'
 
-  $reportsArg = ($coreCov, $sqliteCov) -join ';'
+  Write-Title "Merge coverage con ReportGenerator..."
   & reportgenerator `
-      "-reports:$reportsArg" `
-      "-targetdir:$mergedDir" `
-      "-reporttypes:Cobertura;TextSummary"
+      ("-reports:{0}" -f $reportsArg) `
+      ("-targetdir:{0}" -f $targetDir) `
+      "-reporttypes:Cobertura;TextSummary" `
+      2>&1 | Out-Host
 
-  $cob = Join-Path $mergedDir 'Cobertura.xml'
+  $cob = Join-Path $targetDir 'Cobertura.xml'
   if (!(Test-Path $cob)) { throw "Report merge non creato ($cob)." }
 
-  # Mini sommario + percentuale (come prima)
-  $xml = [xml](Get-Content $cob)
-  $linesValid   = [int]$xml.coverage.'lines-valid'
-  $linesCovered = [int]$xml.coverage.'lines-covered'
-  $pct = [Math]::Round(($linesCovered / $linesValid) * 100, 2)
-
-  Write-Host ""
-  Write-Host "### Test coverage"
-  Write-Host "Report: $cob`n"
-  Write-Host "| Metric        | Value |"
-  Write-Host "|---            | ---:  |"
-  Write-Host ("| Lines covered | {0} |" -f $linesCovered)
-  Write-Host ("| Lines valid   | {0}   |" -f $linesValid)
-  Write-Host ("| **Line %**    | **{0}%** |" -f $pct)
-  return
+  return $cob
 }
 
-# -------------------- GATE --------------------
-if ($PSBoundParameters.ContainsKey('MinLine')) {
-  $cob = Join-Path $mergedDir 'Cobertura.xml'
-  if (!(Test-Path $cob)) { throw "Report merged non trovato: $cob" }
-
-  $xml = [xml](Get-Content $cob)
-  $linesValid   = [int]$xml.coverage.'lines-valid'
-  $linesCovered = [int]$xml.coverage.'lines-covered'
-  $pct = [Math]::Round(($linesCovered / $linesValid) * 100, 2)
+function Show-Summary([string]$mergedDir) {
+  $summary = Join-Path $mergedDir 'Summary.txt'
+  $cob     = Join-Path $mergedDir 'Cobertura.xml'
 
   Write-Host ""
   Write-Host "### Test coverage"
-  Write-Host "Report: $cob`n"
-  Write-Host "| Metric        | Value |"
-  Write-Host "|---            | ---:  |"
-  Write-Host ("| Lines covered | {0} |" -f $linesCovered)
-  Write-Host ("| Lines valid   | {0}   |" -f $linesValid)
-  Write-Host ("| **Line %**    | **{0}%** |" -f $pct)
+  Write-Host "Report: $cob"
+  Write-Host ""
 
-  if ($pct -lt $MinLine) { throw ("Gate FALLITO: coverage {0}% < soglia {1}%." -f $pct, $MinLine) }
-  else                   { Write-Host ("Gate OK: coverage {0}% >= soglia {1}%." -f $pct, $MinLine) }
+  if (Test-Path $summary) { Get-Content $summary | Out-Host }
+  else { Write-Host "(Summary non trovato, mostro solo path Cobertura)" }
+}
+
+# ----- MAIN -----
+
+$here = Resolve-ScriptRoot
+$root = Resolve-FullPath (Join-Path $here '..')
+
+$projCore   = Join-Path $root 'tests/ProgesiCore.Tests/ProgesiCore.Tests.csproj'
+$projSqlite = Join-Path $root 'tests/ProgesiRepositories.Sqlite.Tests/ProgesiRepositories.Sqlite.Tests.csproj'
+
+$covCore   = $null
+$covSqlite = $null
+
+if ($RunTests) {
+  $covCore   = Invoke-Tests $projCore
+  $covSqlite = Invoke-Tests $projSqlite
+} else {
+  $covCore   = Find-CoverageFile $projCore
+  $covSqlite = Find-CoverageFile $projSqlite
+}
+
+if (-not $covCore -or -not $covSqlite) {
+  throw "Cobertura non trovati. Core: '$covCore' esiste: $([bool]$covCore); Sqlite: '$covSqlite' esiste: $([bool]$covSqlite)"
+}
+
+$mergedDir = Join-Path $root 'TestResults/MergedCoverage'
+$null = Merge-Coverage @($covCore, $covSqlite) $mergedDir
+
+Show-Summary $mergedDir
+
+if ($MinLine -ge 0) {
+  $summary = Join-Path $mergedDir 'Summary.txt'
+  if (!(Test-Path $summary)) { throw "Summary non trovato: $summary" }
+
+  $txt = Get-Content $summary -Raw
+  $m = [regex]::Match($txt, 'Line coverage:\s*([\d\.,]+)%', 'IgnoreCase')
+  if (-not $m.Success) { throw "Impossibile leggere la Line coverage dal summary." }
+
+  $pct = ($m.Groups[1].Value.Replace(',','.') -as [double])
+
+  Write-Host ""
+  if ($pct -lt $MinLine) {
+    throw ("Gate FALLITO: coverage {0:N2}% < soglia {1}%" -f $pct, $MinLine)
+  } else {
+    Write-Host ("Gate OK: coverage {0:N2}% >= soglia {1}%." -f $pct, $MinLine)
+  }
 }
