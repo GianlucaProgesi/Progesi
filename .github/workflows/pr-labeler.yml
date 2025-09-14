@@ -1,31 +1,24 @@
 ﻿name: PR Labeler
 
 on:
-  pull_request_target:
+  pull_request:
     types: [opened, synchronize, reopened, edited, ready_for_review]
 
 permissions:
-  contents: read
-  issues: write
-  pull-requests: write
+  contents: read          # serve per leggere .github/labeler.yml via API
+  pull-requests: write    # serve per applicare/rimuovere label
 
 jobs:
   label:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout base branch (to read config locally)
+      # avere il file anche localmente evita il fallback via API
+      - name: Checkout PR head
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event.pull_request.base.sha }}
+          ref: ${{ github.event.pull_request.head.sha }}
 
-      - name: Verify config exists
-        run: |
-          test -f .github/labeler.yml || { echo "❌ .github/labeler.yml NON presente su ${GITHUB_BASE_REF}"; exit 1; }
-          echo "✅ Trovato .github/labeler.yml su ${GITHUB_BASE_REF}"
-        env:
-          GITHUB_BASE_REF: ${{ github.event.pull_request.base.ref }}
-
-      - name: Run labeler
+      - name: Apply labels
         uses: actions/labeler@v5
         with:
           repo-token: ${{ secrets.GITHUB_TOKEN }}
