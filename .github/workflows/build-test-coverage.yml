@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 env:
-  # Soglia temporanea; quando tutto è stabile possiamo riportarla a 80
+  # Soglia temporanea; alzala quando vuoi
   COVERAGE_MIN: '75'
 
 jobs:
@@ -20,7 +20,6 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          # usa l'HEAD del PR se presente, altrimenti il commit corrente (push/dispatch)
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
 
@@ -37,14 +36,35 @@ jobs:
         run: echo "$env:USERPROFILE\.dotnet\tools" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
         shell: pwsh
 
-      # --- MONORIGA: nessun backtick/continuazione, niente ambiguità ---
-      - name: Run tests and collect coverage (Coverlet)
+      # --- TEST + COVERAGE (msbuild + collector) ---
+      - name: Test ProgesiCore.Tests (with coverage)
         shell: pwsh
-        run: |
-          dotnet test tests/ProgesiCore.Tests/ProgesiCore.Tests.csproj -c Debug /p:CollectCoverage=true /p:CoverletOutput=TestResults/Coverage/ /p:CoverletOutputFormat=cobertura
-          dotnet test tests/ProgesiRepositories.Sqlite.Tests/ProgesiRepositories.Sqlite.Tests.csproj -c Debug /p:CollectCoverage=true /p:CoverletOutput=TestResults/Coverage/ /p:CoverletOutputFormat=cobertura
+        run: >
+          dotnet test tests/ProgesiCore.Tests/ProgesiCore.Tests.csproj -c Debug
+          /p:CollectCoverage=true
+          /p:CoverletOutput=TestResults/Coverage/
+          /p:CoverletOutputFormat=cobertura
+          --collect:"XPlat Code Coverage"
 
-      # Lo script unifica i Cobertura trovati, genera HTML, scrive Step Summary e applica il gate
+      - name: Test ProgesiRepositories.Sqlite.Tests (with coverage)
+        shell: pwsh
+        run: >
+          dotnet test tests/ProgesiRepositories.Sqlite.Tests/ProgesiRepositories.Sqlite.Tests.csproj -c Debug
+          /p:CollectCoverage=true
+          /p:CoverletOutput=TestResults/Coverage/
+          /p:CoverletOutputFormat=cobertura
+          --collect:"XPlat Code Coverage"
+
+      # (Facoltativo ma utile per debug)
+      - name: Elenco Cobertura trovati
+        shell: pwsh
+        continue-on-error: true
+        run: |
+          Write-Host "== Cobertura locali (CoverletOutput) =="
+          Get-ChildItem -Path . -Recurse -Filter coverage.cobertura.xml | ForEach-Object { $_.FullName }
+          Write-Host "== Cobertura da XPlat Code Coverage =="
+          Get-ChildItem -Path . -Recurse -Filter coverage.cobertura.xml | ForEach-Object { $_.FullName }
+
       - name: Merge & gate coverage + Step Summary
         shell: pwsh
         run: pwsh ./tools/coverage.ps1 -MinLine $env:COVERAGE_MIN
@@ -57,6 +77,6 @@ jobs:
           path: |
             TestResults/MergedCoverage/
             TestResults/Coverage/
-            tests/**/TestResults/Coverage/
+            tests/**/TestResults/**/coverage.cobertura.xml
           if-no-files-found: ignore
           retention-days: 7
