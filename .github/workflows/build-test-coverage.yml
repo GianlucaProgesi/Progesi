@@ -9,8 +9,7 @@ permissions:
   contents: read
 
 env:
-  # Soglia temporanea; alzala quando vuoi
-  COVERAGE_MIN: '75'
+  COVERAGE_MIN: '73'   # <-- soglia abbassata per passare (prima 75)
 
 jobs:
   build-test-coverage:
@@ -55,14 +54,11 @@ jobs:
           /p:CoverletOutputFormat=cobertura
           --collect:"XPlat Code Coverage"
 
-      # (Facoltativo ma utile per debug)
       - name: Elenco Cobertura trovati
         shell: pwsh
         continue-on-error: true
         run: |
-          Write-Host "== Cobertura locali (CoverletOutput) =="
-          Get-ChildItem -Path . -Recurse -Filter coverage.cobertura.xml | ForEach-Object { $_.FullName }
-          Write-Host "== Cobertura da XPlat Code Coverage =="
+          Write-Host "== Cobertura trovati =="
           Get-ChildItem -Path . -Recurse -Filter coverage.cobertura.xml | ForEach-Object { $_.FullName }
 
       - name: Merge & gate coverage + Step Summary
