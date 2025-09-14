@@ -1,6 +1,7 @@
 ﻿<#
 .SYNOPSIS
 Aggiunge "workflow_dispatch:" ai workflow YAML in .github/workflows se manca.
+Gestisce i casi comuni "on:" su riga propria o con eventi multilinea.
 #>
 [CmdletBinding()]
 param()
@@ -14,20 +15,26 @@ if (-not (Test-Path $dir)) {
 Get-ChildItem -Path $dir -File -Include *.yml,*.yaml | ForEach-Object {
   $p = $_.FullName
   $txt = Get-Content -LiteralPath $p -Raw
-  if ($txt -match 'workflow_dispatch\s*:') {
-    Write-Verbose "Già presente: $($_.Name)"
+
+  if ($txt -match '(?im)^\s*workflow_dispatch\s*:') {
+    Write-Host "OK    $($_.Name)"
     return
   }
-  if ($txt -match '^\s*on\s*:\s*$' -im) {
-    # Inserisci subito dopo "on:"
-    $txt = $txt -replace '(^\s*on\s*:\s*$)','`$1`r`n  workflow_dispatch:'
-  } elseif ($txt -match '^\s*on\s*:\s*[\r\n]') {
-    # Caso "on:" seguito da eventi: aggiungi una riga
-    $txt = $txt -replace '(^\s*on\s*:\s*[\r\n])','$1  workflow_dispatch:' + "`r`n"
-  } else {
-    # Non c'è "on:" → prepend standard header
-    $txt = "on:`r`n  workflow_dispatch:`r`n" + $txt
+
+  if ($txt -match '(?im)^\s*on\s*:\s*$') {
+    # "on:" da solo
+    $txt = $txt -replace '(?im)^\s*on\s*:\s*$', "on:`r`n  workflow_dispatch:`r`n"
   }
+  elseif ($txt -match '(?im)^\s*on\s*:\s*[\r\n]+') {
+    # "on:" seguito da eventi su righe successive
+    $txt = $txt -replace '(?im)^\s*on\s*:\s*', "on:`r`n  workflow_dispatch:`r`n"
+  }
+  else {
+    # Nessun "on:" classico trovato: come fallback, preprendo un blocco on:
+    # (evita casi esotici; se necessario si ritocca a mano)
+    $txt = "on:`r`n  workflow_dispatch:`r`n$txt"
+  }
+
   Set-Content -LiteralPath $p -Value $txt -Encoding UTF8
-  Write-Host "Aggiunto workflow_dispatch -> $($_.Name)"
+  Write-Host "ADDED workflow_dispatch -> $($_.Name)"
 }
