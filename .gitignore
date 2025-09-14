@@ -58,3 +58,7 @@ artifacts/
 CoverageReport/
 run-report-*/
 diagnostics-*/
+
+# workflow backups
+.github/workflows/*.bak
+
