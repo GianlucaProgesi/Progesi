@@ -1,151 +1,94 @@
-<# 
-  tools/coverage.ps1
-
-  Uso:
-    # Esegue i test e produce i report per ciascun test project
-    pwsh ./tools/coverage.ps1 -RunTests
-
-    # Applica il gate leggendo il report (o il merge) più recente
-    pwsh ./tools/coverage.ps1 -MinLine 80
-
-    # Tutto insieme
-    pwsh ./tools/coverage.ps1 -RunTests -MinLine 80
-#>
-
 [CmdletBinding()]
 param(
   [switch]$RunTests,
-  [int]$MinLine = -1,
-  [string]$Configuration = "Debug"
+  [int]$MinLine = 0
 )
 
-$ErrorActionPreference = 'Stop'
+$ErrorActionPreference = "Stop"
+$root = (Get-Location).Path
 
-function Get-RepoRoot {
-  $root = (& git rev-parse --show-toplevel 2>$null)
-  if (-not $root) { $root = (Resolve-Path .).Path }
-  return $root
-}
+function Get-CoberturaFiles {
+  param([string]$BasePath)
 
-function Invoke-Tests {
-  param([string]$Root)
-  Write-Host ">> dotnet test con coverlet (Cobertura)..." -ForegroundColor Cyan
+  $files = @()
+  try { $files += Get-ChildItem -Path $BasePath -Recurse -File -Filter 'coverage.cobertura.xml' -ErrorAction SilentlyContinue } catch {}
+  try { $files += Get-ChildItem -Path $BasePath -Recurse -File -Filter 'Cobertura.xml'         -ErrorAction SilentlyContinue } catch {}
 
-  dotnet test $Root `
-    --nologo -m:1 -c $Configuration `
-    -p:CollectCoverage=true `
-    -p:CoverletOutputFormat=cobertura `
-    -p:DeterministicReport=true `
-    -p:CoverletOutput="TestResults/Coverage/" | Write-Host
-}
-
-function Find-CoberturaFiles {
-  param([string]$Root)
-  $patterns = @('coverage.cobertura.xml','*cobertura*.xml')
-
-  $collected = @(
-    foreach ($p in $patterns) {
-      Get-ChildItem -Path (Join-Path $Root '*') -Recurse -File -Filter $p -ErrorAction SilentlyContinue
-    }
-  )
-  $files = $collected | Sort-Object LastWriteTime -Descending -Unique
-  return $files
-}
-
-function Read-CoberturaSummary {
-  param([string]$Path)
-  [xml]$x = Get-Content -LiteralPath $Path
-
-  # Cobertura root: <coverage lines-covered=".." lines-valid="..">
-  $covered = [int]$x.coverage.'lines-covered'
-  $valid   = [int]$x.coverage.'lines-valid'
-  $pct     = if ($valid -gt 0) { [math]::Round(($covered/$valid)*100, 2) } else { 0 }
-
-  [pscustomobject]@{
-    File    = $Path
-    Covered = $covered
-    Valid   = $valid
-    LinePct = $pct
+  if (-not $files) {
+    try {
+      $files += Get-ChildItem -Path $BasePath -Recurse -File -Include *.xml -ErrorAction SilentlyContinue |
+               Where-Object { $_.Name -match 'cobertura' }
+    } catch {}
   }
+
+  $files | Sort-Object FullName -Unique
 }
 
-function Try-Merge-WithReportGenerator {
-  param(
-    [System.IO.FileInfo[]]$Reports,
-    [string]$Root
-  )
+function Merge-And-Summarize {
+  $covFiles = Get-CoberturaFiles -BasePath $root
+  if (-not $covFiles -or $covFiles.Count -eq 0) {
+    throw "Nessun report Cobertura trovato (cercati sotto '$root')."
+  }
 
-  $rg = Get-Command reportgenerator -ErrorAction SilentlyContinue
-  if (-not $rg) { return $null }  # tool non disponibile → nessun merge
+  $reports   = ($covFiles | ForEach-Object { $_.FullName }) -join ';'
+  $targetDir = Join-Path $root 'TestResults/MergedCoverage'
+  New-Item -ItemType Directory -Force -Path $targetDir | Out-Null
 
-  $mergeDir = Join-Path $Root "TestResults/MergedCoverage"
-  New-Item -ItemType Directory -Force -Path $mergeDir | Out-Null
+  reportgenerator "-reports:$reports" "-targetdir:$targetDir" "-reporttypes:Cobertura;TextSummary" | Out-Null
 
-  $reportsArg = ($Reports | ForEach-Object { $_.FullName }) -join ';'
-  Write-Host ">> Merge coverage con ReportGenerator..." -ForegroundColor Cyan
-  reportgenerator `
-    "-reports:$reportsArg" `
-    "-targetdir:$mergeDir" `
-    "-reporttypes:Cobertura;TextSummary" `
-    | Write-Host
+  $merged = Join-Path $targetDir 'Cobertura.xml'
+  if (-not (Test-Path $merged)) { throw "Merge fallito: file unificato non trovato: $merged" }
 
-  $mergedCobertura = Join-Path $mergeDir "Cobertura.xml"
-  if (Test-Path $mergedCobertura) { return (Get-Item $mergedCobertura) }
-  return $null
-}
+  [xml]$xml = Get-Content -LiteralPath $merged
+  $cov      = $xml.coverage
 
-# --- MAIN ---
-$root = Get-RepoRoot
+  $covered  = [int]$cov.'lines-covered'
+  $valid    = [int]$cov.'lines-valid'
+  $percent  = if ($valid -gt 0) { [math]::Round(($covered / $valid) * 100, 2) } else { 0 }
 
-if ($RunTests) {
-  Invoke-Tests -Root $root
-}
-
-$reports = Find-CoberturaFiles -Root $root
-if (-not $reports -or $reports.Count -eq 0) {
-  throw "Nessun report Cobertura trovato (cercati sotto '$root')."
-}
-
-# Prova a fare il merge se ci sono più report e ReportGenerator è installato
-$chosen = $reports[0]
-if ($reports.Count -gt 1) {
-  $merged = Try-Merge-WithReportGenerator -Reports $reports -Root $root
-  if ($merged) { $chosen = $merged }
-}
-
-$sum = Read-CoberturaSummary -Path $chosen.FullName
-
-# Costruisco la tabella Markdown
-$md = @"
+  $md = @"
 ### Test coverage
-Report: $($chosen.FullName)
+Report: $merged
 
 | Metric        | Value |
 |---            | ---:  |
-| Lines covered | $($sum.Covered) |
-| Lines valid   | $($sum.Valid)   |
-| **Line %**    | **$($sum.LinePct)%** |
+| Lines covered | $covered |
+| Lines valid   | $valid   |
+| **Line %**    | **$percent%** |
 "@
 
-# Se ho più report e NON ho fatto il merge, aggiungo nota e la lista
-if ($reports.Count -gt 1 -and -not ($chosen.FullName -like "*MergedCoverage*")) {
-  $md += "`n> Nota: trovati $($reports.Count) report; mostrato il più recente (merge non eseguito perché 'reportgenerator' non è nel PATH)."
-  $md += "`n`n**Reports trovati (per timestamp):**`n"
-  $md += ($reports | Select-Object FullName, LastWriteTime | Format-Table -AutoSize | Out-String)
+  if ($env:GITHUB_STEP_SUMMARY) {
+    $md | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+  }
+  Write-Host $md
+
+  return $percent
 }
 
-Write-Host ""
-Write-Host $md
+if ($RunTests) {
+  # Esegue i test con i flag Coverlet (utile in locale; nel runner lo fa già il workflow)
+  $projects = Get-ChildItem -Path (Join-Path $root 'tests') -Recurse -File -Filter *.csproj
+  foreach ($p in $projects) {
+    $outDir = Join-Path $p.Directory.FullName 'TestResults/Coverage'
+    New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 
-if ($env:GITHUB_STEP_SUMMARY) {
-  $md | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+    & dotnet test $p.FullName -c Debug `
+      /p:CollectCoverage=true `
+      /p:CoverletOutput="$outDir/" `
+      /p:CoverletOutputFormat="cobertura"
+  }
+
+  # In modalità -RunTests non falliamo se non troviamo report: il gate ci penserà dopo.
+  try { Merge-And-Summarize | Out-Null } catch { Write-Warning $_.Exception.Message }
+  return
 }
 
-if ($MinLine -ge 0) {
-  if ($sum.LinePct -lt $MinLine) {
-    Write-Error ("Gate FALLITO: coverage {0}% < soglia {1}%." -f $sum.LinePct, $MinLine)
-    exit 1
+# Solo merge + summary + gate (usato dal workflow)
+$linePercent = Merge-And-Summarize
+if ($MinLine -gt 0) {
+  if ($linePercent -lt $MinLine) {
+    throw ("Gate FALLITO: coverage {0}% < soglia {1}%." -f $linePercent, $MinLine)
   } else {
-    Write-Host ("Gate OK: {0}% ≥ {1}%." -f $sum.LinePct, $MinLine) -ForegroundColor Green
+    Write-Host ("Gate OK: coverage {0}% ≥ soglia {1}%." -f $linePercent, $MinLine)
   }
 }
