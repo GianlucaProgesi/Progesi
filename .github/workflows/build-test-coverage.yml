@@ -2,10 +2,6 @@
 
 on:
   workflow_dispatch:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
 
 permissions:
   contents: read
@@ -26,7 +22,7 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.x'
+          dotnet-version: "8.0.x"
 
       - name: Restore
         run: dotnet restore Progesi.sln
@@ -34,7 +30,6 @@ jobs:
       - name: Build
         run: dotnet build Progesi.sln -c Release --no-restore
 
-      # Assicurati che i progetti di test abbiano il pacchetto coverlet.collector
       - name: Test with coverage
         run: >
           dotnet test Progesi.sln -c Release --no-build
@@ -42,28 +37,30 @@ jobs:
           --results-directory "${{ runner.temp }}/test-results"
           --collect "XPlat Code Coverage"
 
-      - name: Collect Cobertura files
+      - name: Collect artifacts
         shell: pwsh
         run: |
-          $out = Join-Path $env:RUNNER_TEMP 'coverage'
-          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          New-Item -Type Directory -Force CoverageReport | Out-Null
+          New-Item -Type Directory -Force TestResults    | Out-Null
           Get-ChildItem "${{ runner.temp }}/test-results" -Recurse -Filter "coverage.cobertura.xml" |
             ForEach-Object {
-              $dest = Join-Path $out ("coverage-" + $_.Directory.Name + ".xml")
-              Copy-Item $_.FullName $dest -Force
+              Copy-Item $_.FullName (Join-Path CoverageReport ("coverage-" + $_.Directory.Name + ".xml")) -Force
             }
+          Get-ChildItem "${{ runner.temp }}/test-results" -Recurse -Filter "*.trx" |
+            Copy-Item -Destination TestResults -Force
 
-      - name: Upload test results (TRX)
+      - name: Upload coverage
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-results
-          path: ${{ runner.temp }}/test-results
+          name: CoverageReport
+          path: CoverageReport
+          if-no-files-found: warn
 
-      - name: Upload coverage (Cobertura)
+      - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-cobertura
-          path: ${{ runner.temp }}/coverage
+          name: TestResults
+          path: TestResults
           if-no-files-found: warn
