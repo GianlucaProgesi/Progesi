@@ -49,15 +49,13 @@ jobs:
         with:
           category: "/language:${{ matrix.language }}"
           upload: false
+          output: results   # <<--- forza i SARIF in ${GITHUB_WORKSPACE}\results
 
       - name: Upload SARIF as artifact
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: codeql-sarif
-          path: |
-            results/*.sarif
-            ../results/*.sarif   # <— aggiunto (SARIF è un livello sopra il repo)
+          path: results/*.sarif
           if-no-files-found: warn
           retention-days: 14
-
