@@ -66,3 +66,7 @@ diagnostics-*/
 # audit outputs
 /out/
 
+
+# local helpers
+/tools/Run-Local.ps1
+
