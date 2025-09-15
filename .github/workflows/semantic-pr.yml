@@ -1,16 +1,15 @@
 name: Semantic PR
-on:
-  workflow_dispatch:
 
+on:
   pull_request_target:
-    types: [opened, edited, synchronize, reopened, ready_for_review]
 
 permissions:
   pull-requests: read
-  statuses: write
 
 jobs:
   lint:
+    # non controllare i PR aperti da dependabot
+    if: ${{ github.actor != 'dependabot[bot]' }}
     runs-on: ubuntu-latest
     steps:
       - uses: amannn/action-semantic-pull-request@v5
@@ -18,14 +17,4 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           types: |
-            chore
-            ci
-            docs
-            feat
-            fix
-            perf
-            refactor
-            test
-          requireScope: false
-          subjectPattern: ^.+$
-          wip: true
+            chore,ci,docs,feat,fix,perf,refactor,test

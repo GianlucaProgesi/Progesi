@@ -1,26 +1,21 @@
 name: PR Labeler
 
 on:
-  # Permette l'esecuzione manuale da Actions
-  workflow_dispatch:
-  # Usa pull_request_target così il bot può applicare label anche a PR provenienti da fork
   pull_request_target:
+    types: [opened, synchronize, reopened, edited]
 
-# Permessi minimi per poter leggere il repo e scrivere etichette sui PR
 permissions:
-  contents: read
   pull-requests: write
 
 jobs:
   label:
-    name: Apply labels
+    # Evita i PR dependabot per tagliare rumore
+    if: ${{ github.actor != 'dependabot[bot]' }}
     runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      pull-requests: write
     steps:
-      - name: Run labeler
-        uses: actions/labeler@v5
+      - uses: actions/labeler@v5
         with:
-          # Se il file di configurazione è diverso, aggiorna questo percorso
           configuration-path: .github/labeler.yml
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          sync-labels: false
+          dot: true

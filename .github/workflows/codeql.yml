@@ -1,4 +1,4 @@
-name: CodeQL
+﻿name: CodeQL
 
 on:
   workflow_dispatch:
@@ -8,31 +8,17 @@ on:
     branches: [ main ]
   schedule:
     - cron: '0 6 * * 1'
-
-permissions:
-  contents: read
-  actions: read
-  security-events: write
-  pull-requests: read
-
-concurrency:
-  group: codeql-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   analyze:
     name: Analyze
     runs-on: windows-latest
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
-
     strategy:
       fail-fast: false
       matrix:
         language: [ 'csharp' ]
 
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -41,15 +27,16 @@ jobs:
         with:
           languages: ${{ matrix.language }}
 
-      - name: Autobuild
-        uses: github/codeql-action/autobuild@v3
+      - name: Build solution
+        run: |
+          dotnet restore Progesi.sln
+          dotnet build Progesi.sln -c Release --no-restore
 
       - name: Perform CodeQL Analysis (no upload)
         uses: github/codeql-action/analyze@v3
         with:
           category: "/language:${{ matrix.language }}"
           upload: false
-          output: results   # <<--- forza i SARIF in ${GITHUB_WORKSPACE}\results
 
       - name: Upload SARIF as artifact
         if: always()
