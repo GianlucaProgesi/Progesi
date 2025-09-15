@@ -43,3 +43,7 @@ run-report-*/
 
 # If you keep local artifacts, ignore them
 artifacts/
+
+# workflow backups
+.github/workflows/*.yml.bak
+
