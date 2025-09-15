@@ -1,12 +1,13 @@
 name: CodeQL
 
 on:
+  workflow_dispatch:
   push:
     branches: [ main ]
   pull_request:
     branches: [ main ]
   schedule:
-    - cron: '20 1 * * 5'
+    - cron: '0 6 * * 1'
 
 permissions:
   contents: read
@@ -30,7 +31,8 @@ jobs:
         language: [ 'csharp' ]
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
@@ -39,16 +41,21 @@ jobs:
         with:
           languages: ${{ matrix.language }}
 
-      # Autobuild di CodeQL (per C# in genere basta)
       - name: Autobuild
         uses: github/codeql-action/autobuild@v3
 
-      # Se mai servisse una build manuale, decommenta:
-      # - run: |
-      #     dotnet restore Progesi.sln
-      #     dotnet build Progesi.sln -c Release --no-restore
-
-      - name: Perform CodeQL Analysis
+      - name: Perform CodeQL Analysis (no upload)
         uses: github/codeql-action/analyze@v3
         with:
           category: "/language:${{ matrix.language }}"
+          upload: false
+          output: results   # <<--- forza i SARIF in ${GITHUB_WORKSPACE}\results
+
+      - name: Upload SARIF as artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: codeql-sarif
+          path: results/*.sarif
+          if-no-files-found: warn
+          retention-days: 14
