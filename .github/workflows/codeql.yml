@@ -1,53 +1,44 @@
 name: CodeQL
-on:
-  workflow_dispatch:
 
+on:
+  # Permette run manuali
+  workflow_dispatch:
+  # Scansione su push e PR verso main
   push:
     branches: [ main ]
   pull_request:
     branches: [ main ]
+  # (opzionale) scansione settimanale
   schedule:
-    - cron: '20 1 * * 5'
+    - cron: '0 6 * * 1'
 
+# Permessi minimi richiesti da CodeQL per pubblicare i risultati su Code Scanning
 permissions:
   contents: read
-  actions: read
   security-events: write
-  pull-requests: read
-
-concurrency:
-  group: codeql-${{ github.ref }}
-  cancel-in-progress: true
+  actions: read
 
 jobs:
   analyze:
     name: Analyze
     runs-on: windows-latest
-    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
-
     strategy:
       fail-fast: false
       matrix:
         language: [ 'csharp' ]
 
     steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+      - name: Checkout repository
+        uses: actions/checkout@v4
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
           languages: ${{ matrix.language }}
 
-      # Autobuild di CodeQL (per C# in genere basta)
+      # Tenta la compilazione automatica (di solito basta per C#)
       - name: Autobuild
         uses: github/codeql-action/autobuild@v3
-
-      # Se mai servisse una build manuale, decommenta:
-      # - run: |
-      #     dotnet restore Progesi.sln
-      #     dotnet build Progesi.sln -c Release --no-restore
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
