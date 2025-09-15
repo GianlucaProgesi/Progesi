@@ -47,3 +47,9 @@ artifacts/
 # workflow backups
 .github/workflows/*.yml.bak
 
+
+# local outputs
+/out/
+# local helper
+/tools/Run-Local.ps1
+
