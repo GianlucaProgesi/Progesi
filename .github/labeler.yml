@@ -1,19 +1,35 @@
 ﻿CI/CD:
-  - ".github/workflows/**"
+  - changed-files:
+      - any-glob-to-any-file: [".github/workflows/**"]
+
 core:
-  - "ProgesiCore/**"
+  - changed-files:
+      - any-glob-to-any-file: ["ProgesiCore/**"]
+
 sqlite-repos:
-  - "ProgesiRepositories.Sqlite/**"
+  - changed-files:
+      - any-glob-to-any-file: ["ProgesiRepositories.Sqlite/**"]
+
 tests:
-  - "tests/**"
+  - changed-files:
+      - any-glob-to-any-file: ["tests/**"]
+
 docs:
-  - "README.md"
-  - "docs/**"
+  - changed-files:
+      - any-glob-to-any-file:
+          - "README.md"
+          - "docs/**"
+
 build:
-  - "*.sln"
-  - "**/*.csproj"
-  - "Directory.Build.*"
+  - changed-files:
+      - any-glob-to-any-file:
+          - "*.sln"
+          - "**/*.csproj"
+          - "Directory.Build.*"
+
 housekeeping:
-  - "tools/**"
-  - ".gitignore"
-  - ".editorconfig"
+  - changed-files:
+      - any-glob-to-any-file:
+          - "tools/**"
+          - ".gitignore"
+          - ".editorconfig"
