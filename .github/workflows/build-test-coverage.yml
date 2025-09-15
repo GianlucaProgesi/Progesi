@@ -34,7 +34,7 @@ jobs:
       - name: Build
         run: dotnet build Progesi.sln -c Release --no-restore
 
-      # Assicurati che i progetti di test abbiano "coverlet.collector"
+      # Assicurati che i progetti di test abbiano il pacchetto coverlet.collector
       - name: Test with coverage
         run: >
           dotnet test Progesi.sln -c Release --no-build
@@ -47,10 +47,11 @@ jobs:
         run: |
           $out = Join-Path $env:RUNNER_TEMP 'coverage'
           New-Item -ItemType Directory -Force -Path $out | Out-Null
-          Get-ChildItem "${{ runner.temp }}/test-results" -Recurse -Filter "coverage.cobertura.xml" | ForEach-Object {
-            $dest = Join-Path $out ("coverage-" + $_.Directory.Name + ".xml")
-            Copy-Item $_.FullName $dest -Force
-          }
+          Get-ChildItem "${{ runner.temp }}/test-results" -Recurse -Filter "coverage.cobertura.xml" |
+            ForEach-Object {
+              $dest = Join-Path $out ("coverage-" + $_.Directory.Name + ".xml")
+              Copy-Item $_.FullName $dest -Force
+            }
 
       - name: Upload test results (TRX)
         if: always()
