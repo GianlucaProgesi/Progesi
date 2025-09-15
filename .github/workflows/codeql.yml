@@ -1,4 +1,3 @@
-@'
 name: CodeQL
 
 on:
@@ -59,4 +58,3 @@ jobs:
           path: results/*.sarif
           if-no-files-found: warn
           retention-days: 14
-'@ | Set-Content .github/workflows/codeql.yml -Encoding UTF8
