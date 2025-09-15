@@ -1,27 +1,31 @@
+@'
 name: CodeQL
 
 on:
-  # Permette run manuali
   workflow_dispatch:
-  # Scansione su push e PR verso main
   push:
     branches: [ main ]
   pull_request:
     branches: [ main ]
-  # (opzionale) scansione settimanale
   schedule:
     - cron: '0 6 * * 1'
 
-# Permessi minimi richiesti da CodeQL per pubblicare i risultati su Code Scanning
 permissions:
   contents: read
-  security-events: write
   actions: read
+  security-events: write
+  pull-requests: read
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   analyze:
     name: Analyze
     runs-on: windows-latest
+    if: ${{ github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository }}
+
     strategy:
       fail-fast: false
       matrix:
@@ -30,13 +34,14 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
           languages: ${{ matrix.language }}
 
-      # Tenta la compilazione automatica (di solito basta per C#)
       - name: Autobuild
         uses: github/codeql-action/autobuild@v3
 
@@ -47,8 +52,11 @@ jobs:
           upload: false
 
       - name: Upload SARIF as artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: codeql-sarif
-          path: results/**/*.sarif
-
+          path: results/*.sarif
+          if-no-files-found: warn
+          retention-days: 14
+'@ | Set-Content .github/workflows/codeql.yml -Encoding UTF8
