@@ -2,12 +2,21 @@
 
 on:
   workflow_dispatch:
-  push:
-    branches: [ main ]
   pull_request:
     branches: [ main ]
-  schedule:
-    - cron: '0 6 * * 1'
+  push:
+    branches: [ main ]
+  # se vuoi anche la pianificazione, rimetti una schedule settimanale
+
+permissions:
+  contents: read
+  actions: read
+  security-events: write
+
+concurrency:
+  group: codeql-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   analyze:
     name: Analyze
@@ -15,12 +24,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        language: [ 'csharp' ]
+        language: ['csharp']
 
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
+        with: { fetch-depth: 0 }
 
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
@@ -32,13 +40,13 @@ jobs:
           dotnet restore Progesi.sln
           dotnet build Progesi.sln -c Release --no-restore
 
-      - name: Perform CodeQL Analysis (no upload)
+      - name: Analyze (no upload)
         uses: github/codeql-action/analyze@v3
         with:
           category: "/language:${{ matrix.language }}"
           upload: false
 
-      - name: Upload SARIF as artifact
+      - name: Upload SARIF
         if: always()
         uses: actions/upload-artifact@v4
         with:
