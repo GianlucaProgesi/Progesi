@@ -127,3 +127,5 @@ dotnet nuget remove source github >/dev/null 2>&1; dotnet nuget add source "http
 <!-- PROGESI:RELMAINT:END -->
 
 (Labeler smoke test: 2025-09-15T18:31:20)
+
+(Labeler smoke v2: 2025-09-15T19:59:31)
