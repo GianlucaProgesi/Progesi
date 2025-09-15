@@ -1,74 +1,85 @@
-<#
-.SYNOPSIS
-Aggiunge "workflow_dispatch:" ai workflow in .github/workflows se manca.
-- Gestisce in automatico il caso con "on:" su riga propria (blocco multilinea).
-- Se il workflow usa forme inline (es. "on: [push, pull_request]" o "{...}"), stampa un WARNING e ti dice cosa fare a mano.
-#>
-[CmdletBinding()]
-param()
+﻿# tools/enable-workflow-dispatch.ps1
+[CmdletBinding(SupportsShouldProcess=$true)]
+param(
+  [string]$WorkflowsDir = ".github/workflows"
+)
+$ErrorActionPreference = 'Stop'
 
-$dir = Join-Path (Get-Location) ".github\workflows"
-if (-not (Test-Path $dir)) {
-  Write-Warning "Cartella $dir non trovata."
+function Add-Dispatch($text) {
+  if ($text -match '(?im)^\s*workflow_dispatch\s*:') { return $text }
+
+  # on: [ ... ]
+  if ($text -match '(?im)^\s*on\s*:\s*\[(.*?)\]') {
+    $inside = $Matches[1]
+    if ($inside -notmatch '(?i)workflow_dispatch') {
+      $inside2 = ($inside -replace '\s+', ' ').Trim()
+      if ($inside2.Length -eq 0) { $inside2 = 'workflow_dispatch' }
+      else { $inside2 = "$inside2, workflow_dispatch" }
+      return ($text -replace '(?im)^\s*on\s*:\s*\[.*?\]', "on: [$inside2]")
+    }
+    return $text
+  }
+
+  # on: { ... }
+  if ($text -match '(?im)^\s*on\s*:\s*\{(.*?)\}') {
+    $inside = $Matches[1]
+    if ($inside -notmatch '(?i)workflow_dispatch') {
+      $inside2 = $inside.Trim()
+      if ($inside2.Length -eq 0) { $inside2 = 'workflow_dispatch: {}' }
+      else { $inside2 = "$inside2, workflow_dispatch: {}" }
+      return ($text -replace '(?im)^\s*on\s*:\s*\{.*?\}', "on: {$inside2}")
+    }
+    return $text
+  }
+
+  # on: push
+  if ($text -match '(?im)^\s*on\s*:\s*([A-Za-z_]+)\s*$') {
+    $ev = $Matches[1]
+    if ($ev -notmatch '(?i)workflow_dispatch') {
+      return ($text -replace '(?im)^\s*on\s*:\s*[A-Za-z_]+\s*$', "on: [$ev, workflow_dispatch]")
+    }
+    return $text
+  }
+
+  # on:\n  push:\n...
+  if ($text -match '(?im)^\s*on\s*:\s*(\r?\n)+') {
+    return ($text -replace '(?im)^(on\s*:\s*(\r?\n)+)', "`$1  workflow_dispatch:`r`n")
+  }
+
+  # Nessun on: → prepend
+  return "on:`r`n  workflow_dispatch:`r`n$text"
+}
+
+$dir = Join-Path (Get-Location) $WorkflowsDir
+if (-not (Test-Path -LiteralPath $dir)) {
+  Write-Warning "Cartella non trovata: $dir"
   exit 0
 }
 
-# TROVA i file correttamente (niente -Include senza wildcard)
-$files = Get-ChildItem -Path "$dir\*.yml","$dir\*.yaml" -File -ErrorAction SilentlyContinue
-if (-not $files) {
-  Write-Warning "Nessun file workflow trovato in $dir."
-  exit 0
-}
+# ⚠️ FIX: usa wildcard nel Path (oppure fai due passaggi separati)
+$files = Get-ChildItem -Path "$dir\*.yml","$dir\*.yaml" -File | Sort-Object Name
 
 foreach ($f in $files) {
   $p = $f.FullName
   $txt = Get-Content -LiteralPath $p -Raw
+  $new = Add-Dispatch $txt
 
-  if ($txt -match '(?im)^\s*workflow_dispatch\s*:') {
-    Write-Host "OK     $($f.Name)"
-    continue
+  if ($new -ne $txt) {
+    if ($PSCmdlet.ShouldProcess($p,'Add workflow_dispatch')) {
+      Copy-Item -LiteralPath $p -Destination ($p + '.bak') -Force
+      Set-Content -LiteralPath $p -Value $new -Encoding UTF8
+      Write-Host ("{0,-35}  {1}" -f $f.Name,'AGGIUNTO')
+    } else {
+      Write-Host ("{0,-35}  {1}" -f $f.Name,'AGGIUNTO (WhatIf)')
+    }
+  } else {
+    Write-Host ("{0,-35}  {1}" -f $f.Name,'OK (nessuna modifica)')
   }
+}
 
-  # Caso semplice: "on:" su riga propria -> inserisco subito sotto
-  if ($txt -match '(?im)^\s*on\s*:\s*$') {
-    $txt = [regex]::Replace($txt,'(?im)^(\s*on\s*:\s*)$',"`$1`r`n  workflow_dispatch:")
-    Set-Content -LiteralPath $p -Value $txt -Encoding UTF8
-    Write-Host "ADDED  workflow_dispatch -> $($f.Name)  (inserito dopo 'on:')"
-    continue
-  }
-
-  # Forme inline: avviso e istruzioni manuali (più sicuro)
-  if ($txt -match '(?im)^\s*on\s*:\s*\[') {
-    Write-Warning "Formato inline array in $($f.Name): cambia
-on: [push, pull_request]
-in:
-on:
-  push:
-  pull_request:
-  workflow_dispatch:
-"
-    continue
-  }
-  if ($txt -match '(?im)^\s*on\s*:\s*\w+') {
-    Write-Warning "Formato inline scalare in $($f.Name): cambia
-on: push
-in:
-on:
-  push:
-  workflow_dispatch:
-"
-    continue
-  }
-  if ($txt -match '(?im)^\s*on\s*:\s*\{') {
-    Write-Warning "Formato inline mappa in $($f.Name): espandi a blocco e aggiungi:
-on:
-  push: {}
-  pull_request: {}
-  workflow_dispatch:
-"
-    continue
-  }
-
-  # Fallback prudente
-  Write-Warning "Schema 'on:' non riconosciuto in $($f.Name). Apri il file e aggiungi 'workflow_dispatch:' sotto il blocco 'on:'."
+Write-Host "`nVerifica:"
+Get-ChildItem -Path "$dir\*.yml","$dir\*.yaml" -File | ForEach-Object {
+  $c = Get-Content -LiteralPath $_.FullName -Raw
+  $status = if ($c -match '(?im)^\s*workflow_dispatch\s*:') {'OK'} else {'MANCANTE'}
+  '{0,-35}  {1}' -f $_.Name, $status
 }

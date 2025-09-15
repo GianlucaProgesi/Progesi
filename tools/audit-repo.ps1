@@ -138,3 +138,45 @@ Write-Host "`nNOTE:"
 Write-Host " Per archiviare un workflow sposta il file fuori da '.github/workflows' (es: '.github/workflows-archive/')"
 Write-Host " Per cancellare i branch candidati:"
 Write-Host "   Get-Content `"$brTxt`" | ForEach-Object { git push origin --delete $_ }"
+# Carica lista workflow (già hai $wfJson con id,name,path,state)
+$rows = foreach ($w in $wfJson) {
+  $last = gh run list --workflow $w.path -L 1 --json status,conclusion,createdAt,url `
+          --jq '[.[0].createdAt, .[0].status, (.#? | .[0].conclusion // "n/a"), .[0].url] | @tsv' 2>$null
+  if ($last) {
+    $parts = $last -split "`t"
+    [pscustomobject]@{
+      Name=$w.name; Path=$w.path; State=$w.state
+      Last=$parts[0]; Result="$($parts[1]) / $($parts[2])"; Url=$parts[3]
+    }
+  } else {
+    [pscustomobject]@{
+      Name=$w.name; Path=$w.path; State=$w.state
+      Last='—'; Result='—'; Url='—'
+    }
+  }
+}
+
+# SUGGESTION (bozza): archivia i duplicati/legacy
+$rows | Add-Member -MemberType NoteProperty -Name Suggestion -Value '' -PassThru |
+  ForEach-Object {
+    if ($_.Path -match 'ci_patched\.yml$' -or $_.Path -match '\\labeler\.yml$') {
+      $_.Suggestion = 'Archive'
+    } else {
+      $_.Suggestion = 'Keep'
+    }
+    $_
+  } | Sort-Object Name |
+  ForEach-Object {
+    $line = "| $($_.Name) | $($_.Path) | $($_.State) | $($_.Last) | $($_.Result) | $($_.Suggestion) |"
+    $line
+  } | Set-Content (Join-Path $OutDir 'workflows.md') -Encoding UTF8 -Force
+
+# Prepend header alla tabella
+$header = @(
+  '# Workflows'
+  ''
+  '| Name | Path | State | Last | Result | Suggestion |'
+  '|---|---|---|---|---|---|'
+)
+$body = Get-Content (Join-Path $OutDir 'workflows.md')
+$header + $body | Set-Content (Join-Path $OutDir 'workflows.md') -Encoding UTF8
