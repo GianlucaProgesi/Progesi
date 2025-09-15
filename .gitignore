@@ -62,3 +62,7 @@ diagnostics-*/
 # workflow backups
 .github/workflows/*.bak
 
+
+# audit outputs
+/out/
+
