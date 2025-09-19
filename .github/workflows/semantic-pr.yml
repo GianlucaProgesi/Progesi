@@ -1,11 +1,17 @@
 ﻿name: Semantic PR
+
 on:
-  workflow_dispatch:
   pull_request:
     types: [opened, edited, synchronize, reopened, ready_for_review]
+
 permissions:
   pull-requests: read
   statuses: write
+
+concurrency:
+  group: semantic-pr-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   check:
     runs-on: ubuntu-latest

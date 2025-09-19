@@ -1,11 +1,17 @@
 ﻿name: PR Labeler
+
 on:
-  workflow_dispatch:
   pull_request:
     types: [opened, synchronize, reopened, edited]
+
 permissions:
   contents: read
   pull-requests: write
+
+concurrency:
+  group: pr-labeler-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   label:
     runs-on: ubuntu-latest
