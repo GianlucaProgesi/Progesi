@@ -1,14 +1,10 @@
 ﻿ci:
   - .github/workflows/**
-
 core:
   - src/ProgesiCore/**
-
 sqlite:
   - src/ProgesiRepositories.Sqlite/**
-
 grasshopper:
   - src/ProgesiGrasshopperAssembly/**
-
 docs:
   - "**/*.md"
