@@ -1,39 +1,19 @@
-﻿- label: "CI/CD"
+﻿ci:
   changed-files:
-    - any-glob-to-any-file:
-        - ".github/workflows/**"
+    - any-glob-to-any-file: .github/workflows/**
 
-- label: "core"
+core:
   changed-files:
-    - any-glob-to-any-file:
-        - "ProgesiCore/**"
+    - any-glob-to-any-file: src/ProgesiCore/**
 
-- label: "sqlite-repos"
+sqlite:
   changed-files:
-    - any-glob-to-any-file:
-        - "ProgesiRepositories.Sqlite/**"
+    - any-glob-to-any-file: src/ProgesiRepositories.Sqlite/**
 
-- label: "tests"
+grasshopper:
   changed-files:
-    - any-glob-to-any-file:
-        - "tests/**"
+    - any-glob-to-any-file: src/ProgesiGrasshopperAssembly/**
 
-- label: "docs"
+docs:
   changed-files:
-    - any-glob-to-any-file:
-        - "README.md"
-        - "docs/**"
-
-- label: "build"
-  changed-files:
-    - any-glob-to-any-file:
-        - "*.sln"
-        - "**/*.csproj"
-        - "Directory.Build.*"
-
-- label: "housekeeping"
-  changed-files:
-    - any-glob-to-any-file:
-        - "tools/**"
-        - ".gitignore"
-        - ".editorconfig"
+    - any-glob-to-any-file: "**/*.md"
