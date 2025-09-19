@@ -1,4 +1,4 @@
-[CmdletBinding()]
+﻿[CmdletBinding()]
 param(
   [ValidateSet("Debug","Release")][string]$Configuration = "Release"
 )
@@ -6,23 +6,28 @@ param(
 $ErrorActionPreference = "Stop"
 Write-Host "== Progesi :: Run tests + coverage ($Configuration)" -ForegroundColor Cyan
 
-# Build soluzione
 dotnet --info | Out-Null
 dotnet restore
 dotnet build -c $Configuration --no-restore
 
-# Trova i progetti di test (prima sotto ./tests, poi fallback ovunque con *.Tests.csproj)
-$testProjects = @()
-if (Test-Path ".\tests") {
-  $testProjects = Get-ChildItem .\tests -Recurse -Filter *.csproj
-}
-if (-not $testProjects -or $testProjects.Count -eq 0) {
-  $testProjects = Get-ChildItem . -Recurse -Filter *.Tests.csproj
-}
-if (-not $testProjects -or $testProjects.Count -eq 0) {
-  throw "Nessun progetto di test trovato."
-}
+# Risultati in una cartella unica (come in CI)
+$outDir = Join-Path (Get-Location) "out\test-results"
+New-Item -ItemType Directory -Force -Path $outDir | Out-Null
 
-# Esegui test per progetto e scrivi la coverage SOTTO ciascun progetto (./TestResults/coverage.cobertura.xml)
-foreach ($proj in $testProjects) {
-  Push-Location $proj.D
+# Usa il collector XPlat (richiede 'coverlet.collector' nei progetti di test)
+dotnet test Progesi.sln -c $Configuration --no-build --logger "trx;LogFileName=test-results.trx" --results-directory "$outDir" --collect "XPlat Code Coverage"
+
+# Verifica report Cobertura
+$reports = Get-ChildItem -Recurse -Path $outDir -Filter coverage.cobertura.xml
+if (-not $reports) { throw "Nessun file coverage.cobertura.xml trovato in $outDir. Verifica che i progetti di test referenzino 'coverlet.collector'." }
+
+# Report HTML
+dotnet tool update --global dotnet-reportgenerator-globaltool | Out-Null
+$toolBin = Join-Path $env:USERPROFILE ".dotnet\tools"
+$env:PATH = "$toolBin;$env:PATH"
+
+$target = "coverage-html"
+New-Item -ItemType Directory -Force -Path $target | Out-Null
+reportgenerator -reports:"$outDir/**/coverage.cobertura.xml" -targetdir:"$target" -reporttypes:"HtmlInline_AzurePipelines;Cobertura"
+
+Write-Host "HTML coverage: $target/index.html" -ForegroundColor Green
