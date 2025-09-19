@@ -1,14 +1,19 @@
 ﻿ci:
-  - .github/workflows/**
+  changed-files:
+    - any-glob-to-any-file: .github/workflows/**
 
 core:
-  - src/ProgesiCore/**
+  changed-files:
+    - any-glob-to-any-file: src/ProgesiCore/**
 
 sqlite:
-  - src/ProgesiRepositories.Sqlite/**
+  changed-files:
+    - any-glob-to-any-file: src/ProgesiRepositories.Sqlite/**
 
 grasshopper:
-  - src/ProgesiGrasshopperAssembly/**
+  changed-files:
+    - any-glob-to-any-file: src/ProgesiGrasshopperAssembly/**
 
 docs:
-  - "**/*.md"
+  changed-files:
+    - any-glob-to-any-file: "**/*.md"
