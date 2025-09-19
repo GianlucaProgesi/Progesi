@@ -1,84 +1,70 @@
-﻿name: CI
+﻿name: build-test-coverage
 
 on:
-  push:
-    branches:
-      - main
-      - develop
-      - "release/**"
-    paths-ignore:
-      - "**/*.md"
-      - "docs/**"
-  pull_request:
-    branches:
-      - main
-      - develop
-      - "release/**"
-    paths-ignore:
-      - "**/*.md"
-      - "docs/**"
   workflow_dispatch:
-
-concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
 
 permissions:
   contents: read
 
+concurrency:
+  group: coverage-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-  build-test:
-    name: Build & Test
+  test:
     runs-on: windows-latest
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: 1
+      DOTNET_NOLOGO: 1
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: "8.0.x"
+          dotnet-version: |
+            8.0.x
 
       - name: Restore
-        run: dotnet restore Progesi.sln
+        run: dotnet restore
 
       - name: Build (Release)
-        run: dotnet build Progesi.sln -c Release --no-restore
+        run: dotnet build -c Release --no-restore /m
 
-      - name: Test with coverage
+      - name: Test + collect coverage (Cobertura)
         run: >
-          dotnet test Progesi.sln -c Release --no-build
-          --logger "trx;LogFileName=test-results.trx"
-          --results-directory "${{ runner.temp }}/test-results"
-          --collect "XPlat Code Coverage"
+          dotnet test -c Release --no-build
+          /p:CollectCoverage=true
+          /p:CoverletOutputFormat=cobertura
+          /p:CoverletOutput=./TestResults/coverage.cobertura.xml
 
-      - name: Collect artifacts
+      - name: Install ReportGenerator
+        run: dotnet tool update --global dotnet-reportgenerator-globaltool
+
+      - name: Add dotnet tools to PATH
         shell: pwsh
         run: |
-          New-Item -Type Directory -Force CoverageReport | Out-Null
-          New-Item -Type Directory -Force TestResults    | Out-Null
-          Get-ChildItem "${{ runner.temp }}/test-results" -Recurse -Filter "coverage.cobertura.xml" |
-            ForEach-Object {
-              Copy-Item $_.FullName (Join-Path CoverageReport ("coverage-" + $_.Directory.Name + ".xml")) -Force
-            }
-          Get-ChildItem "${{ runner.temp }}/test-results" -Recurse -Filter "*.trx" |
-            Copy-Item -Destination TestResults -Force
+          $toolPath = "$env:USERPROFILE\.dotnet\tools"
+          echo "$toolPath" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
-      - name: Upload coverage
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: CoverageReport
-          path: CoverageReport
-          if-no-files-found: warn
+      - name: Generate HTML report
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path coverage-html | Out-Null
+          reportgenerator -reports:"**/coverage.cobertura.xml" -targetdir:coverage-html -reporttypes:"HtmlInline_AzurePipelines;Cobertura"
+          Get-ChildItem -Path coverage-html | ForEach-Object { Write-Host $_.FullName }
 
-      - name: Upload test results
-        if: always()
+      - name: Upload coverage (HTML + Cobertura)
         uses: actions/upload-artifact@v4
+        if: always()
         with:
-          name: TestResults
-          path: TestResults
-          if-no-files-found: warn
+          name: coverage-html
+          path: |
+            **/coverage.cobertura.xml
+            coverage-html/**
