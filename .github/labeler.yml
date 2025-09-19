@@ -1,1 +1,19 @@
-﻿<incolla qui .github/labeler.yml di cui sopra>
+﻿ci:
+  changed-files:
+    - any-glob-to-any-file: .github/workflows/**
+
+core:
+  changed-files:
+    - any-glob-to-any-file: src/ProgesiCore/**
+
+sqlite:
+  changed-files:
+    - any-glob-to-any-file: src/ProgesiRepositories.Sqlite/**
+
+grasshopper:
+  changed-files:
+    - any-glob-to-any-file: src/ProgesiGrasshopperAssembly/**
+
+docs:
+  changed-files:
+    - any-glob-to-any-file: "**/*.md"

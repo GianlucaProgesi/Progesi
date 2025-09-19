@@ -21,7 +21,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -31,11 +31,8 @@ jobs:
       DOTNET_CLI_TELEMETRY_OPTOUT: 1
       DOTNET_NOLOGO: 1
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "8.0.x"
 
@@ -45,7 +42,7 @@ jobs:
       - name: Build (Release)
         run: dotnet build -c Release --no-restore /m
 
-      - name: Test + collect coverage (XPlat collector)
+      - name: Test + Coverage (XPlat collector)
         run: >
           dotnet test Progesi.sln
           -c Release
@@ -53,10 +50,6 @@ jobs:
           --logger "trx;LogFileName=test-results.trx"
           --results-directory "out\test-results"
           --collect "XPlat Code Coverage"
-
-      - name: List coverage files
-        shell: pwsh
-        run: Get-ChildItem -Recurse -Path "out\test-results" -Filter coverage.cobertura.xml | % { Write-Host "FOUND: $($_.FullName)" }
 
       - name: Install ReportGenerator
         run: dotnet tool update --global dotnet-reportgenerator-globaltool
@@ -70,7 +63,6 @@ jobs:
         run: |
           New-Item -ItemType Directory -Force -Path coverage-html | Out-Null
           reportgenerator -reports:"out/test-results/**/coverage.cobertura.xml" -targetdir:"coverage-html" -reporttypes:"HtmlInline_AzurePipelines;Cobertura"
-          Get-ChildItem coverage-html | % { Write-Host $_.FullName }
 
       - name: Upload coverage (HTML + Cobertura)
         uses: actions/upload-artifact@v4
