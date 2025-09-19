@@ -1,5 +1,4 @@
 ﻿name: CI
-
 on:
   workflow_dispatch:
   push:
@@ -16,14 +15,10 @@ on:
       - "tests/**"
       - "Progesi.sln"
       - ".github/workflows/ci.yml"
-
-permissions:
-  contents: read
-
+permissions: { contents: read }
 concurrency:
   group: ci-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
-
 jobs:
   test:
     runs-on: windows-latest
@@ -33,15 +28,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: "8.0.x"
-
+        with: { dotnet-version: "8.0.x" }
       - name: Restore
         run: dotnet restore
-
       - name: Build (Release)
         run: dotnet build -c Release --no-restore /m
-
       - name: Test + Coverage (XPlat collector)
         run: >
           dotnet test Progesi.sln
@@ -50,21 +41,17 @@ jobs:
           --logger "trx;LogFileName=test-results.trx"
           --results-directory "out\test-results"
           --collect "XPlat Code Coverage"
-
       - name: Install ReportGenerator
         run: dotnet tool update --global dotnet-reportgenerator-globaltool
-
       - name: Add dotnet tools to PATH
         shell: pwsh
         run: echo "$env:USERPROFILE\.dotnet\tools" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-
       - name: Generate HTML report
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path coverage-html | Out-Null
           reportgenerator -reports:"out/test-results/**/coverage.cobertura.xml" -targetdir:"coverage-html" -reporttypes:"HtmlInline_AzurePipelines;Cobertura"
-
-      - name: Upload coverage (HTML + Cobertura)
+      - name: Upload coverage
         uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -73,8 +60,7 @@ jobs:
           path: |
             out/test-results/**/coverage.cobertura.xml
             coverage-html/**
-
-      - name: Upload TRX test logs
+      - name: Upload TRX
         uses: actions/upload-artifact@v4
         if: always()
         with:

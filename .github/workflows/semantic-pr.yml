@@ -1,24 +1,19 @@
 ﻿name: Semantic PR
-
 on:
   pull_request:
     types: [opened, edited, synchronize, reopened, ready_for_review]
-
 permissions:
   pull-requests: read
   statuses: write
-
 concurrency:
   group: semantic-pr-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
-
 jobs:
   check:
     runs-on: ubuntu-latest
     steps:
       - uses: amannn/action-semantic-pull-request@v5
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        env: { GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }} }
         with:
           types: |
             build
