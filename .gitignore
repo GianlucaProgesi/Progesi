@@ -28,3 +28,7 @@ Thumbs.db
 *.suo
 .vscode/
 .idea/
+
+.vs/
+out/
+

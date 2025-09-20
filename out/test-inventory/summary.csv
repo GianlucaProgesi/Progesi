@@ -1,4 +1,0 @@
-"Project","Count","ListFile","TrxFile","Config"
-"ProgesiCore.Tests","21","out\test-inventory\ProgesiCore.Tests.list.txt","out\test-inventory\ProgesiCore.Tests.trx","Debug"
-"ProgesiDomainServices.Tests","5","out\test-inventory\ProgesiDomainServices.Tests.list.txt","out\test-inventory\ProgesiDomainServices.Tests.trx","Debug"
-"ProgesiRepositories.Sqlite.Tests","20","out\test-inventory\ProgesiRepositories.Sqlite.Tests.list.txt","out\test-inventory\ProgesiRepositories.Sqlite.Tests.trx","Debug"
