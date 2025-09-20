@@ -1,14 +1,59 @@
 ﻿name: CodeQL
+
 on:
-  push: { branches: [ main ] }
-  pull_request: { branches: [ main ] }
-permissions: { contents: read }
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "Progesi.sln"
+      - ".github/workflows/codeql.yml"
+  pull_request:
+    branches: [ main ]
+    paths:
+      - "src/**"
+      - "tests/**"
+      - "Progesi.sln"
+      - ".github/workflows/codeql.yml"
+
+permissions:
+  contents: read
+  security-events: write
+
+concurrency:
+  group: codeql-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   analyze:
-    name: Analyze
+    name: Analyze (C#)
     runs-on: windows-latest
+
     steps:
-      - uses: actions/checkout@v4
-      - uses: github/codeql-action/init@v3
-        with: { languages: csharp }
-      - uses: github/codeql-action/analyze@v3
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "8.0.x"
+
+      # Inizializza CodeQL in modalità "manual build"
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: csharp
+          build-mode: manual
+
+      # Build manuale (dopo l'init, così CodeQL “traccia” la compilazione)
+      - name: Restore
+        run: dotnet restore
+
+      - name: Build (Release)
+        run: dotnet build -c Release --no-restore /m
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:csharp"
