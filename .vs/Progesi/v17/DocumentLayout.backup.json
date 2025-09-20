@@ -1,0 +1,302 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "C:\\Users\\gianl\\source\\repos\\Progesi\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{E5122608-FC51-4AB5-8415-0C550C23A70B}|tests\\ProgesiDomainServices.Tests\\ProgesiDomainServices.Tests\\ProgesiDomainServices.Tests.csproj|c:\\users\\gianl\\source\\repos\\progesi\\tests\\progesidomainservices.tests\\progesidomainservices.tests\\variableservicenamerequiredtests.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{E5122608-FC51-4AB5-8415-0C550C23A70B}|tests\\ProgesiDomainServices.Tests\\ProgesiDomainServices.Tests\\ProgesiDomainServices.Tests.csproj|solutionrelative:tests\\progesidomainservices.tests\\progesidomainservices.tests\\variableservicenamerequiredtests.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{E5122608-FC51-4AB5-8415-0C550C23A70B}|tests\\ProgesiDomainServices.Tests\\ProgesiDomainServices.Tests\\ProgesiDomainServices.Tests.csproj|c:\\users\\gianl\\source\\repos\\progesi\\tests\\progesidomainservices.tests\\progesidomainservices.tests\\progesidomainservices.tests.csproj||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|",
+      "RelativeMoniker": "D:0:0:{E5122608-FC51-4AB5-8415-0C550C23A70B}|tests\\ProgesiDomainServices.Tests\\ProgesiDomainServices.Tests\\ProgesiDomainServices.Tests.csproj|solutionrelative:tests\\progesidomainservices.tests\\progesidomainservices.tests\\progesidomainservices.tests.csproj||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{554C2D2E-0573-4748-8946-E2305ADB51C3}|src\\ProgesiGrasshopperAssembly\\ProgesiGrasshopperAssembly.csproj|c:\\users\\gianl\\source\\repos\\progesi\\src\\progesigrasshopperassembly\\components\\progesivariableincomponent.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{554C2D2E-0573-4748-8946-E2305ADB51C3}|src\\ProgesiGrasshopperAssembly\\ProgesiGrasshopperAssembly.csproj|solutionrelative:src\\progesigrasshopperassembly\\components\\progesivariableincomponent.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{554C2D2E-0573-4748-8946-E2305ADB51C3}|src\\ProgesiGrasshopperAssembly\\ProgesiGrasshopperAssembly.csproj|c:\\users\\gianl\\source\\repos\\progesi\\src\\progesigrasshopperassembly\\components\\progesivariableoutcomponent.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{554C2D2E-0573-4748-8946-E2305ADB51C3}|src\\ProgesiGrasshopperAssembly\\ProgesiGrasshopperAssembly.csproj|solutionrelative:src\\progesigrasshopperassembly\\components\\progesivariableoutcomponent.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{4644DDD0-1C4B-42AA-9DF6-AFC072D82D78}|src\\ProgesiDomainServices\\ProgesiDomainServices.csproj|c:\\users\\gianl\\source\\repos\\progesi\\src\\progesidomainservices\\models\\progesivariable.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{4644DDD0-1C4B-42AA-9DF6-AFC072D82D78}|src\\ProgesiDomainServices\\ProgesiDomainServices.csproj|solutionrelative:src\\progesidomainservices\\models\\progesivariable.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{4644DDD0-1C4B-42AA-9DF6-AFC072D82D78}|src\\ProgesiDomainServices\\ProgesiDomainServices.csproj|c:\\users\\gianl\\source\\repos\\progesi\\src\\progesidomainservices\\services\\inmemoryvariableservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{4644DDD0-1C4B-42AA-9DF6-AFC072D82D78}|src\\ProgesiDomainServices\\ProgesiDomainServices.csproj|solutionrelative:src\\progesidomainservices\\services\\inmemoryvariableservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{7CE28F9D-D3FC-4F25-A868-16D4EE0DD7DC}|src\\ProgesiCore\\ProgesiCore.csproj|c:\\users\\gianl\\source\\repos\\progesi\\src\\progesicore\\progesivariable.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{7CE28F9D-D3FC-4F25-A868-16D4EE0DD7DC}|src\\ProgesiCore\\ProgesiCore.csproj|solutionrelative:src\\progesicore\\progesivariable.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{7CE28F9D-D3FC-4F25-A868-16D4EE0DD7DC}|src\\ProgesiCore\\ProgesiCore.csproj|c:\\users\\gianl\\source\\repos\\progesi\\src\\progesicore\\progesimetadata.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{7CE28F9D-D3FC-4F25-A868-16D4EE0DD7DC}|src\\ProgesiCore\\ProgesiCore.csproj|solutionrelative:src\\progesicore\\progesimetadata.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{E5122608-FC51-4AB5-8415-0C550C23A70B}|tests\\ProgesiDomainServices.Tests\\ProgesiDomainServices.Tests\\ProgesiDomainServices.Tests.csproj|c:\\users\\gianl\\source\\repos\\progesi\\tests\\progesidomainservices.tests\\progesidomainservices.tests\\variableservicetests.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{E5122608-FC51-4AB5-8415-0C550C23A70B}|tests\\ProgesiDomainServices.Tests\\ProgesiDomainServices.Tests\\ProgesiDomainServices.Tests.csproj|solutionrelative:tests\\progesidomainservices.tests\\progesidomainservices.tests\\variableservicetests.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{554C2D2E-0573-4748-8946-E2305ADB51C3}|src\\ProgesiGrasshopperAssembly\\ProgesiGrasshopperAssembly.csproj|c:\\users\\gianl\\source\\repos\\progesi\\src\\progesigrasshopperassembly\\progesigrasshopperassembly.csproj||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|",
+      "RelativeMoniker": "D:0:0:{554C2D2E-0573-4748-8946-E2305ADB51C3}|src\\ProgesiGrasshopperAssembly\\ProgesiGrasshopperAssembly.csproj|solutionrelative:src\\progesigrasshopperassembly\\progesigrasshopperassembly.csproj||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{4644DDD0-1C4B-42AA-9DF6-AFC072D82D78}|src\\ProgesiDomainServices\\ProgesiDomainServices.csproj|c:\\users\\gianl\\source\\repos\\progesi\\src\\progesidomainservices\\progesidomainservices.csproj||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|",
+      "RelativeMoniker": "D:0:0:{4644DDD0-1C4B-42AA-9DF6-AFC072D82D78}|src\\ProgesiDomainServices\\ProgesiDomainServices.csproj|solutionrelative:src\\progesidomainservices\\progesidomainservices.csproj||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{554C2D2E-0573-4748-8946-E2305ADB51C3}|src\\ProgesiGrasshopperAssembly\\ProgesiGrasshopperAssembly.csproj|c:\\users\\gianl\\source\\repos\\progesi\\src\\progesigrasshopperassembly\\infrastructure\\servicehub.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{554C2D2E-0573-4748-8946-E2305ADB51C3}|src\\ProgesiGrasshopperAssembly\\ProgesiGrasshopperAssembly.csproj|solutionrelative:src\\progesigrasshopperassembly\\infrastructure\\servicehub.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{4644DDD0-1C4B-42AA-9DF6-AFC072D82D78}|src\\ProgesiDomainServices\\ProgesiDomainServices.csproj|c:\\users\\gianl\\source\\repos\\progesi\\src\\progesidomainservices\\services\\variableservicecompatextensions.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{4644DDD0-1C4B-42AA-9DF6-AFC072D82D78}|src\\ProgesiDomainServices\\ProgesiDomainServices.csproj|solutionrelative:src\\progesidomainservices\\services\\variableservicecompatextensions.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{4644DDD0-1C4B-42AA-9DF6-AFC072D82D78}|src\\ProgesiDomainServices\\ProgesiDomainServices.csproj|c:\\users\\gianl\\source\\repos\\progesi\\src\\progesidomainservices\\interfaces\\iprogesivariableservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{4644DDD0-1C4B-42AA-9DF6-AFC072D82D78}|src\\ProgesiDomainServices\\ProgesiDomainServices.csproj|solutionrelative:src\\progesidomainservices\\interfaces\\iprogesivariableservice.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{554C2D2E-0573-4748-8946-E2305ADB51C3}|src\\ProgesiGrasshopperAssembly\\ProgesiGrasshopperAssembly.csproj|c:\\users\\gianl\\source\\repos\\progesi\\src\\progesigrasshopperassembly\\progesigrasshopperassemblycomponent.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{554C2D2E-0573-4748-8946-E2305ADB51C3}|src\\ProgesiGrasshopperAssembly\\ProgesiGrasshopperAssembly.csproj|solutionrelative:src\\progesigrasshopperassembly\\progesigrasshopperassemblycomponent.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{4644DDD0-1C4B-42AA-9DF6-AFC072D82D78}|src\\ProgesiDomainServices\\ProgesiDomainServices.csproj|c:\\users\\gianl\\source\\repos\\progesi\\src\\progesidomainservices\\database\\progesidatabasebridge.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{4644DDD0-1C4B-42AA-9DF6-AFC072D82D78}|src\\ProgesiDomainServices\\ProgesiDomainServices.csproj|solutionrelative:src\\progesidomainservices\\database\\progesidatabasebridge.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{4644DDD0-1C4B-42AA-9DF6-AFC072D82D78}|src\\ProgesiDomainServices\\ProgesiDomainServices.csproj|c:\\users\\gianl\\source\\repos\\progesi\\src\\progesidomainservices\\database\\iprogesidatabasebridge.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{4644DDD0-1C4B-42AA-9DF6-AFC072D82D78}|src\\ProgesiDomainServices\\ProgesiDomainServices.csproj|solutionrelative:src\\progesidomainservices\\database\\iprogesidatabasebridge.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 0,
+          "Children": [
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "VariableServiceNameRequiredTests.cs",
+              "DocumentMoniker": "C:\\Users\\gianl\\source\\repos\\Progesi\\tests\\ProgesiDomainServices.Tests\\ProgesiDomainServices.Tests\\VariableServiceNameRequiredTests.cs",
+              "RelativeDocumentMoniker": "tests\\ProgesiDomainServices.Tests\\ProgesiDomainServices.Tests\\VariableServiceNameRequiredTests.cs",
+              "ToolTip": "C:\\Users\\gianl\\source\\repos\\Progesi\\tests\\ProgesiDomainServices.Tests\\ProgesiDomainServices.Tests\\VariableServiceNameRequiredTests.cs",
+              "RelativeToolTip": "tests\\ProgesiDomainServices.Tests\\ProgesiDomainServices.Tests\\VariableServiceNameRequiredTests.cs",
+              "ViewState": "AgIAAAEAAAAAAAAAAAAowBYAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-09-20T18:24:03.979Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 5,
+              "Title": "InMemoryVariableService.cs",
+              "DocumentMoniker": "C:\\Users\\gianl\\source\\repos\\Progesi\\src\\ProgesiDomainServices\\Services\\InMemoryVariableService.cs",
+              "RelativeDocumentMoniker": "src\\ProgesiDomainServices\\Services\\InMemoryVariableService.cs",
+              "ToolTip": "C:\\Users\\gianl\\source\\repos\\Progesi\\src\\ProgesiDomainServices\\Services\\InMemoryVariableService.cs",
+              "RelativeToolTip": "src\\ProgesiDomainServices\\Services\\InMemoryVariableService.cs",
+              "ViewState": "AgIAACQAAAAAAAAAAAAowDkAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-09-20T07:07:58.495Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 4,
+              "Title": "ProgesiVariable.cs",
+              "DocumentMoniker": "C:\\Users\\gianl\\source\\repos\\Progesi\\src\\ProgesiDomainServices\\Models\\ProgesiVariable.cs",
+              "RelativeDocumentMoniker": "src\\ProgesiDomainServices\\Models\\ProgesiVariable.cs",
+              "ToolTip": "C:\\Users\\gianl\\source\\repos\\Progesi\\src\\ProgesiDomainServices\\Models\\ProgesiVariable.cs",
+              "RelativeToolTip": "src\\ProgesiDomainServices\\Models\\ProgesiVariable.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAA0AAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-09-20T07:03:29.403Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "ProgesiVariableInComponent.cs",
+              "DocumentMoniker": "C:\\Users\\gianl\\source\\repos\\Progesi\\src\\ProgesiGrasshopperAssembly\\Components\\ProgesiVariableInComponent.cs",
+              "RelativeDocumentMoniker": "src\\ProgesiGrasshopperAssembly\\Components\\ProgesiVariableInComponent.cs",
+              "ToolTip": "C:\\Users\\gianl\\source\\repos\\Progesi\\src\\ProgesiGrasshopperAssembly\\Components\\ProgesiVariableInComponent.cs",
+              "RelativeToolTip": "src\\ProgesiGrasshopperAssembly\\Components\\ProgesiVariableInComponent.cs",
+              "ViewState": "AgIAAFMAAAAAAAAAAAAowGgAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-09-20T12:17:44.009Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "ProgesiVariableOutComponent.cs",
+              "DocumentMoniker": "C:\\Users\\gianl\\source\\repos\\Progesi\\src\\ProgesiGrasshopperAssembly\\Components\\ProgesiVariableOutComponent.cs",
+              "RelativeDocumentMoniker": "src\\ProgesiGrasshopperAssembly\\Components\\ProgesiVariableOutComponent.cs",
+              "ToolTip": "C:\\Users\\gianl\\source\\repos\\Progesi\\src\\ProgesiGrasshopperAssembly\\Components\\ProgesiVariableOutComponent.cs",
+              "RelativeToolTip": "src\\ProgesiGrasshopperAssembly\\Components\\ProgesiVariableOutComponent.cs",
+              "ViewState": "AgIAAC0AAAAAAAAAAAAowEIAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-09-20T12:18:26.615Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "ProgesiDomainServices.Tests.csproj",
+              "DocumentMoniker": "C:\\Users\\gianl\\source\\repos\\Progesi\\tests\\ProgesiDomainServices.Tests\\ProgesiDomainServices.Tests\\ProgesiDomainServices.Tests.csproj",
+              "RelativeDocumentMoniker": "tests\\ProgesiDomainServices.Tests\\ProgesiDomainServices.Tests\\ProgesiDomainServices.Tests.csproj",
+              "ToolTip": "C:\\Users\\gianl\\source\\repos\\Progesi\\tests\\ProgesiDomainServices.Tests\\ProgesiDomainServices.Tests\\ProgesiDomainServices.Tests.csproj",
+              "RelativeToolTip": "tests\\ProgesiDomainServices.Tests\\ProgesiDomainServices.Tests\\ProgesiDomainServices.Tests.csproj",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABEAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000758|",
+              "WhenOpened": "2025-09-20T07:42:46.304Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 6,
+              "Title": "ProgesiVariable.cs",
+              "DocumentMoniker": "C:\\Users\\gianl\\source\\repos\\Progesi\\src\\ProgesiCore\\ProgesiVariable.cs",
+              "RelativeDocumentMoniker": "src\\ProgesiCore\\ProgesiVariable.cs",
+              "ToolTip": "C:\\Users\\gianl\\source\\repos\\Progesi\\src\\ProgesiCore\\ProgesiVariable.cs",
+              "RelativeToolTip": "src\\ProgesiCore\\ProgesiVariable.cs",
+              "ViewState": "AgIAAAMAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-09-20T17:59:18.059Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 7,
+              "Title": "ProgesiMetadata.cs",
+              "DocumentMoniker": "C:\\Users\\gianl\\source\\repos\\Progesi\\src\\ProgesiCore\\ProgesiMetadata.cs",
+              "RelativeDocumentMoniker": "src\\ProgesiCore\\ProgesiMetadata.cs",
+              "ToolTip": "C:\\Users\\gianl\\source\\repos\\Progesi\\src\\ProgesiCore\\ProgesiMetadata.cs",
+              "RelativeToolTip": "src\\ProgesiCore\\ProgesiMetadata.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-09-20T18:14:33.689Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 10,
+              "Title": "ProgesiDomainServices.csproj",
+              "DocumentMoniker": "C:\\Users\\gianl\\source\\repos\\Progesi\\src\\ProgesiDomainServices\\ProgesiDomainServices.csproj",
+              "RelativeDocumentMoniker": "src\\ProgesiDomainServices\\ProgesiDomainServices.csproj",
+              "ToolTip": "C:\\Users\\gianl\\source\\repos\\Progesi\\src\\ProgesiDomainServices\\ProgesiDomainServices.csproj",
+              "RelativeToolTip": "src\\ProgesiDomainServices\\ProgesiDomainServices.csproj",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAYAAAADAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000758|",
+              "WhenOpened": "2025-09-20T07:03:35.148Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 9,
+              "Title": "ProgesiGrasshopperAssembly.csproj",
+              "DocumentMoniker": "C:\\Users\\gianl\\source\\repos\\Progesi\\src\\ProgesiGrasshopperAssembly\\ProgesiGrasshopperAssembly.csproj",
+              "RelativeDocumentMoniker": "src\\ProgesiGrasshopperAssembly\\ProgesiGrasshopperAssembly.csproj",
+              "ToolTip": "C:\\Users\\gianl\\source\\repos\\Progesi\\src\\ProgesiGrasshopperAssembly\\ProgesiGrasshopperAssembly.csproj",
+              "RelativeToolTip": "src\\ProgesiGrasshopperAssembly\\ProgesiGrasshopperAssembly.csproj",
+              "ViewState": "AgIAAAwAAAAAAAAAAAAAABsAAAAEAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000758|",
+              "WhenOpened": "2025-09-20T12:12:31.056Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 8,
+              "Title": "VariableServiceTests.cs",
+              "DocumentMoniker": "C:\\Users\\gianl\\source\\repos\\Progesi\\tests\\ProgesiDomainServices.Tests\\ProgesiDomainServices.Tests\\VariableServiceTests.cs",
+              "RelativeDocumentMoniker": "tests\\ProgesiDomainServices.Tests\\ProgesiDomainServices.Tests\\VariableServiceTests.cs",
+              "ToolTip": "C:\\Users\\gianl\\source\\repos\\Progesi\\tests\\ProgesiDomainServices.Tests\\ProgesiDomainServices.Tests\\VariableServiceTests.cs",
+              "RelativeToolTip": "tests\\ProgesiDomainServices.Tests\\ProgesiDomainServices.Tests\\VariableServiceTests.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAACcAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-09-20T07:42:33.957Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 11,
+              "Title": "ServiceHub.cs",
+              "DocumentMoniker": "C:\\Users\\gianl\\source\\repos\\Progesi\\src\\ProgesiGrasshopperAssembly\\Infrastructure\\ServiceHub.cs",
+              "RelativeDocumentMoniker": "src\\ProgesiGrasshopperAssembly\\Infrastructure\\ServiceHub.cs",
+              "ToolTip": "C:\\Users\\gianl\\source\\repos\\Progesi\\src\\ProgesiGrasshopperAssembly\\Infrastructure\\ServiceHub.cs",
+              "RelativeToolTip": "src\\ProgesiGrasshopperAssembly\\Infrastructure\\ServiceHub.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAABEAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-09-20T12:16:25.096Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 12,
+              "Title": "VariableServiceCompatExtensions.cs",
+              "DocumentMoniker": "C:\\Users\\gianl\\source\\repos\\Progesi\\src\\ProgesiDomainServices\\Services\\VariableServiceCompatExtensions.cs",
+              "RelativeDocumentMoniker": "src\\ProgesiDomainServices\\Services\\VariableServiceCompatExtensions.cs",
+              "ToolTip": "C:\\Users\\gianl\\source\\repos\\Progesi\\src\\ProgesiDomainServices\\Services\\VariableServiceCompatExtensions.cs",
+              "RelativeToolTip": "src\\ProgesiDomainServices\\Services\\VariableServiceCompatExtensions.cs",
+              "ViewState": "AgIAAAEAAAAAAAAAAAAowBYAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-09-20T13:20:15.407Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 13,
+              "Title": "IProgesiVariableService.cs",
+              "DocumentMoniker": "C:\\Users\\gianl\\source\\repos\\Progesi\\src\\ProgesiDomainServices\\Interfaces\\IProgesiVariableService.cs",
+              "RelativeDocumentMoniker": "src\\ProgesiDomainServices\\Interfaces\\IProgesiVariableService.cs",
+              "ToolTip": "C:\\Users\\gianl\\source\\repos\\Progesi\\src\\ProgesiDomainServices\\Interfaces\\IProgesiVariableService.cs",
+              "RelativeToolTip": "src\\ProgesiDomainServices\\Interfaces\\IProgesiVariableService.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAA0AAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-09-20T07:06:54.06Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 14,
+              "Title": "ProgesiGrasshopperAssemblyComponent.cs",
+              "DocumentMoniker": "C:\\Users\\gianl\\source\\repos\\Progesi\\src\\ProgesiGrasshopperAssembly\\ProgesiGrasshopperAssemblyComponent.cs",
+              "RelativeDocumentMoniker": "src\\ProgesiGrasshopperAssembly\\ProgesiGrasshopperAssemblyComponent.cs",
+              "ToolTip": "C:\\Users\\gianl\\source\\repos\\Progesi\\src\\ProgesiGrasshopperAssembly\\ProgesiGrasshopperAssemblyComponent.cs",
+              "RelativeToolTip": "src\\ProgesiGrasshopperAssembly\\ProgesiGrasshopperAssemblyComponent.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-09-20T12:49:44.371Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 15,
+              "Title": "ProgesiDatabaseBridge.cs",
+              "DocumentMoniker": "C:\\Users\\gianl\\source\\repos\\Progesi\\src\\ProgesiDomainServices\\Database\\ProgesiDatabaseBridge.cs",
+              "RelativeDocumentMoniker": "src\\ProgesiDomainServices\\Database\\ProgesiDatabaseBridge.cs",
+              "ToolTip": "C:\\Users\\gianl\\source\\repos\\Progesi\\src\\ProgesiDomainServices\\Database\\ProgesiDatabaseBridge.cs",
+              "RelativeToolTip": "src\\ProgesiDomainServices\\Database\\ProgesiDatabaseBridge.cs",
+              "ViewState": "AgIAAAYAAAAAAAAAAAAkwBoAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-09-20T07:09:43.466Z"
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 16,
+              "Title": "IProgesiDatabaseBridge.cs",
+              "DocumentMoniker": "C:\\Users\\gianl\\source\\repos\\Progesi\\src\\ProgesiDomainServices\\Database\\IProgesiDatabaseBridge.cs",
+              "RelativeDocumentMoniker": "src\\ProgesiDomainServices\\Database\\IProgesiDatabaseBridge.cs",
+              "ToolTip": "C:\\Users\\gianl\\source\\repos\\Progesi\\src\\ProgesiDomainServices\\Database\\IProgesiDatabaseBridge.cs",
+              "RelativeToolTip": "src\\ProgesiDomainServices\\Database\\IProgesiDatabaseBridge.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAsAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2025-09-20T07:09:03.81Z"
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

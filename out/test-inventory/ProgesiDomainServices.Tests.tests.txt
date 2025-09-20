@@ -1,0 +1,7 @@
+Esecuzione dei test per C:\Users\gianl\source\repos\Progesi\tests\ProgesiDomainServices.Tests\ProgesiDomainServices.Tests\bin\Release\net48\ProgesiDomainServices.Tests.dll (.NETFramework,Version=v4.8)
+Versione di VSTest 17.14.1 (x64)
+
+Sono disponibili i test seguenti:
+    ProgesiDomainServices.Tests.VariableServiceTests.Create_Get_Update_Delete_Works
+
+Sono disponibili aggiornamenti del carico di lavoro. Per altre informazioni, eseguire `dotnet workload list`.

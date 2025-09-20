@@ -1,0 +1,33 @@
+<Project>
+  <PropertyGroup>
+    <!-- Versioning centralizzato -->
+    <Version>1.0.0</Version>
+    <PackageVersion>$(Version)</PackageVersion>
+
+    <!-- Qualità build -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <Nullable>enable</Nullable>
+    <Deterministic>true</Deterministic>
+    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+
+    <!-- SourceLink / simboli -->
+    <EmbedUntrackedSources>true</EmbedUntrackedSources>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <RepositoryUrl>https://github.com/GianlucaProgesi/Progesi</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <IncludeSymbols>true</IncludeSymbols>
+    <SymbolPackageFormat>snupkg</SymbolPackageFormat>
+
+    <!-- Package metadata (eredita nei progetti packabili) -->
+    <Authors>Progesi</Authors>
+    <Company>Progesi</Company>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
+  </PropertyGroup>
+
+  <!-- Escludi progetti non packabili se necessario -->
+  <ItemGroup Condition="'$(IsPackable)' == ''">
+    <IsPackable>false</IsPackable>
+  </ItemGroup>
+</Project>

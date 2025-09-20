@@ -1,0 +1,37 @@
+Summary
+  Generated on: 20/09/2025 - 05:48:16
+  Coverage date: 19/09/2025 - 06:53:48 - 19/09/2025 - 06:57:28
+  Parser: MultiReport (8x Cobertura)
+  Assemblies: 2
+  Classes: 13
+  Files: 12
+  Line coverage: 72.8%
+  Covered lines: 619
+  Uncovered lines: 231
+  Coverable lines: 850
+  Total lines: 1525
+  Branch coverage: 49.7% (170 of 342)
+  Covered branches: 170
+  Total branches: 342
+  Method coverage: 66.1% (94 of 142)
+  Full method coverage: 47.8% (68 of 142)
+  Covered methods: 94
+  Fully covered methods: 68
+  Total methods: 142
+
+ProgesiCore                                                             82.3%
+  ProgesiCore.ProgesiHash                                                 94%
+  ProgesiCore.ProgesiMetadata                                           70.2%
+  ProgesiCore.ProgesiSnip                                                 72%
+  ProgesiCore.ProgesiVariable                                            100%
+  ProgesiCore.ValueObject                                               84.4%
+
+ProgesiRepositories.Sqlite                                                69%
+  ProgesiRepositories.Sqlite.FileLogger                                    0%
+  ProgesiRepositories.Sqlite.NullLogger                                 57.1%
+  ProgesiRepositories.Sqlite.RollingFileLogger                             0%
+  ProgesiRepositories.Sqlite.SqliteMetadataRepository                   93.1%
+  ProgesiRepositories.Sqlite.SqliteRepositoryBase                       73.1%
+  ProgesiRepositories.Sqlite.SqliteVariableRepository                   71.7%
+  ProgesiRepositories.Sqlite.SqliteVariableRepositoryLegacyExtensions      0%
+  ProgesiRepositories.Sqlite.TraceLogger                                   0%

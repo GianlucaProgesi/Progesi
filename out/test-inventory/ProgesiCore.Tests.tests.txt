@@ -1,0 +1,23 @@
+Esecuzione dei test per C:\Users\gianl\source\repos\Progesi\tests\ProgesiCore.Tests\bin\Release\net48\ProgesiCore.Tests.dll (.NETFramework,Version=v4.8)
+Versione di VSTest 17.14.1 (x64)
+
+Sono disponibili i test seguenti:
+    ProgesiCore.Tests.ProgesiHashEdgeTests.CanonicalValue_Basic(input: null, expected: "<null>")
+    ProgesiCore.Tests.ProgesiHashEdgeTests.CanonicalValue_Basic(input: "", expected: "")
+    ProgesiCore.Tests.ProgesiHashEdgeTests.CanonicalValue_Basic(input: "ciao", expected: "ciao")
+    ProgesiCore.Tests.ProgesiHashEdgeTests.CanonicalValue_Primitives_Invariant
+    ProgesiCore.Tests.ProgesiHashEdgeTests.Compute_Variable_OrderIndependent_And_Sensitive_To_DependsOrName
+    ProgesiCore.Tests.ProgesiHashMoreTests.Metadata_References_OrderInsensitive_And_ContentSensitive
+    ProgesiCore.Tests.ProgesiHashMoreTests.Metadata_Snips_OrderInsensitive_And_ContentSensitive
+    ProgesiCore.Tests.ProgesiMetadataTests.Create_And_Touch
+    ProgesiCore.Tests.ProgesiMetadataTests.References_NoDuplicates_And_Remove
+    ProgesiCore.Tests.ProgesiMetadataTests.Snips_Add_Remove_And_Validate
+    ProgesiCore.Tests.ProgesiVariableEqualityTests.Equality_Ignores_DependsFrom_Order
+    ProgesiCore.Tests.ProgesiVariableEqualityTests.Inequality_When_Value_Differs
+    ProgesiCore.Tests.ValueObjectEqualityTests.Equals_And_Hash_Work
+    ProgesiCore.Tests.ValueObjectMoreTests.Operators_Handle_Null_Correctly
+    ProgesiCore.Tests.ValueObjectMoreTests.Equals_Object_With_DifferentType_IsFalse
+    ProgesiCore.Tests.ValueObjectMoreTests.CompareTo_SameComponents_IsZero
+    ProgesiCore.Tests.ValueObjectMoreTests.GetHashCode_Is_Stable
+
+Sono disponibili aggiornamenti del carico di lavoro. Per altre informazioni, eseguire `dotnet workload list`.
