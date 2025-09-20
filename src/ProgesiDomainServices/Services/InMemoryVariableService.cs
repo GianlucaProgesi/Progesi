@@ -8,47 +8,50 @@ namespace Progesi.DomainServices.Services
 {
   public class InMemoryVariableService : IProgesiVariableService
   {
-    private readonly ConcurrentDictionary<Guid, ProgesiVariable> _byId = new();
-    private readonly ConcurrentDictionary<string, Guid> _nameIndex =
-        new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<Guid, ProgesiVariable> _store =
+        new ConcurrentDictionary<Guid, ProgesiVariable>();
 
-    public ProgesiVariable CreateOrUpdate(ProgesiVariable input)
+    public ProgesiVariable CreateOrUpdate(ProgesiVariable v)
     {
-      if (string.IsNullOrWhiteSpace(input.Name))
-        throw new ArgumentException("Name is required", nameof(input));
+      if (v == null) throw new ArgumentNullException(nameof(v));
+      if (string.IsNullOrWhiteSpace(v.Name))
+        throw new ArgumentException("Name is required for ProgesiVariable.", nameof(v));
 
-      // enforce unique name
-      if (_nameIndex.TryGetValue(input.Name, out var existingId)
-          && existingId != input.Id)
+      // Se l'Id è vuoto, prova a risolvere per Name (Name come chiave logica univoca)
+      if (v.Id == Guid.Empty)
       {
-        // merge on existing ID
-        input.Id = existingId;
+        var byName = GetByName(v.Name);
+        v.Id = byName != null ? byName.Id : Guid.NewGuid();
       }
 
-      _byId.AddOrUpdate(input.Id, input, (_, __) => input);
-      _nameIndex.AddOrUpdate(input.Name, input.Id, (_, __) => input.Id);
-      return input;
-    }
-
-    public bool Delete(Guid id)
-    {
-      if (_byId.TryRemove(id, out var removed))
+      // Upsert (copio per evitare mutazioni esterne)
+      var copy = new ProgesiVariable
       {
-        if (!string.IsNullOrWhiteSpace(removed.Name))
-          _nameIndex.TryRemove(removed.Name, out _);
-        return true;
-      }
-      return false;
+        Id = v.Id,
+        Name = v.Name?.Trim(),
+        Value = v.Value,
+        Unit = v.Unit ?? "",
+        Type = v.Type ?? ""
+      };
+
+      _store[copy.Id] = copy;
+      return copy;
     }
 
-    public ProgesiVariable? GetById(Guid id) =>
-        _byId.TryGetValue(id, out var v) ? v : null;
-
-    public ProgesiVariable? GetByName(string name)
+    public ProgesiVariable GetById(Guid id)
     {
-      if (_nameIndex.TryGetValue(name, out var id))
-        return GetById(id);
-      return null;
+      if (id == Guid.Empty) return null;
+      _store.TryGetValue(id, out var v);
+      return v; // può essere null in net48
     }
+
+    public ProgesiVariable GetByName(string name)
+    {
+      if (string.IsNullOrWhiteSpace(name)) return null;
+      return _store.Values.FirstOrDefault(x =>
+          string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+    }
+
+    public bool Delete(Guid id) => _store.TryRemove(id, out _);
   }
 }

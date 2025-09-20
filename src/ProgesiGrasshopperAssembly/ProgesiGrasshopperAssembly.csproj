@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <!-- Select the framework(s) you wish to target.
         Rhino 6: net45
@@ -25,8 +25,7 @@
     <AutoGenerateBindingRedirects>True</AutoGenerateBindingRedirects>
   </PropertyGroup>
   <ItemGroup>
-  </ItemGroup>
-  <ItemGroup>
+    <ProjectReference Include="..\ProgesiDomainServices\ProgesiDomainServices.csproj" />
     <ProjectReference Include="..\ProgesiRepositories.InMemory\ProgesiRepositories.InMemory.csproj" />
     <ProjectReference Include="..\ProgesiRepositories.Rhino\ProgesiRepositories.Rhino.csproj" />
     <ProjectReference Include="..\ProgesiCore\ProgesiCore.csproj" />
