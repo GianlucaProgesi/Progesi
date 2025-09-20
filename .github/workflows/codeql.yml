@@ -1,48 +1,14 @@
 ﻿name: CodeQL
-
 on:
-  workflow_dispatch:
-  push:
-    branches: [ main ]
-  pull_request:
-    branches: [ main ]
-  schedule:
-    - cron: '0 6 * * 1'
+  push: { branches: [ main ] }
+  pull_request: { branches: [ main ] }
+permissions: { contents: read }
 jobs:
   analyze:
     name: Analyze
     runs-on: windows-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        language: [ 'csharp' ]
-
     steps:
       - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Initialize CodeQL
-        uses: github/codeql-action/init@v3
-        with:
-          languages: ${{ matrix.language }}
-
-      - name: Build solution
-        run: |
-          dotnet restore Progesi.sln
-          dotnet build Progesi.sln -c Release --no-restore
-
-      - name: Perform CodeQL Analysis (no upload)
-        uses: github/codeql-action/analyze@v3
-        with:
-          category: "/language:${{ matrix.language }}"
-          upload: false
-
-      - name: Upload SARIF as artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: codeql-sarif
-          path: results/*.sarif
-          if-no-files-found: warn
-          retention-days: 14
+      - uses: github/codeql-action/init@v3
+        with: { languages: csharp }
+      - uses: github/codeql-action/analyze@v3

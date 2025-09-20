@@ -1,6 +1,7 @@
 ﻿name: CI
 
 on:
+  workflow_dispatch:
   push:
     branches: [ main ]
     paths:
@@ -29,10 +30,8 @@ jobs:
     env:
       DOTNET_CLI_TELEMETRY_OPTOUT: 1
       DOTNET_NOLOGO: 1
-
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "8.0.x"
@@ -59,7 +58,7 @@ jobs:
         shell: pwsh
         run: echo "$env:USERPROFILE\.dotnet\tools" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
-      # <- non fallire se Cobertura manca: generiamo report solo se esistono file
+      # Non fallire se il Cobertura non c'è (evita rossi inutili)
       - name: Detect coverage files
         id: cov
         shell: pwsh
