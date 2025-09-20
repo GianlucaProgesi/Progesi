@@ -42,7 +42,7 @@ jobs:
       - name: Build (Release)
         run: dotnet build -c Release --no-restore /m
 
-      - name: Test + Coverage (XPlat collector)
+      - name: Test + collect coverage (XPlat)
         run: >
           dotnet test Progesi.sln
           -c Release
@@ -58,7 +58,22 @@ jobs:
         shell: pwsh
         run: echo "$env:USERPROFILE\.dotnet\tools" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
+      # Non fallire se il Cobertura non c'è (evita rossi inutili)
+      - name: Detect coverage files
+        id: cov
+        shell: pwsh
+        run: |
+          $files = Get-ChildItem -Recurse -Path "out\test-results" -Filter coverage.cobertura.xml -ErrorAction SilentlyContinue
+          if ($files) {
+            "found=true"  | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+            Write-Host "Found $($files.Count) Cobertura file(s)."
+          } else {
+            "found=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+            Write-Warning "No Cobertura reports found under out/test-results."
+          }
+
       - name: Generate HTML report
+        if: steps.cov.outputs.found == 'true'
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force -Path coverage-html | Out-Null
