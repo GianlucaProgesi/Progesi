@@ -1,77 +1,118 @@
 ﻿name: release
+
 on:
   workflow_dispatch:
   push:
-    tags: [ "v*" ]
+    tags: ["v*"]
+
 permissions:
   contents: write
   packages: write
+
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
+
 jobs:
   pack:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-dotnet@v4
-        with: { dotnet-version: "8.0.x" }
+        with:
+          dotnet-version: "8.0.x"
       - run: dotnet restore
       - run: dotnet build -c Release --no-restore
       - name: Compute version
         id: vars
-        if: startsWith(github.ref,'refs/tags/')
+        if: ${{ startsWith(github.ref, 'refs/tags/') }}
         run: echo "VER=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
       - name: Pack list
         run: |
+          set -euo pipefail
           find ./src -name "*.csproj" -not -path "*/ProgesiGrasshopperAssembly/*" | sort > packlist.txt
           cat packlist.txt
+
       - name: Ensure per-project README
         run: |
+          set -euo pipefail
           while IFS= read -r proj; do
             [ -z "$proj" ] && continue
-            d="$(dirname "$proj")"; [ -f "$d/README.md" ] || echo "# $(basename "$d")" > "$d/README.md"
+            d="$(dirname "$proj")"
+            [ -f "$d/README.md" ] || echo "# $(basename "$d")" > "$d/README.md"
           done < packlist.txt
+
       - name: Pack
         run: |
+          set -euo pipefail
           mkdir -p ./nupkg
           VER="${{ steps.vars.outputs.VER }}"
           while IFS= read -r proj; do
             [ -z "$proj" ] && continue
-            if [ -n "$VER" ]; then dotnet pack "$proj" -c Release --no-build -o ./nupkg /p:Version="$VER"; else dotnet pack "$proj" -c Release --no-build -o ./nupkg; fi
+            if [ -n "$VER" ]; then
+              dotnet pack "$proj" -c Release --no-build -o ./nupkg /p:Version="$VER"
+            else
+              dotnet pack "$proj" -c Release --no-build -o ./nupkg
+            fi
           done < packlist.txt
+
       - uses: actions/upload-artifact@v4
-        with: { name: nupkg, path: ./nupkg/*.nupkg }
+        with:
+          name: nupkg
+          path: ./nupkg/*.nupkg
+
   publish:
     needs: pack
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
-        with: { name: nupkg, path: ./nupkg }
+        with:
+          name: nupkg
+          path: ./nupkg
       - uses: actions/setup-dotnet@v4
-        with: { dotnet-version: "8.0.x" }
+        with:
+          dotnet-version: "8.0.x"
+
       - name: Choose GPR token
         run: |
-          if [ -n "${{ secrets.GPR_PAT }}" ]; then echo "GPR_TOKEN=${{ secrets.GPR_PAT }}" >> $GITHUB_ENV; else echo "GPR_TOKEN=${{ github.token }}" >> $GITHUB_ENV; fi
+          if [ -n "${{ secrets.GPR_PAT }}" ]; then
+            echo "GPR_TOKEN=${{ secrets.GPR_PAT }}" >> $GITHUB_ENV
+          else
+            echo "GPR_TOKEN=${{ github.token }}" >> $GITHUB_ENV
+          fi
+
       - name: Add GPR source
         run: |
           dotnet nuget remove source github 2>/dev/null || true
-          dotnet nuget add source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json" --name "github" --username "${{ github.repository_owner }}" --password "$GPR_TOKEN" --store-password-in-clear-text
+          dotnet nuget add source "https://nuget.pkg.github.com/${{ github.repository_owner }}/index.json" \
+            --name "github" --username "${{ github.repository_owner }}" \
+            --password "$GPR_TOKEN" --store-password-in-clear-text
+
       - name: Compute version
         id: vars
-        if: startsWith(github.ref,'refs/tags/')
+        if: ${{ startsWith(github.ref, 'refs/tags/') }}
         run: echo "VER=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+
       - name: Push to GPR
-        if: startsWith(github.ref,'refs/tags/')
+        if: ${{ startsWith(github.ref, 'refs/tags/') }}
         run: |
           shopt -s nullglob
-          for n in ./nupkg/*.${{ steps.vars.outputs.VER }}.nupkg; do dotnet nuget push "$n" --source "github" --api-key "$GPR_TOKEN" --skip-duplicate; done
+          for n in ./nupkg/*.${{ steps.vars.outputs.VER }}.nupkg; do
+            dotnet nuget push "$n" --source github --api-key "$GPR_TOKEN" --skip-duplicate
+          done
+
       - name: Push to NuGet.org (optional)
-        if: startsWith(github.ref,'refs/tags/') && env.NUGET_API_KEY != ''
-        env: { NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }} }
+        if: ${{ startsWith(github.ref, 'refs/tags/') && env.NUGET_API_KEY != '' }}
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
         run: |
           shopt -s nullglob
-          for n in ./nupkg/*.${{ steps.vars.outputs.VER }}.nupkg; do dotnet nuget push "$n" --source "https://api.nuget.org/v3/index.json" --api-key "$NUGET_API_KEY" --skip-duplicate; done
+          for n in ./nupkg/*.${{ steps.vars.outputs.VER }}.nupkg; do
+            dotnet nuget push "$n" --source "https://api.nuget.org/v3/index.json" --api-key "$NUGET_API_KEY" --skip-duplicate
+          done
+
       - uses: softprops/action-gh-release@v2
-        if: startsWith(github.ref,'refs/tags/')
-        with: { files: ./nupkg/*.${{ steps.vars.outputs.VER }}.nupkg }
+        if: ${{ startsWith(github.ref, 'refs/tags/') }}
+        with:
+          files: ./nupkg/*.${{ steps.vars.outputs.VER }}.nupkg
