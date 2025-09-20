@@ -1,0 +1,9 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
+    <AssemblyName>ProgesiDomainServices</AssemblyName>
+    <RootNamespace>Progesi.DomainServices</RootNamespace>
+  </PropertyGroup>
+</Project>
