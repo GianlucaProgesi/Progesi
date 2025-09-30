@@ -1,29 +1,36 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
+
   <PropertyGroup>
-    <!-- Select the framework(s) you wish to target.
-        Rhino 6: net45
-        Rhino 7: net48
-        Rhino 8 Windows: net48, net7.0, net7.0-windows, net7.0-windows10.0.22000.0, etc
-        Rhino 8 Mac: net7.0, net7.0-macos, net7.0-macos12.0, etc
-    -->
+    <!-- Rhino 7: net48 -->
     <TargetFramework>net48</TargetFramework>
+
+    <!-- Grasshopper add-on -->
     <EnableDynamicLoading>true</EnableDynamicLoading>
     <TargetExt>.gha</TargetExt>
-    <NoWarn>NU1701;NETSDK1086</NoWarn>
+
+    <!-- Toolchain -->
     <EnableWindowsTargeting>true</EnableWindowsTargeting>
     <LangVersion>8.0</LangVersion>
     <Nullable>enable</Nullable>
+    <NoWarn>NU1701;NETSDK1086</NoWarn>
     <IsPackable>false</IsPackable>
-    <PackageReadmeFile>README.md</PackageReadmeFile>
+
+    <!-- Copiare tutte le dipendenze nella cartella di output -->
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>
-  <PropertyGroup>
-    <!-- Specifies information for Assembly and Yak -->
-    <Version>1.0</Version>
-    <Title>ProgesiGrasshopperAssembly</Title>
-    <Company>ProgesiGrasshopperAssembly Authors</Company>
-    <Description>Description of ProgesiGrasshopperAssembly</Description>
-    <AutoGenerateBindingRedirects>True</AutoGenerateBindingRedirects>
+
+  <!-- WinForms abilitato per net48 / ambienti Windows -->
+  <PropertyGroup Condition="$(TargetFramework.StartsWith('net4')) or $(TargetFramework.Contains('-windows'))">
+    <UseWindowsForms>true</UseWindowsForms>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Stesse versioni che avevi nel progetto -->
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="rhinocommon" Version="8.21.25188.17001" />
+    <PackageReference Include="Grasshopper" Version="8.21.25188.17001" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\ProgesiDomainServices\ProgesiDomainServices.csproj" />
     <ProjectReference Include="..\ProgesiRepositories.InMemory\ProgesiRepositories.InMemory.csproj" />
@@ -31,30 +38,27 @@
     <ProjectReference Include="..\ProgesiCore\ProgesiCore.csproj" />
     <ProjectReference Include="..\ProgesiRepositories.Sqlite\ProgesiRepositories.Sqlite.csproj" />
   </ItemGroup>
-  <!-- For Windows only builds -->
-  <PropertyGroup Condition="$(TargetFramework.Contains('-windows')) or $(TargetFramework.StartsWith('net4'))">
-    <UseWindowsForms>true</UseWindowsForms>
-  </PropertyGroup>
-  <!-- Reference WinForms for .NET 7.0 on macOS -->
-  <ItemGroup Condition="!($(TargetFramework.Contains('-windows')) or $(TargetFramework.StartsWith('net4')))">
-    <!-- Rhino 8.11 and later you can use this -->
-    <!-- <FrameworkReference Include="Microsoft.WindowsDesktop.App.WindowsForms" /> -->
-    <!-- Rhino 8.10 and earlier -->
-    <Reference Include="$(PkgMicrosoft_NETFramework_ReferenceAssemblies_net48)\build\.NETFramework\v4.8\System.Windows.Forms.dll" Private="False" />
-  </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\ProgesiCore\ProgesiCore.csproj" />
-  </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\ProgesiRepositories.Sqlite\ProgesiRepositories.Sqlite.csproj" />
-  </ItemGroup>
+
+  <!-- ===== Deploy automatico in Grasshopper/Libraries/Progesi ===== -->
   <PropertyGroup>
-    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <GhDeployDir>$(APPDATA)\Grasshopper\Libraries\Progesi</GhDeployDir>
   </PropertyGroup>
-  <ItemGroup>
-    <PackageReference Include="rhinocommon" Version="8.21.25188.17001" />
-    <PackageReference Include="Grasshopper" Version="8.21.25188.17001" />
-    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net48" Version="1.0.3" />
-    <PackageReference Include="System.Drawing.Common" Version="7.0.0" />
-  </ItemGroup>
+
+  <Target Name="DeployGrasshopper" AfterTargets="Build">
+    <Message Text="Deploying Grasshopper addon to '$(GhDeployDir)'" Importance="high" />
+    <MakeDir Directories="$(GhDeployDir)" />
+
+    <!-- Copia il file principale (.gha o .dll) -->
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(GhDeployDir)" SkipUnchangedFiles="true" />
+
+    <!-- Copia le dipendenze locali che MSBuild mette in output -->
+    <ItemGroup>
+      <GhDeps Include="@(ReferenceCopyLocalPaths)" />
+    </ItemGroup>
+    <Copy SourceFiles="@(GhDeps)" DestinationFolder="$(GhDeployDir)" SkipUnchangedFiles="true" Condition="@(GhDeps) != ''" />
+
+    <!-- Se il target è una .dll, crea anche la .gha affiancata -->
+    <Copy SourceFiles="$(TargetPath)" DestinationFiles="$(GhDeployDir)\$(TargetName).gha" SkipUnchangedFiles="true" Condition="'$(TargetExt)'=='.dll'" />
+  </Target>
+
 </Project>

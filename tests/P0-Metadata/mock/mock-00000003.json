@@ -1,0 +1,8 @@
+﻿{
+  "id": 0,
+  "hash": "mock-00000003",
+  "by": "GM",
+  "refs": [ "https://example.org/metadata/3" ],
+  "snips": [ "snip:3:image/png:caption=Mock-3" ],
+  "lastModified": "2025-09-29T01:00:00Z"
+}

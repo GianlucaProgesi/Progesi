@@ -17,21 +17,24 @@ namespace Progesi.DomainServices.Services
       if (string.IsNullOrWhiteSpace(v.Name))
         throw new ArgumentException("Name is required for ProgesiVariable.", nameof(v));
 
-      // Se l'Id è vuoto, prova a risolvere per Name (Name come chiave logica univoca)
+      // Se Id mancante, prova a risolvere per Name
       if (v.Id == Guid.Empty)
       {
-        var byName = GetByName(v.Name);
-        v.Id = byName != null ? byName.Id : Guid.NewGuid();
+        ProgesiVariable? byName = GetByName(v.Name); // <- nullable locale
+        if (byName != null)
+          v.Id = byName.Id;
+        else
+          v.Id = Guid.NewGuid();
       }
 
       // Upsert (copio per evitare mutazioni esterne)
       var copy = new ProgesiVariable
       {
         Id = v.Id,
-        Name = v.Name?.Trim(),
+        Name = v.Name?.Trim() ?? string.Empty,
         Value = v.Value,
-        Unit = v.Unit ?? "",
-        Type = v.Type ?? ""
+        Unit = v.Unit ?? string.Empty,
+        Type = v.Type ?? string.Empty
       };
 
       _store[copy.Id] = copy;
@@ -40,16 +43,17 @@ namespace Progesi.DomainServices.Services
 
     public ProgesiVariable GetById(Guid id)
     {
-      if (id == Guid.Empty) return null;
+      if (id == Guid.Empty) return null!;                // compat interfaccia non-nullable
       _store.TryGetValue(id, out var v);
-      return v; // può essere null in net48
+      return v!;                                         // può essere null a runtime
     }
 
     public ProgesiVariable GetByName(string name)
     {
-      if (string.IsNullOrWhiteSpace(name)) return null;
-      return _store.Values.FirstOrDefault(x =>
+      if (string.IsNullOrWhiteSpace(name)) return null!;
+      var match = _store.Values.FirstOrDefault(x =>
           string.Equals(x.Name, name, StringComparison.OrdinalIgnoreCase));
+      return match!;                                     // può essere null a runtime
     }
 
     public bool Delete(Guid id) => _store.TryRemove(id, out _);

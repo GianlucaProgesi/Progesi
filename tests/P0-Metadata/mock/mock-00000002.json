@@ -1,0 +1,14 @@
+﻿{
+    "id":  2,
+    "refs":  [
+                 "https://example.org/metadata/2",
+                 "file:///C:/Progesi/mock/2.png"
+             ],
+    "hash":  "mock-00000002",
+    "lastModified":  "2025-09-29T01:00:00Z",
+    "info":  "Mock metadata #2",
+    "by":  "GM",
+    "snips":  [
+                  "snip:2:image/png:caption=Mock-2"
+              ]
+}
