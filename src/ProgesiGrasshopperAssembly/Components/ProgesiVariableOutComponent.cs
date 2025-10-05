@@ -1,10 +1,11 @@
-﻿using System;
-using System.Globalization;
+﻿// ProgesiVariableOutComponent.cs
+#nullable disable
+using System;
+using System.Collections;
+using System.Collections.Generic;
 using System.Linq;
-using System.Security.Cryptography;
-using System.Text;
+using System.Reflection;
 using Grasshopper.Kernel;
-using ProgesiCore;
 using ProgesiGrasshopperAssembly.Infrastructure;
 
 namespace ProgesiGrasshopperAssembly.Components
@@ -13,135 +14,104 @@ namespace ProgesiGrasshopperAssembly.Components
   {
     public ProgesiVariableOutComponent()
       : base("ProgesiVariableOut", "VarOut",
-             "Fetch a ProgesiVariable (by Hash, Id or Name) and expose its fields.",
+             "Legge variabile per Hash (prioritario) o Id. LIVE (SQLite) se configurato.\n" +
+             "Dynamic out (Val): emette il Value con NickName uguale al Name.",
              "Progesi", "Variables")
     { }
 
-    public override Guid ComponentGuid => new Guid("9C7C2A95-1F44-4D04-87E0-0CF7F7F83CA2");
+    public override Guid ComponentGuid => new Guid("E6E25C83-9C8C-4C3D-8F7A-37C8C1E7D9AA");
+    protected override System.Drawing.Bitmap Icon => ProgesiIcons.VarOut;
 
     protected override void RegisterInputParams(GH_InputParamManager p)
     {
-      // A: Run; H: Hash (priorità 1); Id (priorità 2); Name (priorità 3, case-insensitive)
-      p.AddBooleanParameter("Run", "Run", "Run: True|False", GH_ParamAccess.item, false);
-      p.AddTextParameter("Hash", "Hash", "Rich hash (Name|Value|DependsFrom|MetadataId). Highest priority selector.", GH_ParamAccess.item, string.Empty);
-      p.AddIntegerParameter("Id", "Id", "Variable Id (int). Used if Hash is empty.", GH_ParamAccess.item, 0);
-      p.AddTextParameter("Name", "Name", "Variable Name (case-insensitive). Used if Hash and Id are empty.", GH_ParamAccess.item, string.Empty);
-
-      Params.Input[1].Optional = true; // Hash
-      Params.Input[2].Optional = true; // Id
-      Params.Input[3].Optional = true; // Name
+      p.AddBooleanParameter("Run", "Run", "Esegui (default TRUE).", GH_ParamAccess.item, true);
+      p.AddTextParameter("Hash", "Hash", "Hash della variabile.", GH_ParamAccess.item, "");
+      p.AddIntegerParameter("Id", "Id", "Id (usato se Hash è vuoto).", GH_ParamAccess.item, 0);
     }
 
+    // OUT (0=Val dinamico, poi i campi classici)
     protected override void RegisterOutputParams(GH_OutputParamManager p)
     {
-      // Id, Hash “ricco”, Name, Value (generic), DepFromId (list), Metaids (list), Info
-      p.AddIntegerParameter("Id", "Id", "Id of the variable, or 0 if not found.", GH_ParamAccess.item);
-      p.AddTextParameter("HashCode", "Hash", "Rich hash of the variable (Name|Value|DependsFrom|MetadataId). Empty if not found.", GH_ParamAccess.item);
-      p.AddTextParameter("Name", "Name", "Variable name. Empty if not found.", GH_ParamAccess.item);
-      p.AddGenericParameter("Value", "Value", "Variable value as GH generic. Null/empty if not found.", GH_ParamAccess.item);
-      p.AddIntegerParameter("DepFromId", "DepFromId", "DependsFrom ids (may be empty).", GH_ParamAccess.list);
-      p.AddIntegerParameter("MetadataIds", "Metaids", "Metadata ids (0 or 1 element taken from MetadataId).", GH_ParamAccess.list);
-      p.AddTextParameter("Info", "Info", "Operation results.", GH_ParamAccess.item);
-    }
-
-    // === Helpers coerenti con VarIn ===
-    static string Sha256Hex(string s)
-    {
-      using var sha = SHA256.Create();
-      byte[] bytes = Encoding.UTF8.GetBytes(s ?? string.Empty);
-      byte[] hash = sha.ComputeHash(bytes);
-      var sb = new StringBuilder(hash.Length * 2);
-      foreach (var b in hash) sb.Append(b.ToString("x2", CultureInfo.InvariantCulture));
-      return sb.ToString();
-    }
-
-    static string BuildRichSignature(ProgesiVariable v)
-    {
-      var val = ProgesiHash.CanonicalValue(v.Value);
-      var deps = string.Join(",", (v.DependsFrom ?? Array.Empty<int>()).OrderBy(x => x));
-      var mid = v.MetadataId.HasValue ? v.MetadataId.Value.ToString(CultureInfo.InvariantCulture) : "";
-      string payload = $"{v.Name}|{val}|{deps}|{mid}";
-      return Sha256Hex(payload);
+      p.AddTextParameter("Val", "Val", "Dynamic out: Value con NickName uguale al Name.", GH_ParamAccess.item);
+      p.AddIntegerParameter("Id", "Id", "Id.", GH_ParamAccess.item);
+      p.AddTextParameter("Hash", "Hash", "Hash.", GH_ParamAccess.item);
+      p.AddTextParameter("Name", "Name", "Nome.", GH_ParamAccess.item);
+      p.AddTextParameter("Value", "Value", "Valore.", GH_ParamAccess.item);
+      p.AddTextParameter("Unit", "Unit", "Unità.", GH_ParamAccess.item);
+      p.AddTextParameter("By", "By", "Autore.", GH_ParamAccess.item);
+      p.AddTextParameter("LM", "LM", "LastModified (UTC ISO).", GH_ParamAccess.item);
+      p.AddTextParameter("Info", "Info", "Esito.", GH_ParamAccess.item);
     }
 
     protected override void SolveInstance(IGH_DataAccess DA)
     {
-      bool run = false;
-      string hashIn = string.Empty;
-      int id = 0;
-      string name = string.Empty;
+      bool run = true; string hash = ""; int id = 0;
+      DA.GetData(0, ref run); DA.GetData(1, ref hash); DA.GetData(2, ref id);
 
-      DA.GetData(0, ref run);
-      DA.GetData(1, ref hashIn);
-      DA.GetData(2, ref id);
-      DA.GetData(3, ref name);
+      int oId = 0; string oHash = ""; string oName = ""; string oVal = ""; string oUnit = ""; string oBy = ""; string oLm = ""; string oInfo = "";
 
-      void EmitNotFound(string info)
+      if (!run) { Emit(DA, oVal, oId, oHash, oName, oUnit, oBy, oLm, "Idle"); return; }
+      if (string.IsNullOrWhiteSpace(hash) && id <= 0) { Emit(DA, oVal, oId, oHash, oName, oUnit, oBy, oLm, "Input non valido: Hash o Id>0"); return; }
+
+      object repo; string hub;
+      ServiceHub.TryGetMetadataRepository(out repo, out hub);
+      if (repo == null) { Emit(DA, oVal, oId, oHash, oName, oUnit, oBy, oLm, hub); return; }
+
+      object dto; string info;
+      if (MetadataRepositoryCompatExtensions.TryGetVariableByHashThenId(repo, hash ?? "", id, out dto, out info))
       {
-        DA.SetData(0, 0);               // Id
-        DA.SetData(1, string.Empty);    // Hash
-        DA.SetData(2, string.Empty);    // Name
-        DA.SetData(3, null);            // Value
-        DA.SetDataList(4, Array.Empty<int>());   // DepFromId
-        DA.SetDataList(5, Array.Empty<int>());   // Metaids
-        DA.SetData(6, info ?? "Not found.");
+        Map(dto, out oId, out oHash, out oName, out oVal, out oUnit, out oBy, out oLm);
+        oInfo = string.IsNullOrWhiteSpace(info) ? "OK" : info;
+      }
+      else { oInfo = string.IsNullOrWhiteSpace(info) ? "Non trovato" : info; }
+
+      Emit(DA, oVal, oId, oHash, oName, oUnit, oBy, oLm, oInfo);
+    }
+
+    private void Emit(IGH_DataAccess da, string val, int id, string hash, string name, string unit, string by, string lm, string info)
+    {
+      // OUT0: dinamico (Val) + nickname aggiornato
+      da.SetData(0, val ?? "");
+      var p = Params.Output[0];
+      if (!string.IsNullOrWhiteSpace(name))
+      {
+        if (!string.Equals(p.NickName, name, StringComparison.Ordinal))
+        {
+          p.NickName = name;
+          p.Name = name;
+          p.Description = "Dynamic value of '" + name + "'";
+        }
       }
 
-      if (!run)
-      {
-        EmitNotFound("Idle");
-        return;
-      }
+      da.SetData(1, id);
+      da.SetData(2, hash ?? "");
+      da.SetData(3, name ?? "");
+      da.SetData(4, val ?? "");
+      da.SetData(5, unit ?? "");
+      da.SetData(6, by ?? "");
+      da.SetData(7, lm ?? "");
+      da.SetData(8, info ?? "");
+    }
 
-      try
-      {
-        ProgesiVariable? v = null;
+    private static void Map(object o, out int id, out string hash, out string name, out string value, out string unit, out string by, out string lm)
+    {
+      id = GetInt(o, "id"); hash = GetString(o, "hash");
+      name = GetString(o, "name"); value = GetString(o, "value");
+      unit = GetString(o, "unit"); by = GetString(o, "by");
+      lm = GetString(o, "lastModified");
+    }
 
-        // PRIORITÀ 1: HASH (case-insensitive sui caratteri esadecimali)
-        if (!string.IsNullOrWhiteSpace(hashIn))
-        {
-          string want = hashIn.Trim();
-          var all = ServiceHubCore.Variables.GetAllAsync().GetAwaiter().GetResult();
-          v = all.FirstOrDefault(x => string.Equals(BuildRichSignature(x), want, StringComparison.OrdinalIgnoreCase));
-        }
-
-        // PRIORITÀ 2: ID
-        if (v == null && id > 0)
-        {
-          v = ServiceHubCore.Variables.GetByIdAsync(id).GetAwaiter().GetResult();
-        }
-
-        // PRIORITÀ 3: NAME (case-insensitive)
-        if (v == null && !string.IsNullOrWhiteSpace(name))
-        {
-          var all = ServiceHubCore.Variables.GetAllAsync().GetAwaiter().GetResult();
-          v = all.FirstOrDefault(x => string.Equals(x.Name ?? string.Empty, name.Trim(), StringComparison.OrdinalIgnoreCase));
-        }
-
-        if (v == null)
-        {
-          EmitNotFound("Not found.");
-          return;
-        }
-
-        // Build outputs
-        string hash = BuildRichSignature(v);
-        var deps = (v.DependsFrom ?? Array.Empty<int>()).ToArray();
-        var metas = v.MetadataId.HasValue ? new[] { v.MetadataId.Value } : Array.Empty<int>();
-
-        DA.SetData(0, v.Id);
-        DA.SetData(1, hash);
-        DA.SetData(2, v.Name ?? string.Empty);
-        DA.SetData(3, v.Value);
-        DA.SetDataList(4, deps);
-        DA.SetDataList(5, metas);
-        DA.SetData(6, "OK");
-      }
-      catch (Exception ex)
-      {
-        AddRuntimeMessage(GH_RuntimeMessageLevel.Error, ex.Message);
-        EmitNotFound("Error: " + ex.Message);
-      }
+    private static int GetInt(object o, string n) { var v = GetVal(o, n); int z; if (v is int i) return i; return (v != null && int.TryParse(v.ToString(), out z)) ? z : 0; }
+    private static string GetString(object o, string n) { var v = GetVal(o, n); return v?.ToString() ?? ""; }
+    private static object GetVal(object o, string n)
+    {
+      if (o == null) return null;
+      var t = o.GetType();
+      var pi = t.GetProperty(n, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+      if (pi != null) return pi.GetValue(o, null);
+      var fi = t.GetField(n, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+      if (fi != null) return fi.GetValue(o);
+      return null;
     }
   }
 }

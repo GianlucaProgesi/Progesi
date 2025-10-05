@@ -1,79 +1,76 @@
-﻿using System;
+﻿// ServiceHub.cs
+#nullable disable
+using System;
 using System.IO;
 
 namespace ProgesiGrasshopperAssembly.Infrastructure
 {
   /// <summary>
-  /// Punto unico di accesso a repository reali o mock.
+  /// Wiring dei servizi runtime per i componenti GH.
+  /// Priorità: LIVE (sqlite) -> MOCK (file) -> NONE.
   /// </summary>
   internal static class ServiceHub
   {
-    // Env keys supportate
-    private static readonly string[] MockOnKeys = new[]
+    /// <summary>Context minimale per il LIVE SQLite (solo percorso del DB).</summary>
+    internal sealed class LiveSqliteContext
     {
-            "PROGESI_MOCK_ON",
-            "PROGESI_ENABLE_MOCK"
-        };
-
-    private static readonly string[] MockRootKeys = new[]
-    {
-            "PROGESI_MOCK_ROOT",
-            "PROGESI_METADATA_MOCK_ROOT",
-            "PROGESI_METADATA_FIXTURES"
-        };
-
-    /// <summary>Ritorna true se l'utente ha forzato l’uso del mock via env.</summary>
-    public static bool IsMockForced()
-    {
-      foreach (var k in MockOnKeys)
-      {
-        var v = Environment.GetEnvironmentVariable(k);
-        if (string.IsNullOrWhiteSpace(v)) continue;
-        v = v.Trim().ToLowerInvariant();
-        if (v == "1" || v == "true" || v == "yes" || v == "on")
-          return true;
-      }
-      return false;
-    }
-
-    /// <summary>Risoluzione della root dei file di mock (prima env valida vince).</summary>
-    public static string? GetMockRoot()
-    {
-      foreach (var k in MockRootKeys)
-      {
-        var v = Environment.GetEnvironmentVariable(k);
-        if (!string.IsNullOrWhiteSpace(v))
-          return v;
-      }
-      return null;
+      public string DbPath { get; private set; }
+      public LiveSqliteContext(string dbPath) { DbPath = dbPath ?? string.Empty; }
     }
 
     /// <summary>
-    /// Tenta di ottenere un "repository" reale (se presente), oppure – se forzato il mock – 
-    /// restituisce il repository file-based. Info descrive la modalità attiva.
+    /// Ritorna un oggetto repository in base alle env var:
+    ///   PROGESI_LIVE_ON=1 + PROGESI_LIVE_DB=<file>  -> LiveSqliteContext
+    ///   PROGESI_MOCK_ON=1 + PROGESI_MOCK_ROOT=<dir> -> FileMockMetadataRepository
+    /// altrimenti nessun repo collegato.
     /// </summary>
-    public static bool TryGetMetadataRepository(out object? repoObj, out string info)
+    public static bool TryGetMetadataRepository(out object repoObj, out string info)
     {
-      // 1) Se mock forzato, costruiamo subito il file repository
-      if (IsMockForced())
+      // 1) LIVE (sqlite) – legge sia dal Process che dallo User (così non serve riavvio)
+      var liveOn = ReadEnv("PROGESI_LIVE_ON");
+      var liveDb = ReadEnv("PROGESI_LIVE_DB");
+      if (IsTrue(liveOn) && !string.IsNullOrWhiteSpace(liveDb) && File.Exists(liveDb))
       {
-        var root = GetMockRoot();
-        if (string.IsNullOrWhiteSpace(root))
-        {
-          repoObj = null;
-          info = "Mock attivo ma root non impostata (set PROGESI_MOCK_ROOT).";
-          return true;
-        }
-
-        repoObj = new FileMockMetadataRepository(root!);
-        info = $"Mock (root: {root})";
+        repoObj = new LiveSqliteContext(liveDb);
+        info = $"LIVE (sqlite) → {liveDb}";
         return true;
       }
 
-      // 2) Repo reale (qui si lasciano future integrazioni Rhino/SQLite)
+      // 2) MOCK (file)
+      var mockOn = ReadEnv("PROGESI_MOCK_ON");
+      var mockRoot = ReadEnv("PROGESI_MOCK_ROOT");
+      if (IsTrue(mockOn) && !string.IsNullOrWhiteSpace(mockRoot) && Directory.Exists(mockRoot))
+      {
+        repoObj = new FileMockMetadataRepository(mockRoot);
+        info = $"MOCK → {mockRoot}";
+        return true;
+      }
+
+      // 3) Nessun repo
       repoObj = null;
       info = "OK (nessun repo collegato)";
-      return true;
+      return false;
+    }
+
+    // ---------- helpers ----------
+
+    private static string ReadEnv(string name)
+    {
+      // process -> user -> machine
+      var p = Environment.GetEnvironmentVariable(name, EnvironmentVariableTarget.Process);
+      if (!string.IsNullOrEmpty(p)) return p;
+      var u = Environment.GetEnvironmentVariable(name, EnvironmentVariableTarget.User);
+      if (!string.IsNullOrEmpty(u)) return u;
+      var m = Environment.GetEnvironmentVariable(name, EnvironmentVariableTarget.Machine);
+      if (!string.IsNullOrEmpty(m)) return m;
+      return string.Empty;
+    }
+
+    private static bool IsTrue(string v)
+    {
+      if (string.IsNullOrWhiteSpace(v)) return false;
+      v = v.Trim();
+      return v == "1" || v.Equals("true", StringComparison.OrdinalIgnoreCase) || v.Equals("on", StringComparison.OrdinalIgnoreCase);
     }
   }
 }

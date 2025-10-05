@@ -1,64 +1,110 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <!-- Rhino 7: net48 -->
     <TargetFramework>net48</TargetFramework>
+    <AssemblyName>ProgesiGrasshopperAssembly</AssemblyName>
+    <RootNamespace>ProgesiGrasshopperAssembly</RootNamespace>
+    <LangVersion>latest</LangVersion>
 
-    <!-- Grasshopper add-on -->
-    <EnableDynamicLoading>true</EnableDynamicLoading>
-    <TargetExt>.gha</TargetExt>
+      <Nullable>enable</Nullable>
+      <LangVersion>latest</LangVersion>
 
-    <!-- Toolchain -->
-    <EnableWindowsTargeting>true</EnableWindowsTargeting>
-    <LangVersion>8.0</LangVersion>
-    <Nullable>enable</Nullable>
-    <NoWarn>NU1701;NETSDK1086</NoWarn>
-    <IsPackable>false</IsPackable>
+    <!-- sempre out in bin\<Cfg>\net48\ -->
+    <AppendTargetFrameworkToOutputPath>true</AppendTargetFrameworkToOutputPath>
+    <OutDir>$(MSBuildProjectDirectory)\bin\$(Configuration)\net48\</OutDir>
 
-    <!-- Copiare tutte le dipendenze nella cartella di output -->
+    <!-- genera sempre l’assembly completo accanto alla .gha -->
+    <ProduceReferenceAssembly>false</ProduceReferenceAssembly>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+
+    <!-- copia automatica in GH solo se PROGESI_DEPLOY_GH=1 -->
+    <ProgesiDeployGh Condition="'$(ProgesiDeployGh)'==''">false</ProgesiDeployGh>
   </PropertyGroup>
 
-  <!-- WinForms abilitato per net48 / ambienti Windows -->
-  <PropertyGroup Condition="$(TargetFramework.StartsWith('net4')) or $(TargetFramework.Contains('-windows'))">
-    <UseWindowsForms>true</UseWindowsForms>
-  </PropertyGroup>
-
+  <!-- NuGet -->
   <ItemGroup>
-    <!-- Stesse versioni che avevi nel progetto -->
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
-    <PackageReference Include="rhinocommon" Version="8.21.25188.17001" />
-    <PackageReference Include="Grasshopper" Version="8.21.25188.17001" />
   </ItemGroup>
 
+  <!-- Progetti della soluzione -->
   <ItemGroup>
+    <ProjectReference Include="..\ProgesiCore\ProgesiCore.csproj" />
     <ProjectReference Include="..\ProgesiDomainServices\ProgesiDomainServices.csproj" />
     <ProjectReference Include="..\ProgesiRepositories.InMemory\ProgesiRepositories.InMemory.csproj" />
     <ProjectReference Include="..\ProgesiRepositories.Rhino\ProgesiRepositories.Rhino.csproj" />
-    <ProjectReference Include="..\ProgesiCore\ProgesiCore.csproj" />
     <ProjectReference Include="..\ProgesiRepositories.Sqlite\ProgesiRepositories.Sqlite.csproj" />
   </ItemGroup>
 
-  <!-- ===== Deploy automatico in Grasshopper/Libraries/Progesi ===== -->
+  <!-- Riferimenti Rhino/Grasshopper -->
   <PropertyGroup>
-    <GhDeployDir>$(APPDATA)\Grasshopper\Libraries\Progesi</GhDeployDir>
+    <RhinoRoot Condition="Exists('C:\Program Files\Rhino 8')">C:\Program Files\Rhino 8</RhinoRoot>
+    <RhinoRoot Condition="'$(RhinoRoot)'=='' and Exists('C:\Program Files\Rhino 7')">C:\Program Files\Rhino 7</RhinoRoot>
   </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="RhinoCommon">
+      <HintPath>$(RhinoRoot)\System\RhinoCommon.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Grasshopper">
+      <HintPath>$(RhinoRoot)\Plug-ins\Grasshopper\Grasshopper.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="GH_IO">
+      <HintPath>$(RhinoRoot)\Plug-ins\Grasshopper\GH_IO.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="System.Drawing" />
+    <Reference Include="System.Windows.Forms" />
+  </ItemGroup>
+  <ItemGroup>
+    <Folder Include="Resources\" />
+  </ItemGroup>
 
-  <Target Name="DeployGrasshopper" AfterTargets="Build">
-    <Message Text="Deploying Grasshopper addon to '$(GhDeployDir)'" Importance="high" />
-    <MakeDir Directories="$(GhDeployDir)" />
-
-    <!-- Copia il file principale (.gha o .dll) -->
-    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(GhDeployDir)" SkipUnchangedFiles="true" />
-
-    <!-- Copia le dipendenze locali che MSBuild mette in output -->
+  <!-- 1) crea SEMPRE la .gha accanto alla dll -->
+  <Target Name="MakeGha" AfterTargets="Build">
     <ItemGroup>
-      <GhDeps Include="@(ReferenceCopyLocalPaths)" />
+      <BuiltDll Include="$(TargetPath)" />
     </ItemGroup>
-    <Copy SourceFiles="@(GhDeps)" DestinationFolder="$(GhDeployDir)" SkipUnchangedFiles="true" Condition="@(GhDeps) != ''" />
-
-    <!-- Se il target è una .dll, crea anche la .gha affiancata -->
-    <Copy SourceFiles="$(TargetPath)" DestinationFiles="$(GhDeployDir)\$(TargetName).gha" SkipUnchangedFiles="true" Condition="'$(TargetExt)'=='.dll'" />
+    <Copy SourceFiles="@(BuiltDll)" DestinationFiles="$(TargetDir)$(AssemblyName).gha" OverwriteReadOnlyFiles="true" SkipUnchangedFiles="false" />
   </Target>
+
+  <!-- 2) copia automatica in %APPDATA% SE richiamato con /p:ProgesiDeployGh=true -->
+  <Target Name="CopyToGrasshopper" AfterTargets="MakeGha" Condition="'$(ProgesiDeployGh)'=='true'">
+    <PropertyGroup>
+      <GhLib>$(APPDATA)\Grasshopper\Libraries\Progesi\</GhLib>
+    </PropertyGroup>
+    <MakeDir Directories="$(GhLib)" />
+    <ItemGroup>
+      <GhFiles Include="$(TargetDir)**\*.gha;$(TargetDir)**\*.dll" />
+      <RuntimeFiles Include="$(TargetDir)runtimes\**\*.*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(GhFiles)" DestinationFolder="$(GhLib)" SkipUnchangedFiles="false" OverwriteReadOnlyFiles="true" />
+    <Copy SourceFiles="@(RuntimeFiles)" DestinationFiles="@(RuntimeFiles->'$(GhLib)runtimes\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="false" OverwriteReadOnlyFiles="true" />
+  </Target>
+  <!-- 1) Rimuovi qualunque item che catturi PNG in Resources (None/Content/…): -->
+  <ItemGroup>
+    <None Remove="Resources\*.png" />
+    <Content Remove="Resources\*.png" />
+    <Resource Remove="Resources\*.png" />
+  </ItemGroup>
+
+  <!-- 2) Re-include come EmbeddedResource con LogicalName deterministico: -->
+  <ItemGroup>
+    <EmbeddedResource Include="Resources\metin.png">
+      <LogicalName>ProgesiGrasshopperAssembly.Resources.metin.png</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Resources\metout.png">
+      <LogicalName>ProgesiGrasshopperAssembly.Resources.metout.png</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Resources\varin.png">
+      <LogicalName>ProgesiGrasshopperAssembly.Resources.varin.png</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Resources\varout.png">
+      <LogicalName>ProgesiGrasshopperAssembly.Resources.varout.png</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Resources\snip.png">
+      <LogicalName>ProgesiGrasshopperAssembly.Resources.snip.png</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
 
 </Project>

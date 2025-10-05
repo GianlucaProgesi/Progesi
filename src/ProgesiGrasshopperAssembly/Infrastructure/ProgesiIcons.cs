@@ -1,23 +1,43 @@
-﻿using System.Drawing;
+﻿#nullable disable
+using System;
+using System.Drawing;
+using System.Linq;
+using System.Reflection;
 
 namespace ProgesiGrasshopperAssembly.Infrastructure
 {
   internal static class ProgesiIcons
   {
-    // nullable per evitare l'obbligo di inizializzazione nel costruttore di tipo
-    private static Bitmap? _px;
-
-    public static Bitmap Transparent1px
+    private static Bitmap Load(string file)
     {
-      get
+      try
       {
-        if (_px == null)
+        var asm = Assembly.GetExecutingAssembly();
+        // nome atteso con LogicalName
+        var expected = "ProgesiGrasshopperAssembly.Resources." + file;
+
+        var res = asm.GetManifestResourceNames()
+                     .FirstOrDefault(n => n.Equals(expected, StringComparison.OrdinalIgnoreCase));
+
+        // fallback tollerante
+        if (res == null)
+          res = asm.GetManifestResourceNames()
+                   .FirstOrDefault(n => n.EndsWith(".Resources." + file, StringComparison.OrdinalIgnoreCase));
+
+        if (res != null)
         {
-          _px = new Bitmap(1, 1);
-          _px.SetPixel(0, 0, Color.Transparent);
+          using (var s = asm.GetManifestResourceStream(res))
+            return (Bitmap)Image.FromStream(s);
         }
-        return _px!; // dopo il check non è più null
       }
+      catch { }
+      return null;
     }
+
+    public static Bitmap MetIn => Load("metin.png");
+    public static Bitmap MetOut => Load("metout.png");
+    public static Bitmap VarIn => Load("varin.png");
+    public static Bitmap VarOut => Load("varout.png");
+    public static Bitmap Snip => Load("snip.png");
   }
 }

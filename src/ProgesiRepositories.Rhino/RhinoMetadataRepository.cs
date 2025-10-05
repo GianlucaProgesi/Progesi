@@ -14,7 +14,6 @@ namespace ProgesiRepositories.Rhino
   public sealed class RhinoMetadataRepository : IMetadataRepository
   {
     private readonly StringTable _table;
-
     public RhinoMetadataRepository(RhinoDoc doc)
     {
       if (doc is null) throw new ArgumentNullException(nameof(doc));

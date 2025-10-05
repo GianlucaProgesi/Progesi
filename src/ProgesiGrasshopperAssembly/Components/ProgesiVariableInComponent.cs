@@ -1,12 +1,9 @@
-﻿using System;
-using System.Collections.Generic;
+﻿// ProgesiVariableInComponent.cs
+#nullable disable
+using System;
 using System.Globalization;
-using System.Linq;
-using System.Security.Cryptography;
-using System.Text;
+using System.Reflection;
 using Grasshopper.Kernel;
-using Grasshopper.Kernel.Types;
-using ProgesiCore;
 using ProgesiGrasshopperAssembly.Infrastructure;
 
 namespace ProgesiGrasshopperAssembly.Components
@@ -15,228 +12,129 @@ namespace ProgesiGrasshopperAssembly.Components
   {
     public ProgesiVariableInComponent()
       : base("ProgesiVariableIn", "VarIn",
-             "Create / Update / Delete a ProgesiVariable (Core repo, generic Value).",
+             "Create/Update/Delete variable.\nLIVE (SQLite) se configurato, altrimenti mock/echo.\n" +
+             "Dynamic out (Val): emette il Value con NickName uguale al Name.",
              "Progesi", "Variables")
     { }
 
-    public override Guid ComponentGuid => new Guid("E7F6D4B1-0F7E-4A7B-9F6D-5C0C5D8C1A10");
+    public override Guid ComponentGuid => new Guid("C3E9F2B7-3B1B-4D28-B0D9-4F0C23B8B9C2");
+    protected override System.Drawing.Bitmap Icon => ProgesiIcons.VarIn;
 
+    // IN
     protected override void RegisterInputParams(GH_InputParamManager p)
     {
-      p.AddBooleanParameter("Run", "Run", "Run: True|False", GH_ParamAccess.item, false);
-      p.AddTextParameter("Action", "Act", "Action: Create|Update|Delete (default Create)", GH_ParamAccess.item, "Create");
-      p.AddIntegerParameter("Id", "Id", "Existing variable Id (int). Required for Update/Delete. Leave 0/empty for Create.", GH_ParamAccess.item, 0);
-      p.AddTextParameter("Name", "Name", "Variable Name (required for Create).", GH_ParamAccess.item, "New Progesi Variable");
-      p.AddGenericParameter("Value", "Value", "Generic: Numerical|String|Rhino/Grasshopper object. Cannot be null.", GH_ParamAccess.item);
-      p.AddNumberParameter("Factor", "Factor", "Scale factor (applied only if Value is numeric).", GH_ParamAccess.item, 1.0);
-      p.AddIntegerParameter("DependsFromId", "DepFromId", "List of variable ids this one depends on. Leave empty if independent.", GH_ParamAccess.list);
-      p.AddIntegerParameter("MetadataIds", "Metaids", "List of ProgesiMetadata ids associated (first non-zero is used).", GH_ParamAccess.list);
-
-      // opzionali
-      Params.Input[2].Optional = true; // Id
-      Params.Input[6].Optional = true; // DepFromId
-      Params.Input[7].Optional = true; // Metaids
+      p.AddBooleanParameter("Run", "Run", "Esegui (default FALSE).", GH_ParamAccess.item, false);
+      p.AddTextParameter("Act", "Act", "Create | Update | Delete", GH_ParamAccess.item, "Create");
+      p.AddIntegerParameter("Id", "Id", "Id per Update/Delete.", GH_ParamAccess.item, 0);
+      p.AddTextParameter("Name", "Name", "Nome variabile (es. LEN).", GH_ParamAccess.item, "");
+      p.AddTextParameter("Value", "Value", "Valore (string/number).", GH_ParamAccess.item, "");
+      p.AddTextParameter("Unit", "Unit", "Fattore numerico (double) applicato a Value se entrambi numerici; altrimenti ignorato.", GH_ParamAccess.item, "");
+      p.AddTextParameter("By", "By", "Autore (es. GM).", GH_ParamAccess.item, "");
     }
 
+    // OUT (0=Val dinamico, 1=Id, 2=Hash, 3=Info)
     protected override void RegisterOutputParams(GH_OutputParamManager p)
     {
-      p.AddIntegerParameter("Id", "Id", "0 if deleted; otherwise Id of the variable.", GH_ParamAccess.item);
-      p.AddTextParameter("HashCode", "Hash", "Empty if deleted; otherwise a rich hash of the variable.", GH_ParamAccess.item);
-      p.AddTextParameter("Name", "Name", "Empty if deleted; otherwise the name of the variable.", GH_ParamAccess.item);
-      p.AddTextParameter("Info", "Info", "Operation results.", GH_ParamAccess.item);
-    }
-
-    // === Helpers ===
-    static string NormalizeAction(string s)
-    {
-      if (string.IsNullOrWhiteSpace(s)) return "Create";
-      if (s.Equals("create", StringComparison.OrdinalIgnoreCase)) return "Create";
-      if (s.Equals("update", StringComparison.OrdinalIgnoreCase)) return "Update";
-      if (s.Equals("delete", StringComparison.OrdinalIgnoreCase)) return "Delete";
-      return "Create";
-    }
-
-    static object Unwrap(object maybe)
-    {
-      if (maybe is IGH_Goo goo)
-      {
-        try { return goo.ScriptVariable(); } catch { }
-      }
-      return maybe;
-    }
-
-    static string Sha256Hex(string s)
-    {
-      using var sha = SHA256.Create();
-      byte[] bytes = Encoding.UTF8.GetBytes(s ?? string.Empty);
-      byte[] hash = sha.ComputeHash(bytes);
-      var sb = new StringBuilder(hash.Length * 2);
-      foreach (var b in hash) sb.Append(b.ToString("x2", CultureInfo.InvariantCulture));
-      return sb.ToString();
-    }
-
-    static string BuildRichSignature(string name, object? value, IEnumerable<int> depends, int? metadataId)
-    {
-      // Value canonico dal Core (numeri formattati invarianti, ecc.)
-      string val = ProgesiHash.CanonicalValue(value);
-      string deps = string.Join(",", (depends ?? Array.Empty<int>()).OrderBy(x => x));
-      string mid = metadataId.HasValue ? metadataId.Value.ToString(CultureInfo.InvariantCulture) : "";
-      string payload = $"{name}|{val}|{deps}|{mid}";
-      return Sha256Hex(payload); // firma leggibile/consistente
+      p.AddTextParameter("Val", "Val", "Dynamic out: Value con NickName uguale al Name.", GH_ParamAccess.item);
+      p.AddIntegerParameter("Id", "Id", "Id risultante.", GH_ParamAccess.item);
+      p.AddTextParameter("Hash", "Hash", "Hash risultante.", GH_ParamAccess.item);
+      p.AddTextParameter("Info", "Info", "Esito/diagnostica.", GH_ParamAccess.item);
     }
 
     protected override void SolveInstance(IGH_DataAccess DA)
     {
-      // --- Read inputs ---
-      bool run = false;
-      string action = "Create";
-      int id = 0;
-      string name = string.Empty;
-      object valueRaw = null!;
-      double factor = 1.0;
-      var dependsFrom = new List<int>();
-      var metadataIds = new List<int>();
+      bool run = false; string act = "Create"; int id = 0; string name = ""; string val = ""; string unit = ""; string by = "";
+      DA.GetData(0, ref run); DA.GetData(1, ref act); DA.GetData(2, ref id);
+      DA.GetData(3, ref name); DA.GetData(4, ref val); DA.GetData(5, ref unit); DA.GetData(6, ref by);
 
-      DA.GetData(0, ref run);
-      DA.GetData(1, ref action);
-      DA.GetData(2, ref id);          // opzionale
-      DA.GetData(3, ref name);
-      DA.GetData(4, ref valueRaw);
-      DA.GetData(5, ref factor);
-      DA.GetDataList(6, dependsFrom); // opzionale (vuoto = ok)
-      DA.GetDataList(7, metadataIds); // opzionale (vuoto = ok)
+      int outId = 0; string outHash = ""; string outInfo = "";
 
-      void Emit(int idOut, string hash, string nm, string info)
+      if (!run) { Emit(DA, val, outId, outHash, "Idle", name); return; }
+
+      bool isCreate = act.Equals("Create", StringComparison.OrdinalIgnoreCase);
+      bool isUpdate = act.Equals("Update", StringComparison.OrdinalIgnoreCase);
+      bool isDelete = act.Equals("Delete", StringComparison.OrdinalIgnoreCase);
+
+      if (!(isCreate || isUpdate || isDelete)) { Emit(DA, val, outId, outHash, "Input non valido: Act", name); return; }
+      if ((isUpdate || isDelete) && id <= 0) { Emit(DA, val, outId, outHash, "Input non valido: Id (>0)", name); return; }
+
+      // Unit come fattore numerico opzionale: Value × Unit se ENTRAMBI numerici
+      var inv = CultureInfo.InvariantCulture;
+      double vFix, uFix;
+      if (double.TryParse(val, NumberStyles.Any, inv, out vFix) &&
+          double.TryParse(unit, NumberStyles.Any, inv, out uFix))
       {
-        DA.SetData(0, idOut);
-        DA.SetData(1, hash ?? string.Empty);
-        DA.SetData(2, nm ?? string.Empty);
-        DA.SetData(3, info ?? string.Empty);
+        var combined = vFix * uFix;
+        val = combined.ToString(inv);
+        unit = ""; // fattore applicato → unit non serve più
       }
 
-      if (!run) { Emit(0, string.Empty, string.Empty, "Idle"); return; }
-
-      var act = NormalizeAction(action);
-
-      // Validazioni minime
-      if (act == "Update" || act == "Delete")
-      {
-        if (id <= 0)
-        {
-          const string msg = "Id is required for Update/Delete.";
-          AddRuntimeMessage(GH_RuntimeMessageLevel.Error, msg);
-          Emit(0, string.Empty, string.Empty, msg);
-          return;
-        }
-      }
-
-      if (act != "Delete")
-      {
-        if (string.IsNullOrWhiteSpace(name))
-        {
-          const string msg = "Name is required for Create/Update.";
-          AddRuntimeMessage(GH_RuntimeMessageLevel.Error, msg);
-          Emit(0, string.Empty, string.Empty, msg);
-          return;
-        }
-        if (valueRaw is null)
-        {
-          const string msg = "Value cannot be null.";
-          AddRuntimeMessage(GH_RuntimeMessageLevel.Error, msg);
-          Emit(0, string.Empty, string.Empty, msg);
-          return;
-        }
-      }
+      object repo; string hub;
+      ServiceHub.TryGetMetadataRepository(out repo, out hub);
 
       try
       {
-        if (act == "Delete")
+        if (isDelete)
         {
-          // In P1 non abbiamo Delete nel repo: emettiamo risposta coerente.
-          Emit(0, string.Empty, string.Empty, "The variable has been eliminated (logical).");
-          return;
+          string info; bool ok = MetadataRepositoryCompatExtensions.TryDeleteVariable(repo, id, out info);
+          outId = id > 0 ? id : 0; outHash = ""; outInfo = string.IsNullOrWhiteSpace(info) ? (ok ? "OK" : "Operazione non riuscita") : info;
+          Emit(DA, val, outId, outHash, outInfo, name); return;
         }
 
-        // Preparazione dati
-        var unwrapped = Unwrap(valueRaw);
-        object? valueToSave = unwrapped;
-        if (unwrapped is double d) valueToSave = d * factor;
-        else if (unwrapped is float f) valueToSave = f * (float)factor;
-        else if (unwrapped is int i) valueToSave = (int)Math.Round(i * factor, MidpointRounding.AwayFromZero);
-        else if (unwrapped is long l) valueToSave = (long)Math.Round(l * factor, MidpointRounding.AwayFromZero);
+        var payload = new VarPayload { id = id, name = name, value = val, unit = unit, by = by };
+        object saved; string upInfo;
+        bool upOk = MetadataRepositoryCompatExtensions.TryUpsertVariable(repo, payload, out saved, out upInfo);
 
-        var depends = dependsFrom?.ToArray() ?? Array.Empty<int>();
-        int? metadataId = null;
-        if (metadataIds != null)
-        {
-          var first = metadataIds.FirstOrDefault(x => x > 0);
-          if (first > 0) metadataId = first;
-        }
+        // >>> qui serve la doppia overload di ReadIf (int e string)!
+        if (saved != null) { ReadIf(saved, "Id", ref outId); ReadIf(saved, "Hash", ref outHash); }
+        else { outId = id > 0 ? id : 0; outHash = ""; }
 
-        // ==== CREATE: riuso id se esiste, altrimenti id progressivo ====
-        if (act == "Create")
-        {
-          // firma input
-          string inSig = BuildRichSignature(name.Trim(), valueToSave, depends, metadataId);
-
-          // cerca nel repo
-          var all = ServiceHubCore.Variables.GetAllAsync().GetAwaiter().GetResult();
-          var existing = all.FirstOrDefault(v =>
-          {
-            string sig = BuildRichSignature(v.Name, v.Value, v.DependsFrom, v.MetadataId);
-            return string.Equals(sig, inSig, StringComparison.Ordinal);
-          });
-
-          ProgesiVariable saved;
-          bool reused;
-
-          if (existing != null)
-          {
-            // riuso
-            saved = existing;
-            reused = true;
-          }
-          else
-          {
-            // nuovo id progressivo
-            int nextId = all.Count == 0 ? 1 : all.Max(v => v.Id) + 1;
-            var toSave = new ProgesiVariable(nextId, name.Trim(), valueToSave, depends, metadataId);
-            saved = ServiceHubCore.Variables.SaveAsync(toSave).GetAwaiter().GetResult();
-            reused = false;
-          }
-
-          string hashStr = BuildRichSignature(saved.Name, saved.Value, saved.DependsFrom, saved.MetadataId);
-          string typeName = (saved.Value?.GetType()?.Name ?? "null");
-          string info;
-
-          if (reused)
-            info = $"The ProgesiVariable '{saved.Name}', type '{typeName}' already existed and has been reused with id '{saved.Id}'.";
-          else if (saved.Value is string s)
-            info = $"The ProgesiVariable '{saved.Name}', type 'string' has been created with id '{saved.Id}' and value '{s}'.";
-          else if (saved.Value is double || saved.Value is float || saved.Value is int || saved.Value is long)
-            info = $"The ProgesiVariable '{saved.Name}', type '{typeName}' has been created with id '{saved.Id}' and value {saved.Value}.";
-          else
-            info = $"The ProgesiVariable '{saved.Name}', type '{typeName}' has been created with id '{saved.Id}'.";
-
-          Emit(saved.Id, hashStr, saved.Name, info);
-          return;
-        }
-
-        // ==== UPDATE ====
-        {
-          var input = new ProgesiVariable(id, name.Trim(), valueToSave, depends, metadataId);
-          var saved = ServiceHubCore.Variables.SaveAsync(input).GetAwaiter().GetResult();
-
-          string hashStr = BuildRichSignature(saved.Name, saved.Value, saved.DependsFrom, saved.MetadataId);
-          string info = $"The ProgesiVariable '{saved.Name}' with id '{saved.Id}' has been successfully updated.";
-          Emit(saved.Id, hashStr, saved.Name, info);
-        }
+        outInfo = string.IsNullOrWhiteSpace(upInfo) ? (upOk ? "OK" : "Operazione non riuscita") : upInfo;
+        Emit(DA, val, outId, outHash, outInfo, name);
       }
-      catch (Exception ex)
+      catch (Exception ex) { Emit(DA, val, outId, outHash, "Errore: " + ex.Message, name); }
+    }
+
+    // payload e helpers
+    private sealed class VarPayload { public int id { get; set; } public string name { get; set; } public string value { get; set; } public string unit { get; set; } public string by { get; set; } }
+
+    private static void ReadIf(object obj, string prop, ref int target)
+    {
+      if (obj == null) return;
+      var pi = obj.GetType().GetProperty(prop, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+      if (pi == null) return;
+      var v = pi.GetValue(obj, null);
+      int n; if (v is int i) target = i; else if (v != null && int.TryParse(v.ToString(), out n)) target = n;
+    }
+
+    // *** overload mancante nella tua versione: questa elimina il CS1503 ***
+    private static void ReadIf(object obj, string prop, ref string target)
+    {
+      if (obj == null) return;
+      var pi = obj.GetType().GetProperty(prop, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+      if (pi == null) return;
+      var v = pi.GetValue(obj, null);
+      var s = (v == null ? "" : v.ToString() ?? "").Trim();
+      if (s.Length > 0) target = s;
+    }
+
+    private void Emit(IGH_DataAccess DA, string val, int id, string hash, string info, string name)
+    {
+      // OUT0: Val dinamico + nickname aggiornato
+      DA.SetData(0, val ?? "");
+      var p = Params.Output[0];
+      if (!string.IsNullOrWhiteSpace(name))
       {
-        AddRuntimeMessage(GH_RuntimeMessageLevel.Error, ex.Message);
-        Emit(0, string.Empty, string.Empty, "Error: " + ex.Message);
+        if (!string.Equals(p.NickName, name, StringComparison.Ordinal))
+        {
+          p.NickName = name;   // etichetta mostrata
+          p.Name = name;   // tooltip e nome interno
+          p.Description = "Dynamic value of '" + name + "'";
+        }
       }
+      DA.SetData(1, id);
+      DA.SetData(2, hash ?? "");
+      DA.SetData(3, info ?? "");
     }
   }
 }
