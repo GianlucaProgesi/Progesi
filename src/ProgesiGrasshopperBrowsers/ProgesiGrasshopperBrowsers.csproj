@@ -1,0 +1,48 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <AssemblyName>ProgesiGrasshopperBrowsers</AssemblyName>
+    <RootNamespace>Progesi.Grasshopper.Browsers</RootNamespace>
+    <LangVersion>latest</LangVersion>
+    <Platforms>AnyCPU</Platforms>
+    <DebugType>portable</DebugType>
+    <Deterministic>true</Deterministic>
+
+    <!-- Evita duplicati: usiamo il nostro AssemblyInfo.cs -->
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+  </PropertyGroup>
+
+  <!-- RHINO 8 -->
+  <PropertyGroup>
+    <!-- Cambia se Rhino 8 non è qui -->
+    <RhinoInstallDir Condition="'$(RhinoInstallDir)'==''">C:\Program Files\Rhino 8</RhinoInstallDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Grasshopper 1 (Rhino 8) -->
+    <Reference Include="RhinoCommon">
+      <HintPath>$(RhinoInstallDir)\System\RhinoCommon.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="GH_IO">
+      <HintPath>$(RhinoInstallDir)\Plug-ins\Grasshopper\GH_IO.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Grasshopper">
+      <HintPath>$(RhinoInstallDir)\Plug-ins\Grasshopper\Grasshopper.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.9" />
+  </ItemGroup>
+
+  <!-- Rinominare in .gha in post-build -->
+  <Target Name="PostBuildRenameToGha" AfterTargets="Build">
+    <ItemGroup>
+      <BuiltDll Include="$(OutputPath)$(AssemblyName).dll" />
+    </ItemGroup>
+    <Copy SourceFiles="@(BuiltDll)" DestinationFiles="$(OutputPath)$(AssemblyName).gha" SkipUnchangedFiles="true" />
+  </Target>
+</Project>

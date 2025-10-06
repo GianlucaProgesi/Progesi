@@ -29,6 +29,7 @@
   <!-- Progetti della soluzione -->
   <ItemGroup>
     <ProjectReference Include="..\ProgesiCore\ProgesiCore.csproj" />
+    <ProjectReference Include="..\ProgesiDataExchange\ProgesiDataExchange.csproj" />
     <ProjectReference Include="..\ProgesiDomainServices\ProgesiDomainServices.csproj" />
     <ProjectReference Include="..\ProgesiRepositories.InMemory\ProgesiRepositories.InMemory.csproj" />
     <ProjectReference Include="..\ProgesiRepositories.Rhino\ProgesiRepositories.Rhino.csproj" />

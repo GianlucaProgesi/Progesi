@@ -1,13 +1,9 @@
 <Project>
   <PropertyGroup>
-    <MinVerTagPrefix>v</MinVerTagPrefix>
-    <MinVerDefaultPreReleasePhase></MinVerDefaultPreReleasePhase>
-    <MinVerAutoIncrement>patch</MinVerAutoIncrement>
-    <MinVerBuildMetadata>build.{0:yyyyMMdd-HHmmss}</MinVerBuildMetadata>
-    <Deterministic>true</Deterministic>
-    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+    <!-- NON trasformare i warning in errori -->
+    <TreatWarningsAsErrors>false</TreatWarningsAsErrors>
+
+    <!-- Degrada MSB3277 a semplice messaggio -->
+    <MSBuildWarningsAsMessages>$(MSBuildWarningsAsMessages);MSB3277</MSBuildWarningsAsMessages>
   </PropertyGroup>
-  <ItemGroup>
-    <PackageReference Include="MinVer" Version="5.0.0" PrivateAssets="All" />
-  </ItemGroup>
 </Project>
