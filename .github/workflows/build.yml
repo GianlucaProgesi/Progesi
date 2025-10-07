@@ -66,13 +66,41 @@ jobs:
           path: out/test-results/**/*.trx
 
       # ===== S2-A: Smoke P0 =====
-      - name: Install sqlite3 (winget) and persist PATH
+      - name: Install sqlite3 (robust) and persist PATH
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Continue'
-          winget install -e --id SQLite.SQLite --silent --accept-package-agreements --accept-source-agreements
-          $p = "$env:LOCALAPPDATA\Microsoft\WinGet\Links"
-          if (Test-Path "$p\sqlite3.exe") { "$p" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append }
+          $installed = $false
+
+          # 1) winget
+          try {
+            winget install -e --id SQLite.SQLite --silent --accept-package-agreements --accept-source-agreements
+            $p = "$env:LOCALAPPDATA\Microsoft\WinGet\Links"
+            if (Test-Path "$p\sqlite3.exe") {
+              "$p" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+              $installed = $true
+            }
+          } catch { }
+
+          # 2) choco fallback
+          if (-not $installed) {
+            try {
+              choco install sqlite -y --no-progress
+              $cp = "$env:ChocolateyInstall\bin"
+              if (Test-Path "$cp\sqlite3.exe") {
+                "$cp" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+                $installed = $true
+              }
+            } catch { }
+          }
+
+          if (-not $installed) {
+            Write-Error "sqlite3 non installato: winget/choco failed."
+            exit 1
+          }
+
+          # sanity check
+          sqlite3 --version
 
       - name: Run Smoke P0
         shell: pwsh
