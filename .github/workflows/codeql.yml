@@ -36,8 +36,9 @@ jobs:
         with:
           languages: csharp
 
+      # >>> FIX: flag anche qui <<<
       - name: Restore
-        run: dotnet restore Progesi.sln --nologo
+        run: dotnet restore Progesi.sln --nologo -p:UseNugetRhino=true
 
       - name: Build (Release, NuGet Rhino)
         run: dotnet build Progesi.sln -c Release --nologo -p:UseNugetRhino=true

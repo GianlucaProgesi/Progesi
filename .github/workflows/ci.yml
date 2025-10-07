@@ -34,8 +34,9 @@ jobs:
             8.0.x
             7.0.x
 
+      # >>> FIX: flag anche qui <<<
       - name: Restore
-        run: dotnet restore Progesi.sln --nologo
+        run: dotnet restore Progesi.sln --nologo -p:UseNugetRhino=true
 
       - name: Build (Release, NuGet Rhino)
         run: dotnet build Progesi.sln -c Release --nologo --no-restore -p:UseNugetRhino=true

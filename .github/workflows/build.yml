@@ -38,8 +38,9 @@ jobs:
           restore-keys: |
             nuget-${{ runner.os }}-
 
+      # >>> FIX: passiamo il flag anche al RESTORE <<<
       - name: Restore
-        run: dotnet restore Progesi.sln --nologo
+        run: dotnet restore Progesi.sln --nologo -p:UseNugetRhino=true
 
       - name: Build Release (NuGet Rhino in CI)
         run: dotnet build Progesi.sln -c Release --nologo --no-restore -p:UseNugetRhino=true
@@ -65,7 +66,7 @@ jobs:
           if-no-files-found: warn
           path: out/test-results/**/*.trx
 
-      # ===== S2-A: Smoke P0 =====
+      # ===== S2-A: Smoke P0 (.NET, senza sqlite3.exe) =====
       - name: Smoke P0 (.NET)
         run: dotnet run --project tools/ProgesiSmoke/ProgesiSmoke.csproj -c Release -- out\smoke\smoke-report.txt
 
