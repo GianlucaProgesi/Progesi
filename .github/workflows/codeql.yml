@@ -1,27 +1,21 @@
 ﻿name: CodeQL
 
 on:
-  # Avvio manuale quando vuoi
   workflow_dispatch:
-
-  # Scansiona solo su main (evita rossi su branch di lavoro)
   push:
-    branches: ['main']
+    branches: ['**']
     paths:
       - 'src/**'
       - 'Progesi.sln'
       - '.github/workflows/codeql.yml'
-
   pull_request:
-    branches: ['main']
+    branches: ['**']
     paths:
       - 'src/**'
       - 'Progesi.sln'
       - '.github/workflows/codeql.yml'
-
-  # Scansione settimanale su main
   schedule:
-    - cron: '0 3 * * 1'   # lunedì 03:00 UTC
+    - cron: '0 3 * * 1'   # Lunedì 03:00 UTC
 
 permissions:
   contents: read
@@ -29,9 +23,7 @@ permissions:
 
 jobs:
   analyze:
-    runs-on: windows-latest
-    # Se mai inciampa, NON blocca la pipeline (non regressivo per il flusso di lavoro)
-    continue-on-error: true
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
@@ -39,35 +31,22 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Setup .NET
+      - name: Setup .NET (for analyzers if needed)
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
 
-      # Modalità buildless: niente tracing MSBuild (robusto)
+      # Modalità buildless: CodeQL non intercetta alcuna build
       - name: Initialize CodeQL (buildless)
         uses: github/codeql-action/init@v3
         with:
           languages: csharp
           build-mode: none
-          # Scope sui progetti applicativi (dove ha senso)
-          paths: |
-            src/ProgesiCore/**
-            src/ProgesiDataExchange/**
-            src/ProgesiRepositories.Rhino/**
-            src/ProgesiRepositories.Sqlite/**
-            src/ProgesiRepositories.InMemory/**
-          paths-ignore: |
-            src/ProgesiGrasshopperAssembly/**
-            src/ProgesiGrasshopperBrowsers/**
 
-      # Restore solo per completezza (non compiliamo)
-      - name: Restore (buildless)
-        run: dotnet restore Progesi.sln --nologo -p:UseNugetRhino=true
-
+      # Analisi: in buildless l’estrazione non dipende da MSBuild
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
-        env:
-          CODEQL_EXTRACTOR_CSHARP_BUILDLESS: true
         with:
           category: "/language:csharp"
+        # Paracadute: se l’action inciampa, NON ti fallisce la pipeline
+        continue-on-error: true
