@@ -3,8 +3,8 @@ name: build-and-pack
 on:
   workflow_dispatch:
   push:
-    branches: ['**']    # tutti i branch
-    tags:     ['v*']    # release
+    branches: ['**']
+    tags:     ['v*']
   pull_request:
     branches: ['**']
 

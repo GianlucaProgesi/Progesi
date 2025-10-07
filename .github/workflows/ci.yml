@@ -3,7 +3,7 @@
 on:
   workflow_dispatch:
   push:
-    branches: ['**']   # prima era solo main: così parte anche dai branch di lavoro
+    branches: ['**']
     paths:
       - 'src/**'
       - 'tests/**'
@@ -37,19 +37,11 @@ jobs:
       - name: Restore
         run: dotnet restore Progesi.sln --nologo
 
-      - name: Build (Release)
+      - name: Build (Release, NuGet Rhino)
         run: dotnet build Progesi.sln -c Release --nologo --no-restore -p:UseNugetRhino=true
 
-      - name: Test (TRX + cobertura if present)
-        shell: pwsh
-        run: |
-          dotnet test Progesi.sln -c Release --no-build --nologo `
-            --logger "trx;LogFileName=tests.trx" `
-            --results-directory out\test-results
-
-          # opzionale: se generi coverage altrove, caricalo
-          $cov = Get-ChildItem -Recurse -Filter coverage.cobertura.xml -ErrorAction SilentlyContinue
-          if ($cov) { "found" | Out-File -FilePath cov.flag -Encoding ascii }
+      - name: Test (TRX)
+        run: dotnet test Progesi.sln -c Release --no-build --nologo -p:UseNugetRhino=true --logger "trx;LogFileName=tests.trx" --results-directory out\test-results
 
       - name: Upload TRX test logs
         if: always()
@@ -58,13 +50,3 @@ jobs:
           name: test-results
           if-no-files-found: warn
           path: out/test-results/**/*.trx
-
-      - name: Upload coverage (if found)
-        if: hashFiles('cov.flag') != ''
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-html
-          if-no-files-found: warn
-          path: |
-            out/test-results/**/coverage.cobertura.xml
-            coverage-html/**

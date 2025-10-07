@@ -15,7 +15,7 @@ on:
       - 'Progesi.sln'
       - '.github/workflows/codeql.yml'
   schedule:
-    - cron: '0 3 * * 1'   # lunedì 03:00 UTC
+    - cron: '0 3 * * 1'
 
 permissions:
   contents: read
@@ -25,11 +25,9 @@ jobs:
   analyze:
     runs-on: windows-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
 
@@ -38,7 +36,10 @@ jobs:
         with:
           languages: csharp
 
-      - name: Build (no-tests)
+      - name: Restore
+        run: dotnet restore Progesi.sln --nologo
+
+      - name: Build (Release, NuGet Rhino)
         run: dotnet build Progesi.sln -c Release --nologo -p:UseNugetRhino=true
 
       - name: Perform CodeQL Analysis
