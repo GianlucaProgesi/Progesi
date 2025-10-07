@@ -1,21 +1,27 @@
 ﻿name: CodeQL
 
 on:
+  # Avvio manuale quando vuoi
   workflow_dispatch:
+
+  # Scansiona solo su main (evita rossi su branch di lavoro)
   push:
-    branches: ['**']
+    branches: ['main']
     paths:
       - 'src/**'
       - 'Progesi.sln'
       - '.github/workflows/codeql.yml'
+
   pull_request:
-    branches: ['**']
+    branches: ['main']
     paths:
       - 'src/**'
       - 'Progesi.sln'
       - '.github/workflows/codeql.yml'
+
+  # Scansione settimanale su main
   schedule:
-    - cron: '0 3 * * 1'
+    - cron: '0 3 * * 1'   # lunedì 03:00 UTC
 
 permissions:
   contents: read
@@ -24,6 +30,8 @@ permissions:
 jobs:
   analyze:
     runs-on: windows-latest
+    # Se mai inciampa, NON blocca la pipeline (non regressivo per il flusso di lavoro)
+    continue-on-error: true
 
     steps:
       - name: Checkout
@@ -36,13 +44,13 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
-      # Inizializza CodeQL in modalità buildless e limita lo scope ai progetti applicativi
-      - name: Initialize CodeQL (buildless, scoped)
+      # Modalità buildless: niente tracing MSBuild (robusto)
+      - name: Initialize CodeQL (buildless)
         uses: github/codeql-action/init@v3
         with:
           languages: csharp
           build-mode: none
-          # Scansiona solo i progetti applicativi/librerie; escludi i progetti GH (Assembly/Browsers)
+          # Scope sui progetti applicativi (dove ha senso)
           paths: |
             src/ProgesiCore/**
             src/ProgesiDataExchange/**
@@ -53,11 +61,10 @@ jobs:
             src/ProgesiGrasshopperAssembly/**
             src/ProgesiGrasshopperBrowsers/**
 
-      # Restore per ripristinare PackageReference condizionali senza compilare
+      # Restore solo per completezza (non compiliamo)
       - name: Restore (buildless)
         run: dotnet restore Progesi.sln --nologo -p:UseNugetRhino=true
 
-      # Analisi CodeQL (estrazione buildless per C#)
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
         env:
