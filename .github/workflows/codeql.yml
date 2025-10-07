@@ -26,9 +26,12 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # più robusto per CodeQL sulle soluzioni multi-progetto
 
-      # MSBuild dei VS Build Tools (serve per net48 + tracciamento CodeQL)
+      # MSBuild (necessario per net48 + tracing CodeQL)
       - name: Setup MSBuild
         uses: microsoft/setup-msbuild@v2
 
@@ -37,19 +40,15 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
-      - name: Initialize CodeQL
+      - name: Initialize CodeQL (manual build mode)
         uses: github/codeql-action/init@v3
         with:
           languages: csharp
-          # (opzionale) queries: security-extended
+          build-mode: manual
 
-      # RESTORE con il flag (fondamentale per i PackageReference condizionali)
-      - name: Restore (MSBuild)
-        run: msbuild Progesi.sln /t:Restore /p:UseNugetRhino=true /p:Configuration=Release
-
-      # BUILD con MSBuild (CodeQL intercetta la compilazione)
-      - name: Build (MSBuild, NuGet Rhino)
-        run: msbuild Progesi.sln /p:UseNugetRhino=true /p:Configuration=Release /nologo /m
+      # Build TRACCIATA da CodeQL: /restore + flag UseNugetRhino=true
+      - name: Build solution (MSBuild, NuGet Rhino)
+        run: msbuild Progesi.sln /restore /m /nologo /p:Configuration=Release /p:UseNugetRhino=true
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
