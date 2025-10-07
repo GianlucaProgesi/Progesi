@@ -29,28 +29,28 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0   # più robusto per CodeQL sulle soluzioni multi-progetto
-
-      # MSBuild (necessario per net48 + tracing CodeQL)
-      - name: Setup MSBuild
-        uses: microsoft/setup-msbuild@v2
+          fetch-depth: 0
 
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
 
-      - name: Initialize CodeQL (manual build mode)
+      # Inizializza CodeQL in modalità buildless
+      - name: Initialize CodeQL (buildless)
         uses: github/codeql-action/init@v3
         with:
           languages: csharp
-          build-mode: manual
+          build-mode: none
 
-      # Build TRACCIATA da CodeQL: /restore + flag UseNugetRhino=true
-      - name: Build solution (MSBuild, NuGet Rhino)
-        run: msbuild Progesi.sln /restore /m /nologo /p:Configuration=Release /p:UseNugetRhino=true
+      # Restore con il flag per i riferimenti condizionali (Rhino/Grasshopper via NuGet in CI)
+      - name: Restore (buildless)
+        run: dotnet restore Progesi.sln --nologo -p:UseNugetRhino=true
 
+      # Analisi CodeQL (estrazione buildless per C#)
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
+        env:
+          CODEQL_EXTRACTOR_CSHARP_BUILDLESS: true
         with:
           category: "/language:csharp"
