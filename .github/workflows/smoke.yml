@@ -1,0 +1,53 @@
+name: smoke
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Restore (tool)
+        working-directory: tools/ProgesiSmoke
+        run: dotnet restore ProgesiSmoke.csproj --nologo
+
+      - name: Publish (tool)
+        shell: pwsh
+        working-directory: tools/ProgesiSmoke
+        run: |
+          $ErrorActionPreference='Stop'
+          $out = "$env:GITHUB_WORKSPACE/out/smoke/app"
+          dotnet publish ProgesiSmoke.csproj -c Release -o "$out" --nologo --no-restore
+          if (-not (Test-Path "$out/ProgesiSmoke.dll")) { throw "Smoke publish failed: DLL non trovata in $out" }
+
+      - name: Run smoke
+        shell: pwsh
+        run: |
+          $app    = "$env:GITHUB_WORKSPACE/out/smoke/app/ProgesiSmoke.dll"
+          $report = "$env:GITHUB_WORKSPACE/out/smoke/smoke-report.txt"
+          dotnet $app $report
+          Write-Host "------ SMOKE REPORT ------"
+          Get-Content $report | Write-Host
+          Write-Host "--------------------------"
+
+      - name: Upload smoke report
+        uses: actions/upload-artifact@v4
+        with:
+          name: smoke-report
+          path: out/smoke/smoke-report.txt
+          if-no-files-found: error
