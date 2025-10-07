@@ -38,7 +38,7 @@ jobs:
           restore-keys: |
             nuget-${{ runner.os }}-
 
-      # Restore con flag (serve ai PackageReference condizionali Rhino/Grasshopper)
+      # RESTORE con flag per Rhino/Grasshopper via NuGet in CI
       - name: Restore
         run: dotnet restore Progesi.sln --nologo -p:UseNugetRhino=true
 
@@ -66,12 +66,28 @@ jobs:
           if-no-files-found: warn
           path: out/test-results/**/*.trx
 
-      # ===== S2-A: Smoke P0 (dotnet) — PUBLISH + RUN dal DLL pubblicato (robusto) =====
+      # ===== S2-A: Smoke P0 (dotnet) — publish+run con working-directory e PATH espliciti =====
       - name: Smoke publish
-        run: dotnet publish tools/ProgesiSmoke/ProgesiSmoke.csproj -c Release -o out/smoke/app --nologo
+        shell: pwsh
+        working-directory: tools/ProgesiSmoke
+        run: |
+          $ErrorActionPreference='Stop'
+          $out = "$env:GITHUB_WORKSPACE/out/smoke/app"
+          dotnet publish ProgesiSmoke.csproj -c Release -o "$out" --nologo
+          if (-not (Test-Path "$out/ProgesiSmoke.dll")) { throw "Smoke publish failed: DLL non trovata in $out" }
 
       - name: Smoke run
-        run: dotnet "out/smoke/app/ProgesiSmoke.dll" "out/smoke/smoke-report.txt"
+        shell: pwsh
+        run: |
+          $ErrorActionPreference='Stop'
+          $app = "$env:GITHUB_WORKSPACE/out/smoke/app/ProgesiSmoke.dll"
+          $report = "$env:GITHUB_WORKSPACE/out/smoke/smoke-report.txt"
+          if (-not (Test-Path $app)) { throw "Smoke app non trovata: $app" }
+          dotnet $app $report
+          if (-not (Test-Path $report)) { throw "Smoke report non trovato: $report" }
+          Write-Host "------ SMOKE REPORT ------"
+          Get-Content $report | Write-Host
+          Write-Host "--------------------------"
 
       - name: Upload smoke report
         if: always()
