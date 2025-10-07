@@ -2,12 +2,17 @@ name: smoke
 
 on:
   workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch o tag su cui eseguire lo smoke (es: chore/cleanup-20251005-155659 o main)"
+        required: true
+        default: main
 
 permissions:
   contents: read
 
 concurrency:
-  group: smoke-${{ github.ref }}
+  group: smoke-${{ github.event.inputs.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -15,57 +20,51 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - name: Checkout
+      - name: Checkout (ref selezionato)
         uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.ref }}
+
+      - name: Sanity check (tool path)
+        shell: pwsh
+        run: |
+          Write-Host "Repo root: $env:GITHUB_WORKSPACE"
+          if (-not (Test-Path "$env:GITHUB_WORKSPACE/tools/ProgesiSmoke/ProgesiSmoke.csproj")) {
+            Write-Error "tools/ProgesiSmoke non trovato nel ref '${{ github.event.inputs.ref }}'."
+          }
 
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
 
-      # Restore + publish con working-directory e path assoluti
-      - name: Smoke restore
-        shell: pwsh
+      - name: Restore (tool)
         working-directory: tools/ProgesiSmoke
         run: dotnet restore ProgesiSmoke.csproj --nologo
 
-      - name: Smoke publish
+      - name: Publish (tool)
         shell: pwsh
         working-directory: tools/ProgesiSmoke
         run: |
           $ErrorActionPreference='Stop'
           $out = "$env:GITHUB_WORKSPACE/out/smoke/app"
           dotnet publish ProgesiSmoke.csproj -c Release -o "$out" --nologo --no-restore
-          if (-not (Test-Path "$out/ProgesiSmoke.dll")) {
-            throw "Smoke publish failed: DLL non trovata in $out"
-          }
+          if (-not (Test-Path "$out/ProgesiSmoke.dll")) { throw "Smoke publish failed: DLL non trovata in $out" }
 
-      # Esegui lo smoke MA non far fallire il job; se qualcosa va storto, crea un report minimale
-      - name: Smoke run (non-bloccante)
+      - name: Run smoke
         shell: pwsh
-        continue-on-error: true
         run: |
-          $ErrorActionPreference='Continue'
           $app    = "$env:GITHUB_WORKSPACE/out/smoke/app/ProgesiSmoke.dll"
           $report = "$env:GITHUB_WORKSPACE/out/smoke/smoke-report.txt"
-          New-Item -ItemType Directory -Force -Path (Split-Path $report) | Out-Null
-          if (Test-Path $app) {
-            try {
-              dotnet $app $report
-            } catch {
-              "Smoke P0 - $(Get-Date -Format s)Z  Result: FAIL`nDettagli: $($_.Exception.Message)" | Set-Content $report
-            }
-          } else {
-            "Smoke P0 - $(Get-Date -Format s)Z  Result: FAIL`nDettagli: ProgesiSmoke.dll non trovato" | Set-Content $report
-          }
+          dotnet $app $report
+          if (-not (Test-Path $report)) { throw "Smoke report non trovato: $report" }
           Write-Host "------ SMOKE REPORT ------"
-          if (Test-Path $report) { Get-Content $report | Write-Host } else { Write-Host "(report non presente)" }
+          Get-Content $report | Write-Host
           Write-Host "--------------------------"
 
       - name: Upload smoke report
-        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: smoke-report
-          if-no-files-found: warn
           path: out/smoke/smoke-report.txt
+          if-no-files-found: error
