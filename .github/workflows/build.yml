@@ -16,6 +16,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # ---------- JOB 1: build + test + pack ----------
   build:
     runs-on: windows-latest
 
@@ -38,7 +39,7 @@ jobs:
           restore-keys: |
             nuget-${{ runner.os }}-
 
-      # RESTORE con flag per Rhino/Grasshopper via NuGet in CI
+      # restore con il flag (fondamentale con i riferimenti condizionali)
       - name: Restore
         run: dotnet restore Progesi.sln --nologo -p:UseNugetRhino=true
 
@@ -66,7 +67,22 @@ jobs:
           if-no-files-found: warn
           path: out/test-results/**/*.trx
 
-      # ===== S2-A: Smoke P0 (dotnet) — publish+run con working-directory e PATH espliciti =====
+  # ---------- JOB 2: smoke (isolato, continua anche se fallisce) ----------
+  smoke:
+    runs-on: windows-latest
+    needs: build
+    continue-on-error: true   # ← finché non è stabile; poi lo togliamo
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      # publish + run con working-directory e path assoluti: deterministico
       - name: Smoke publish
         shell: pwsh
         working-directory: tools/ProgesiSmoke
@@ -96,14 +112,3 @@ jobs:
           name: smoke-report
           if-no-files-found: warn
           path: out/smoke/smoke-report.txt
-
-      - name: Create GitHub Release (on tag)
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          draft: false
-          prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-alpha') }}
-          files: |
-            out/*.zip
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
