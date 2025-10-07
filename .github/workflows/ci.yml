@@ -3,96 +3,68 @@
 on:
   workflow_dispatch:
   push:
-    branches: [ main ]
+    branches: ['**']   # prima era solo main: così parte anche dai branch di lavoro
     paths:
-      - "src/**"
-      - "tests/**"
-      - "Progesi.sln"
-      - ".github/workflows/ci.yml"
+      - 'src/**'
+      - 'tests/**'
+      - 'Progesi.sln'
+      - '.github/workflows/ci.yml'
   pull_request:
-    branches: [ main ]
+    branches: ['**']
     paths:
-      - "src/**"
-      - "tests/**"
-      - "Progesi.sln"
-      - ".github/workflows/ci.yml"
+      - 'src/**'
+      - 'tests/**'
+      - 'Progesi.sln'
+      - '.github/workflows/ci.yml'
 
 permissions:
   contents: read
 
-concurrency:
-  group: ci-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
-
 jobs:
   test:
     runs-on: windows-latest
-    env:
-      DOTNET_CLI_TELEMETRY_OPTOUT: 1
-      DOTNET_NOLOGO: 1
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: "8.0.x"
+          dotnet-version: |
+            8.0.x
+            7.0.x
 
       - name: Restore
-        run: dotnet restore
+        run: dotnet restore Progesi.sln --nologo
 
       - name: Build (Release)
-        run: dotnet build -c Release --no-restore /m
+        run: dotnet build Progesi.sln -c Release --nologo --no-restore -p:UseNugetRhino=true
 
-      - name: Test + collect coverage (XPlat)
-        run: >
-          dotnet test Progesi.sln
-          -c Release
-          --no-build
-          --logger "trx;LogFileName=test-results.trx"
-          --results-directory "out\test-results"
-          --collect "XPlat Code Coverage"
-
-      - name: Install ReportGenerator
-        run: dotnet tool update --global dotnet-reportgenerator-globaltool
-
-      - name: Add dotnet tools to PATH
-        shell: pwsh
-        run: echo "$env:USERPROFILE\.dotnet\tools" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-
-      # Non fallire se il Cobertura non c'è (evita rossi inutili)
-      - name: Detect coverage files
-        id: cov
+      - name: Test (TRX + cobertura if present)
         shell: pwsh
         run: |
-          $files = Get-ChildItem -Recurse -Path "out\test-results" -Filter coverage.cobertura.xml -ErrorAction SilentlyContinue
-          if ($files) {
-            "found=true"  | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
-            Write-Host "Found $($files.Count) Cobertura file(s)."
-          } else {
-            "found=false" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
-            Write-Warning "No Cobertura reports found under out/test-results."
-          }
+          dotnet test Progesi.sln -c Release --no-build --nologo `
+            --logger "trx;LogFileName=tests.trx" `
+            --results-directory out\test-results
 
-      - name: Generate HTML report
-        if: steps.cov.outputs.found == 'true'
-        shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Force -Path coverage-html | Out-Null
-          reportgenerator -reports:"out/test-results/**/coverage.cobertura.xml" -targetdir:"coverage-html" -reporttypes:"HtmlInline_AzurePipelines;Cobertura"
+          # opzionale: se generi coverage altrove, caricalo
+          $cov = Get-ChildItem -Recurse -Filter coverage.cobertura.xml -ErrorAction SilentlyContinue
+          if ($cov) { "found" | Out-File -FilePath cov.flag -Encoding ascii }
 
-      - name: Upload coverage (HTML + Cobertura)
-        uses: actions/upload-artifact@v4
+      - name: Upload TRX test logs
         if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          if-no-files-found: warn
+          path: out/test-results/**/*.trx
+
+      - name: Upload coverage (if found)
+        if: hashFiles('cov.flag') != ''
+        uses: actions/upload-artifact@v4
         with:
           name: coverage-html
           if-no-files-found: warn
           path: |
             out/test-results/**/coverage.cobertura.xml
             coverage-html/**
-
-      - name: Upload TRX test logs
-        uses: actions/upload-artifact@v4
-        if: always()
-        with:
-          name: test-results
-          if-no-files-found: warn
-          path: out/test-results/**/*.trx

@@ -3,33 +3,27 @@
 on:
   workflow_dispatch:
   push:
-    branches: [ main ]
+    branches: ['**']
     paths:
-      - "src/**"
-      - "tests/**"
-      - "Progesi.sln"
-      - ".github/workflows/codeql.yml"
+      - 'src/**'
+      - 'Progesi.sln'
+      - '.github/workflows/codeql.yml'
   pull_request:
-    branches: [ main ]
+    branches: ['**']
     paths:
-      - "src/**"
-      - "tests/**"
-      - "Progesi.sln"
-      - ".github/workflows/codeql.yml"
+      - 'src/**'
+      - 'Progesi.sln'
+      - '.github/workflows/codeql.yml'
+  schedule:
+    - cron: '0 3 * * 1'   # lunedì 03:00 UTC
 
 permissions:
   contents: read
   security-events: write
 
-concurrency:
-  group: codeql-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
-
 jobs:
   analyze:
-    name: Analyze (C#)
     runs-on: windows-latest
-
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -37,21 +31,15 @@ jobs:
       - name: Setup .NET
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: "8.0.x"
+          dotnet-version: 8.0.x
 
-      # Inizializza CodeQL in modalità "manual build"
       - name: Initialize CodeQL
         uses: github/codeql-action/init@v3
         with:
           languages: csharp
-          build-mode: manual
 
-      # Build manuale (dopo l'init, così CodeQL “traccia” la compilazione)
-      - name: Restore
-        run: dotnet restore
-
-      - name: Build (Release)
-        run: dotnet build -c Release --no-restore /m
+      - name: Build (no-tests)
+        run: dotnet build Progesi.sln -c Release --nologo -p:UseNugetRhino=true
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
