@@ -31,13 +31,21 @@ jobs:
             8.0.x
             7.0.x
 
-      - name: Cache NuGet
+      - name: Cache NuGet (v3-cache)
         uses: actions/cache@v4
         with:
           path: ~\AppData\Local\NuGet\v3-cache
           key: nuget-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/packages.lock.json', '**/*.props', '**/*.targets') }}
           restore-keys: |
             nuget-${{ runner.os }}-
+
+      - name: Cache NuGet packages (~/.nuget/packages)
+        uses: actions/cache@v4
+        with:
+          path: ~\.nuget\packages
+          key: pkgs-${{ runner.os }}-${{ hashFiles('**/*.csproj', '**/packages.lock.json') }}
+          restore-keys: |
+            pkgs-${{ runner.os }}-
 
       # restore con il flag (fondamentale con i riferimenti condizionali)
       - name: Restore
@@ -67,11 +75,11 @@ jobs:
           if-no-files-found: warn
           path: out/test-results/**/*.trx
 
-  # ---------- JOB 2: smoke (isolato, continua anche se fallisce) ----------
+  # ---------- JOB 2: smoke (isolato) ----------
   smoke:
     runs-on: windows-latest
     needs: build
-    continue-on-error: true   # ← finché non è stabile; poi lo togliamo
+    continue-on-error: true   # ← togli questa riga quando vediamo stabilità
 
     steps:
       - name: Checkout
@@ -82,23 +90,45 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
-      # publish + run con working-directory e path assoluti: deterministico
+      # stesse cache del job build → restore stabile e veloce
+      - name: Cache NuGet (v3-cache)
+        uses: actions/cache@v4
+        with:
+          path: ~\AppData\Local\NuGet\v3-cache
+          key: nuget-${{ runner.os }}-${{ hashFiles('tools/ProgesiSmoke/*.csproj') }}
+          restore-keys: |
+            nuget-${{ runner.os }}-
+
+      - name: Cache NuGet packages (~/.nuget/packages)
+        uses: actions/cache@v4
+        with:
+          path: ~\.nuget\packages
+          key: pkgs-${{ runner.os }}-${{ hashFiles('tools/ProgesiSmoke/*.csproj') }}
+          restore-keys: |
+            pkgs-${{ runner.os }}-
+
+      # publish + run con working-directory e path assoluti
+      - name: Smoke restore
+        shell: pwsh
+        working-directory: tools/ProgesiSmoke
+        run: dotnet restore ProgesiSmoke.csproj --nologo
+
       - name: Smoke publish
         shell: pwsh
         working-directory: tools/ProgesiSmoke
         run: |
           $ErrorActionPreference='Stop'
           $out = "$env:GITHUB_WORKSPACE/out/smoke/app"
-          dotnet publish ProgesiSmoke.csproj -c Release -o "$out" --nologo
+          dotnet publish ProgesiSmoke.csproj -c Release -o "$out" --nologo --no-restore
           if (-not (Test-Path "$out/ProgesiSmoke.dll")) { throw "Smoke publish failed: DLL non trovata in $out" }
 
       - name: Smoke run
         shell: pwsh
         run: |
           $ErrorActionPreference='Stop'
-          $app = "$env:GITHUB_WORKSPACE/out/smoke/app/ProgesiSmoke.dll"
+          $app    = "$env:GITHUB_WORKSPACE/out/smoke/app/ProgesiSmoke.dll"
           $report = "$env:GITHUB_WORKSPACE/out/smoke/smoke-report.txt"
-          if (-not (Test-Path $app)) { throw "Smoke app non trovata: $app" }
+          if (-not (Test-Path $app))    { throw "Smoke app non trovata: $app" }
           dotnet $app $report
           if (-not (Test-Path $report)) { throw "Smoke report non trovato: $report" }
           Write-Host "------ SMOKE REPORT ------"
