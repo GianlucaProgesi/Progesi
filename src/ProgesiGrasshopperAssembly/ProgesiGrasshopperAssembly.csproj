@@ -5,107 +5,71 @@
     <AssemblyName>ProgesiGrasshopperAssembly</AssemblyName>
     <RootNamespace>ProgesiGrasshopperAssembly</RootNamespace>
     <LangVersion>latest</LangVersion>
+    <Nullable>enable</Nullable>
 
-      <Nullable>enable</Nullable>
-      <LangVersion>latest</LangVersion>
-
-    <!-- sempre out in bin\<Cfg>\net48\ -->
+    <!-- output come nel tuo file -->
     <AppendTargetFrameworkToOutputPath>true</AppendTargetFrameworkToOutputPath>
     <OutDir>$(MSBuildProjectDirectory)\bin\$(Configuration)\net48\</OutDir>
 
-    <!-- genera sempre l’assembly completo accanto alla .gha -->
-    <ProduceReferenceAssembly>false</ProduceReferenceAssembly>
-    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
-
-    <!-- copia automatica in GH solo se PROGESI_DEPLOY_GH=1 -->
-    <ProgesiDeployGh Condition="'$(ProgesiDeployGh)'==''">false</ProgesiDeployGh>
+    <!-- Switch: in CI usiamo pacchetti, in locale DLL installate -->
+    <UseNugetRhino Condition="'$(UseNugetRhino)'==''">false</UseNugetRhino>
+    <RhinoInstallDir Condition="'$(RhinoInstallDir)'==''">C:\Program Files\Rhino 8</RhinoInstallDir>
   </PropertyGroup>
 
-  <!-- NuGet -->
+  <!-- CI: pacchetti Rhino/Grasshopper (niente runtime, ci pensa Rhino a runtime) -->
+  <ItemGroup Condition="'$(UseNugetRhino)'=='true'">
+    <PackageReference Include="RhinoCommon" Version="8.*">
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </PackageReference>
+    <PackageReference Include="Grasshopper" Version="8.*">
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <!-- Locale: DLL dall’installazione di Rhino 8 -->
+  <ItemGroup Condition="'$(UseNugetRhino)'!='true'">
+    <Reference Include="RhinoCommon">
+      <HintPath>$(RhinoInstallDir)\System\RhinoCommon.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="GH_IO">
+      <HintPath>$(RhinoInstallDir)\Plug-ins\Grasshopper\GH_IO.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Grasshopper">
+      <HintPath>$(RhinoInstallDir)\Plug-ins\Grasshopper\Grasshopper.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <!-- Riferimenti ai tuoi progetti usati dall'assembly GH -->
+  <ItemGroup>
+    <ProjectReference Include="..\ProgesiDataExchange\ProgesiDataExchange.csproj" />
+    <ProjectReference Include="..\ProgesiCore\ProgesiCore.csproj" />
+    <ProjectReference Include="..\ProgesiRepositories.Rhino\ProgesiRepositories.Rhino.csproj" />
+    <ProjectReference Include="..\ProgesiRepositories.Sqlite\ProgesiRepositories.Sqlite.csproj" />
+    <!-- >>> AGGIUNTO: in-memory repositories <<< -->
+    <ProjectReference Include="..\ProgesiRepositories.InMemory\ProgesiRepositories.InMemory.csproj" />
+  </ItemGroup>
+
+  <!-- Pacchetti usati DIRETTAMENTE nell’assembly -->
   <ItemGroup>
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
   </ItemGroup>
 
-  <!-- Progetti della soluzione -->
+  <!-- Icone: mantieni tutte le png con lo stesso LogicalName di prima -->
   <ItemGroup>
-    <ProjectReference Include="..\ProgesiCore\ProgesiCore.csproj" />
-    <ProjectReference Include="..\ProgesiDataExchange\ProgesiDataExchange.csproj" />
-    <ProjectReference Include="..\ProgesiDomainServices\ProgesiDomainServices.csproj" />
-    <ProjectReference Include="..\ProgesiRepositories.InMemory\ProgesiRepositories.InMemory.csproj" />
-    <ProjectReference Include="..\ProgesiRepositories.Rhino\ProgesiRepositories.Rhino.csproj" />
-    <ProjectReference Include="..\ProgesiRepositories.Sqlite\ProgesiRepositories.Sqlite.csproj" />
+    <EmbeddedResource Include="Resources\*.png">
+      <LogicalName>ProgesiGrasshopperAssembly.Resources.%(Filename)%(Extension)</LogicalName>
+    </EmbeddedResource>
   </ItemGroup>
 
-  <!-- Riferimenti Rhino/Grasshopper -->
-  <PropertyGroup>
-    <RhinoRoot Condition="Exists('C:\Program Files\Rhino 8')">C:\Program Files\Rhino 8</RhinoRoot>
-    <RhinoRoot Condition="'$(RhinoRoot)'=='' and Exists('C:\Program Files\Rhino 7')">C:\Program Files\Rhino 7</RhinoRoot>
-  </PropertyGroup>
-  <ItemGroup>
-    <Reference Include="RhinoCommon">
-      <HintPath>$(RhinoRoot)\System\RhinoCommon.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="Grasshopper">
-      <HintPath>$(RhinoRoot)\Plug-ins\Grasshopper\Grasshopper.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="GH_IO">
-      <HintPath>$(RhinoRoot)\Plug-ins\Grasshopper\GH_IO.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="System.Drawing" />
-    <Reference Include="System.Windows.Forms" />
-  </ItemGroup>
-  <ItemGroup>
-    <Folder Include="Resources\" />
-  </ItemGroup>
-
-  <!-- 1) crea SEMPRE la .gha accanto alla dll -->
-  <Target Name="MakeGha" AfterTargets="Build">
+  <!-- Dopo build: rinomina dll in .gha accanto all’output -->
+  <Target Name="PostBuildRenameToGha" AfterTargets="Build">
     <ItemGroup>
-      <BuiltDll Include="$(TargetPath)" />
+      <BuiltDll Include="$(OutDir)$(AssemblyName).dll" />
     </ItemGroup>
-    <Copy SourceFiles="@(BuiltDll)" DestinationFiles="$(TargetDir)$(AssemblyName).gha" OverwriteReadOnlyFiles="true" SkipUnchangedFiles="false" />
+    <Copy SourceFiles="@(BuiltDll)" DestinationFiles="$(OutDir)$(AssemblyName).gha" SkipUnchangedFiles="true" />
   </Target>
-
-  <!-- 2) copia automatica in %APPDATA% SE richiamato con /p:ProgesiDeployGh=true -->
-  <Target Name="CopyToGrasshopper" AfterTargets="MakeGha" Condition="'$(ProgesiDeployGh)'=='true'">
-    <PropertyGroup>
-      <GhLib>$(APPDATA)\Grasshopper\Libraries\Progesi\</GhLib>
-    </PropertyGroup>
-    <MakeDir Directories="$(GhLib)" />
-    <ItemGroup>
-      <GhFiles Include="$(TargetDir)**\*.gha;$(TargetDir)**\*.dll" />
-      <RuntimeFiles Include="$(TargetDir)runtimes\**\*.*" />
-    </ItemGroup>
-    <Copy SourceFiles="@(GhFiles)" DestinationFolder="$(GhLib)" SkipUnchangedFiles="false" OverwriteReadOnlyFiles="true" />
-    <Copy SourceFiles="@(RuntimeFiles)" DestinationFiles="@(RuntimeFiles->'$(GhLib)runtimes\%(RecursiveDir)%(Filename)%(Extension)')" SkipUnchangedFiles="false" OverwriteReadOnlyFiles="true" />
-  </Target>
-  <!-- 1) Rimuovi qualunque item che catturi PNG in Resources (None/Content/…): -->
-  <ItemGroup>
-    <None Remove="Resources\*.png" />
-    <Content Remove="Resources\*.png" />
-    <Resource Remove="Resources\*.png" />
-  </ItemGroup>
-
-  <!-- 2) Re-include come EmbeddedResource con LogicalName deterministico: -->
-  <ItemGroup>
-    <EmbeddedResource Include="Resources\metin.png">
-      <LogicalName>ProgesiGrasshopperAssembly.Resources.metin.png</LogicalName>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Resources\metout.png">
-      <LogicalName>ProgesiGrasshopperAssembly.Resources.metout.png</LogicalName>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Resources\varin.png">
-      <LogicalName>ProgesiGrasshopperAssembly.Resources.varin.png</LogicalName>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Resources\varout.png">
-      <LogicalName>ProgesiGrasshopperAssembly.Resources.varout.png</LogicalName>
-    </EmbeddedResource>
-    <EmbeddedResource Include="Resources\snip.png">
-      <LogicalName>ProgesiGrasshopperAssembly.Resources.snip.png</LogicalName>
-    </EmbeddedResource>
-  </ItemGroup>
 
 </Project>
