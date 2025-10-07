@@ -34,7 +34,6 @@ jobs:
             8.0.x
             7.0.x
 
-      # >>> FIX: flag anche qui <<<
       - name: Restore
         run: dotnet restore Progesi.sln --nologo -p:UseNugetRhino=true
 

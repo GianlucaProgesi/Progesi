@@ -24,10 +24,16 @@ permissions:
 jobs:
   analyze:
     runs-on: windows-latest
+
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-dotnet@v4
+      # MSBuild dei VS Build Tools (serve per net48 + tracciamento CodeQL)
+      - name: Setup MSBuild
+        uses: microsoft/setup-msbuild@v2
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
         with:
           dotnet-version: 8.0.x
 
@@ -35,13 +41,15 @@ jobs:
         uses: github/codeql-action/init@v3
         with:
           languages: csharp
+          # (opzionale) queries: security-extended
 
-      # >>> FIX: flag anche qui <<<
-      - name: Restore
-        run: dotnet restore Progesi.sln --nologo -p:UseNugetRhino=true
+      # RESTORE con il flag (fondamentale per i PackageReference condizionali)
+      - name: Restore (MSBuild)
+        run: msbuild Progesi.sln /t:Restore /p:UseNugetRhino=true /p:Configuration=Release
 
-      - name: Build (Release, NuGet Rhino)
-        run: dotnet build Progesi.sln -c Release --nologo -p:UseNugetRhino=true
+      # BUILD con MSBuild (CodeQL intercetta la compilazione)
+      - name: Build (MSBuild, NuGet Rhino)
+        run: msbuild Progesi.sln /p:UseNugetRhino=true /p:Configuration=Release /nologo /m
 
       - name: Perform CodeQL Analysis
         uses: github/codeql-action/analyze@v3
