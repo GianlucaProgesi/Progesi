@@ -36,14 +36,24 @@ jobs:
         with:
           dotnet-version: 8.0.x
 
-      # Inizializza CodeQL in modalità buildless
-      - name: Initialize CodeQL (buildless)
+      # Inizializza CodeQL in modalità buildless e limita lo scope ai progetti applicativi
+      - name: Initialize CodeQL (buildless, scoped)
         uses: github/codeql-action/init@v3
         with:
           languages: csharp
           build-mode: none
+          # Scansiona solo i progetti applicativi/librerie; escludi i progetti GH (Assembly/Browsers)
+          paths: |
+            src/ProgesiCore/**
+            src/ProgesiDataExchange/**
+            src/ProgesiRepositories.Rhino/**
+            src/ProgesiRepositories.Sqlite/**
+            src/ProgesiRepositories.InMemory/**
+          paths-ignore: |
+            src/ProgesiGrasshopperAssembly/**
+            src/ProgesiGrasshopperBrowsers/**
 
-      # Restore con il flag per i riferimenti condizionali (Rhino/Grasshopper via NuGet in CI)
+      # Restore per ripristinare PackageReference condizionali senza compilare
       - name: Restore (buildless)
         run: dotnet restore Progesi.sln --nologo -p:UseNugetRhino=true
 
