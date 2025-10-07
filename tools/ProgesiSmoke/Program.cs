@@ -1,19 +1,17 @@
-using System;
+﻿using System;
 using System.IO;
 using Microsoft.Data.Sqlite;
 
 internal static class Program
 {
-  // Usage: dotnet run --project tools/ProgesiSmoke -c Release -- out\smoke\smoke-report.txt
   public static int Main(string[] args)
   {
     try
     {
       var outDir = "out/smoke";
-      var reportPath = args is { Length: >0 } ? args[0] : Path.Combine(outDir, "smoke-report.txt");
+      var reportPath = args is { Length: > 0 } ? args[0] : Path.Combine(outDir, "smoke-report.txt");
       Directory.CreateDirectory(outDir);
       var dbPath = Path.Combine(outDir, "progesi_smoke.db");
-
       if (File.Exists(dbPath)) File.Delete(dbPath);
 
       using var cn = new SqliteConnection($"Data Source={dbPath}");
@@ -34,7 +32,6 @@ CREATE INDEX IF NOT EXISTS idx_metadata_hash ON metadata(Hash);
 CREATE INDEX IF NOT EXISTS idx_axis_hash     ON axisvariables(Hash);
 ");
 
-      // seed
       Exec(cn, @"
 INSERT INTO variables (Id,Hash,Name,Value,Unit,By,Ref,LastModifiedUtc)
 VALUES ('v-1','','E1_Load','42.5','kN','Smoke','','2020-01-01T00:00:00Z');
@@ -44,16 +41,15 @@ INSERT INTO axisvariables (Id,Hash,Name,Unit,AxisRef,Stations,""Values"",By,Ref,
 VALUES ('a-1','','GirderCamber','mm','Axis-1','0;0.5;1','0;15;0','Smoke','','2020-01-01T00:00:00Z');
 ");
 
-      var ok = true;
+      bool ok = true;
       using var cmd = cn.CreateCommand();
 
-      // assert 1
       cmd.CommandText = "SELECT COUNT(*) FROM variables WHERE Name='E1_Load' AND Unit='kN' AND Value='42.5'";
       var v = Convert.ToInt32(cmd.ExecuteScalar() ?? 0);
-      // assert 2
+
       cmd.CommandText = "SELECT COUNT(*) FROM metadata WHERE Info LIKE '%Seed metadata%'";
       var m = Convert.ToInt32(cmd.ExecuteScalar() ?? 0);
-      // assert 3 (Values è parola riservata → sempre tra doppi apici)
+
       cmd.CommandText = "SELECT COUNT(*) FROM axisvariables WHERE Name='GirderCamber' AND Stations='0;0.5;1' AND \"Values\"='0;15;0'";
       var a = Convert.ToInt32(cmd.ExecuteScalar() ?? 0);
 
