@@ -38,6 +38,7 @@ jobs:
           restore-keys: |
             nuget-${{ runner.os }}-
 
+      # Restore con flag (serve ai PackageReference condizionali Rhino/Grasshopper)
       - name: Restore
         run: dotnet restore Progesi.sln --nologo -p:UseNugetRhino=true
 
@@ -65,15 +66,12 @@ jobs:
           if-no-files-found: warn
           path: out/test-results/**/*.trx
 
-      # ===== S2-A: Smoke P0 (dotnet) – restore/build del tool per evitare cache ballerine =====
-      - name: Smoke restore
-        run: dotnet restore tools/ProgesiSmoke/ProgesiSmoke.csproj --nologo
-
-      - name: Smoke build
-        run: dotnet build tools/ProgesiSmoke/ProgesiSmoke.csproj -c Release --nologo --no-restore
+      # ===== S2-A: Smoke P0 (dotnet) — PUBLISH + RUN dal DLL pubblicato (robusto) =====
+      - name: Smoke publish
+        run: dotnet publish tools/ProgesiSmoke/ProgesiSmoke.csproj -c Release -o out/smoke/app --nologo
 
       - name: Smoke run
-        run: dotnet run --project tools/ProgesiSmoke/ProgesiSmoke.csproj -c Release -- out\smoke\smoke-report.txt
+        run: dotnet "out/smoke/app/ProgesiSmoke.dll" "out/smoke/smoke-report.txt"
 
       - name: Upload smoke report
         if: always()
