@@ -39,10 +39,10 @@ jobs:
         run: dotnet restore Progesi.sln --nologo
 
       - name: Build Release
-        run: dotnet build Progesi.sln -c Release --nologo --no-restore
+  	run: dotnet build Progesi.sln -c Release --nologo --no-restore -p:UseNugetRhino=true
 
       - name: Test (Release)
-        run: dotnet test Progesi.sln -c Release --no-build --nologo --logger "trx" --results-directory out\test-results
+        run: dotnet test Progesi.sln -c Release --no-build --nologo -p:UseNugetRhino=true
 
       - name: Package plugin (zip)
         shell: pwsh
@@ -63,12 +63,14 @@ jobs:
 
       # ===== S2-A: Smoke P0 CLI =====
       - name: Install sqlite3 (winget)
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Continue'
+  	shell: pwsh
+	run: |
+    	  $ErrorActionPreference = 'Continue'
           winget install -e --id SQLite.SQLite --silent --accept-package-agreements --accept-source-agreements
           $p = "$env:LOCALAPPDATA\Microsoft\WinGet\Links"
-          if (Test-Path "$p\sqlite3.exe") { $env:Path = "$p;$env:Path" }
+          if (Test-Path "$p\sqlite3.exe") {
+            "$p" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          }
 
       - name: Run Smoke P0
         shell: pwsh
