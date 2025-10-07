@@ -38,7 +38,6 @@ jobs:
           restore-keys: |
             nuget-${{ runner.os }}-
 
-      # RESTORE con UseNugetRhino=true (fondamentale)
       - name: Restore
         run: dotnet restore Progesi.sln --nologo -p:UseNugetRhino=true
 
@@ -66,8 +65,14 @@ jobs:
           if-no-files-found: warn
           path: out/test-results/**/*.trx
 
-      # Smoke .NET (senza sqlite3.exe)
-      - name: Smoke P0 (.NET)
+      # ===== S2-A: Smoke P0 (dotnet) – restore/build del tool per evitare cache ballerine =====
+      - name: Smoke restore
+        run: dotnet restore tools/ProgesiSmoke/ProgesiSmoke.csproj --nologo
+
+      - name: Smoke build
+        run: dotnet build tools/ProgesiSmoke/ProgesiSmoke.csproj -c Release --nologo --no-restore
+
+      - name: Smoke run
         run: dotnet run --project tools/ProgesiSmoke/ProgesiSmoke.csproj -c Release -- out\smoke\smoke-report.txt
 
       - name: Upload smoke report
