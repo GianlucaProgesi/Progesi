@@ -6,6 +6,8 @@
     <RootNamespace>ProgesiGrasshopperAssembly</RootNamespace>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
+    <PlatformTarget>x64</PlatformTarget>
+    <Prefer32Bit>false</Prefer32Bit>
 
     <!-- output come nel tuo file -->
     <AppendTargetFrameworkToOutputPath>true</AppendTargetFrameworkToOutputPath>
