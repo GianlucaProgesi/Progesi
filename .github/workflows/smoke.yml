@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       ref:
-        description: "Branch o tag su cui eseguire lo smoke (es: chore/cleanup-20251005-155659 o main)"
+        description: "Branch o tag su cui eseguire lo smoke (es: main o chore/…)"
         required: true
         default: main
 
@@ -18,20 +18,11 @@ concurrency:
 jobs:
   smoke:
     runs-on: windows-latest
-
     steps:
       - name: Checkout (ref selezionato)
         uses: actions/checkout@v4
         with:
           ref: ${{ github.event.inputs.ref }}
-
-      - name: Sanity check (tool path)
-        shell: pwsh
-        run: |
-          Write-Host "Repo root: $env:GITHUB_WORKSPACE"
-          if (-not (Test-Path "$env:GITHUB_WORKSPACE/tools/ProgesiSmoke/ProgesiSmoke.csproj")) {
-            Write-Error "tools/ProgesiSmoke non trovato nel ref '${{ github.event.inputs.ref }}'."
-          }
 
       - name: Setup .NET SDK
         uses: actions/setup-dotnet@v4
@@ -57,7 +48,6 @@ jobs:
           $app    = "$env:GITHUB_WORKSPACE/out/smoke/app/ProgesiSmoke.dll"
           $report = "$env:GITHUB_WORKSPACE/out/smoke/smoke-report.txt"
           dotnet $app $report
-          if (-not (Test-Path $report)) { throw "Smoke report non trovato: $report" }
           Write-Host "------ SMOKE REPORT ------"
           Get-Content $report | Write-Host
           Write-Host "--------------------------"

@@ -1,16 +1,9 @@
-# crea la cartella se mancasse
-New-Item -ItemType Directory -Force -Path .github\workflows | Out-Null
-
-@'
 name: build-and-pack
 
 on:
-  workflow_dispatch:
+  workflow_dispatch:            # Run workflow (manuale)
   push:
-    branches: ["**"]
-    tags: ["v*"]
-  pull_request:
-    branches: ["**"]
+    tags: ['v*']                # release solo su tag
 
 permissions:
   contents: write
@@ -41,11 +34,10 @@ jobs:
           restore-keys: |
             nuget-${{ runner.os }}-
 
-      # restore con flag per Rhino/Grasshopper in CI
       - name: Restore
         run: dotnet restore Progesi.sln --nologo -p:UseNugetRhino=true
 
-      - name: Build Release
+      - name: Build (Release)
         run: dotnet build Progesi.sln -c Release --nologo --no-restore -p:UseNugetRhino=true
 
       - name: Test (Release)
@@ -79,4 +71,3 @@ jobs:
             out/*.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-'@ | Set-Content .github\workflows\build.yml -Encoding UTF8

@@ -3,12 +3,16 @@
 on:
   workflow_dispatch:
   push:
-    branches: ['**']
+    branches: ['main']          # solo main
   pull_request:
-    branches: ['**']
+    branches: ['**']            # tutte le PR
 
 permissions:
   contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test:
@@ -33,7 +37,7 @@ jobs:
       - name: Test (TRX)
         run: dotnet test Progesi.sln -c Release --no-build --nologo -p:UseNugetRhino=true --logger "trx;LogFileName=tests.trx" --results-directory out\test-results
 
-      - name: Upload TRX test logs
+      - name: Upload TRX
         if: always()
         uses: actions/upload-artifact@v4
         with:
