@@ -1,0 +1,12 @@
+﻿Restored files:
+src/ProgesiCore/Persistence/ProgesiAxisVariableRepository.cs
+src/ProgesiCore/Persistence/ProgesiAxisVariableSql.cs
+src/ProgesiCore/ProgesiAxisVariable.cs
+src/ProgesiCore/ProgesiAxisVariableDto.cs
+tests/ProgesiCore.Tests/ProgesiAxisVariableDtoTests.cs
+tests/ProgesiCore.Tests/ProgesiAxisVariableRepositoryTests.cs
+tests/ProgesiCore.Tests/ProgesiAxisVariableTests.cs
+tests/ProgesiRepositories.Sqlite.Tests/ProgesiAxisVariableRepositoryIntegrationTests.cs
+
+Missed files (no SHA found):
+tests/ProgesiCore.Tests/ProgesiAxisVariableRepositoryIntegrationTests.cs
