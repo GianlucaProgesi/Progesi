@@ -1,6 +1,7 @@
-﻿using System;
-using Grasshopper.Kernel;
+﻿using Grasshopper.Kernel;
 using Progesi.DataExchange;
+using ProgesiGrasshopperAssembly.Infrastructure;
+using System;
 
 namespace Progesi.GrasshopperAssembly.Components
 {
@@ -13,7 +14,8 @@ namespace Progesi.GrasshopperAssembly.Components
     { }
 
     public override Guid ComponentGuid => new Guid("E2D8D8E1-10D7-4F62-9A8E-A2D8E3A1B8C5");
-    protected override System.Drawing.Bitmap Icon => null!; // suppress nullability warning
+    protected override System.Drawing.Bitmap Icon => ProgesiIcons.DataEx;
+    
     public override GH_Exposure Exposure => GH_Exposure.primary;
 
     protected override void RegisterInputParams(GH_InputParamManager p)

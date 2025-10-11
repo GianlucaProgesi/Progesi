@@ -39,5 +39,7 @@ namespace ProgesiGrasshopperAssembly.Infrastructure
     public static Bitmap VarIn => Load("varin.png");
     public static Bitmap VarOut => Load("varout.png");
     public static Bitmap Snip => Load("snip.png");
+
+    public static Bitmap DataEx => Load("dataex.png");
   }
 }
