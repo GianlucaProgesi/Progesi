@@ -12,18 +12,10 @@ namespace ProgesiGrasshopperAssembly.Infrastructure
   /// </summary>
   public static class SnipHelpers
   {
-    // data:image/png;base64,AAA...
     private static readonly Regex DataUrlRx = new Regex(
         @"^data:(?<mime>[-\w\.\+\/]+);base64,(?<b64>[A-Za-z0-9\+\/=]+)$",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-    /// <summary>
-    /// Valida e normalizza un “Ref”.
-    /// Accetta:
-    ///  - path di file esistente (restituisce percorso assoluto)
-    ///  - URL http/https valido
-    ///  - data-uri (restituito com’è)
-    /// </summary>
     public static bool TryNormalizeRef(string input, out string normalized, out string reason)
     {
       normalized = string.Empty; reason = string.Empty;
@@ -35,11 +27,11 @@ namespace ProgesiGrasshopperAssembly.Infrastructure
       // data-url → lo accettiamo così com'è
       if (DataUrlRx.IsMatch(s)) { normalized = s; return true; }
 
-      // path di file esistente
+      // path di file esistente (no schema, no data:)
       try
       {
-        // path relativo → assoluto
-        if (s.IndexOf("://", StringComparison.Ordinal) < 0 && !s.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
+        if (s.IndexOf("://", StringComparison.Ordinal) < 0 &&
+            !s.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
         {
           string abs = Path.GetFullPath(s);
           if (File.Exists(abs)) { normalized = abs; return true; }
@@ -65,18 +57,9 @@ namespace ProgesiGrasshopperAssembly.Infrastructure
       return false;
     }
 
-    /// <summary>
-    /// Prova a creare una stringa SNIP normalizzata da “input”.
-    /// Regole:
-    ///  - snip:*              → mantiene mime (se mancante usa application/octet-stream)
-    ///  - data-url base64     → usa mime catturato
-    ///  - path/url immagine   → deduce mime da estensione (png/jpg/jpeg/gif/bmp/webp/tiff)
-    ///  - base64 “nuda”       → assume image/png
-    /// </summary>
     public static bool TryMake(object input, string caption, int index, out string snip, out string info)
     {
       snip = string.Empty; info = string.Empty;
-
       if (input == null) { info = "Input snip nullo"; return false; }
 
       var s = input as string;
@@ -102,34 +85,23 @@ namespace ProgesiGrasshopperAssembly.Infrastructure
         return true;
       }
 
-      // path/URL → deduce mime
+      // path/URL → deduce mime (e nel caso path verifica la presenza)
       var mimeFromPath = GuessMimeFromPathOrUrl(s);
       if (!string.Equals(mimeFromPath, "application/octet-stream", StringComparison.Ordinal))
       {
-        // Se sembra un PATH (niente :// e non data:...), verifica anche l'esistenza del file
         if (s.IndexOf("://", StringComparison.Ordinal) < 0 &&
             !s.StartsWith("data:", StringComparison.OrdinalIgnoreCase))
         {
           try
           {
-            string abs = System.IO.Path.GetFullPath(s);
-            if (!System.IO.File.Exists(abs))
-            {
-              info = "File non trovato";
-              return false;
-            }
+            string abs = Path.GetFullPath(s);
+            if (!File.Exists(abs)) { info = "File non trovato"; return false; }
           }
-          catch
-          {
-            info = "Path non valido";
-            return false;
-          }
+          catch { info = "Path non valido"; return false; }
         }
-
         snip = Compose(index, mimeFromPath, caption);
         return true;
       }
-
 
       // base64 “nuda”
       if (LooksLikeBase64(s))
@@ -144,9 +116,7 @@ namespace ProgesiGrasshopperAssembly.Infrastructure
 
     public static string GuessMimeFromPathOrUrl(string pathOrUrl)
     {
-      if (string.IsNullOrEmpty(pathOrUrl))
-        return "application/octet-stream";
-
+      if (string.IsNullOrEmpty(pathOrUrl)) return "application/octet-stream";
       string ext = string.Empty;
       try
       {
