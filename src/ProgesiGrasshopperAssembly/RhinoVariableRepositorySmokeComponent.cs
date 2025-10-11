@@ -19,6 +19,9 @@ namespace ProgesiGrasshopperAssembly
 
     protected override System.Drawing.Bitmap Icon => new System.Drawing.Bitmap(24, 24); // opzionale
 
+    public override Grasshopper.Kernel.GH_Exposure Exposure => Grasshopper.Kernel.GH_Exposure.hidden;
+    public override bool IsPreviewCapable => false;
+
     protected override void RegisterInputParams(GH_InputParamManager p)
     {
       p.AddBooleanParameter("Run", "Run", "Esegui l'azione selezionata", GH_ParamAccess.item, false);

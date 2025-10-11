@@ -1,61 +1,75 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
   <PropertyGroup>
-    <!-- Select the framework(s) you wish to target.
-        Rhino 6: net45
-        Rhino 7: net48
-        Rhino 8 Windows: net48, net7.0, net7.0-windows, net7.0-windows10.0.22000.0, etc
-        Rhino 8 Mac: net7.0, net7.0-macos, net7.0-macos12.0, etc
-    -->
     <TargetFramework>net48</TargetFramework>
-    <EnableDynamicLoading>true</EnableDynamicLoading>
-    <TargetExt>.gha</TargetExt>
-    <NoWarn>NU1701;NETSDK1086</NoWarn>
-    <EnableWindowsTargeting>true</EnableWindowsTargeting>
-    <LangVersion>8.0</LangVersion>
+    <AssemblyName>ProgesiGrasshopperAssembly</AssemblyName>
+    <RootNamespace>ProgesiGrasshopperAssembly</RootNamespace>
+    <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
-    <IsPackable>false</IsPackable>
-    <PackageReadmeFile>README.md</PackageReadmeFile>
+
+    <!-- output come nel tuo file -->
+    <AppendTargetFrameworkToOutputPath>true</AppendTargetFrameworkToOutputPath>
+    <OutDir>$(MSBuildProjectDirectory)\bin\$(Configuration)\net48\</OutDir>
+
+    <!-- Switch: in CI usiamo pacchetti, in locale DLL installate -->
+    <UseNugetRhino Condition="'$(UseNugetRhino)'==''">false</UseNugetRhino>
+    <RhinoInstallDir Condition="'$(RhinoInstallDir)'==''">C:\Program Files\Rhino 8</RhinoInstallDir>
   </PropertyGroup>
-  <PropertyGroup>
-    <!-- Specifies information for Assembly and Yak -->
-    <Version>1.0</Version>
-    <Title>ProgesiGrasshopperAssembly</Title>
-    <Company>ProgesiGrasshopperAssembly Authors</Company>
-    <Description>Description of ProgesiGrasshopperAssembly</Description>
-    <AutoGenerateBindingRedirects>True</AutoGenerateBindingRedirects>
-  </PropertyGroup>
-  <ItemGroup>
+
+  <!-- CI: pacchetti Rhino/Grasshopper (niente runtime, ci pensa Rhino a runtime) -->
+  <ItemGroup Condition="'$(UseNugetRhino)'=='true'">
+    <PackageReference Include="RhinoCommon" Version="8.*">
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </PackageReference>
+    <PackageReference Include="Grasshopper" Version="8.*">
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </PackageReference>
   </ItemGroup>
+
+  <!-- Locale: DLL dall’installazione di Rhino 8 -->
+  <ItemGroup Condition="'$(UseNugetRhino)'!='true'">
+    <Reference Include="RhinoCommon">
+      <HintPath>$(RhinoInstallDir)\System\RhinoCommon.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="GH_IO">
+      <HintPath>$(RhinoInstallDir)\Plug-ins\Grasshopper\GH_IO.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Grasshopper">
+      <HintPath>$(RhinoInstallDir)\Plug-ins\Grasshopper\Grasshopper.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <!-- Riferimenti ai tuoi progetti usati dall'assembly GH -->
   <ItemGroup>
-    <ProjectReference Include="..\ProgesiRepositories.InMemory\ProgesiRepositories.InMemory.csproj" />
+    <ProjectReference Include="..\ProgesiDataExchange\ProgesiDataExchange.csproj" />
+    <ProjectReference Include="..\ProgesiCore\ProgesiCore.csproj" />
     <ProjectReference Include="..\ProgesiRepositories.Rhino\ProgesiRepositories.Rhino.csproj" />
-    <ProjectReference Include="..\ProgesiCore\ProgesiCore.csproj" />
     <ProjectReference Include="..\ProgesiRepositories.Sqlite\ProgesiRepositories.Sqlite.csproj" />
+    <!-- >>> AGGIUNTO: in-memory repositories <<< -->
+    <ProjectReference Include="..\ProgesiRepositories.InMemory\ProgesiRepositories.InMemory.csproj" />
   </ItemGroup>
-  <!-- For Windows only builds -->
-  <PropertyGroup Condition="$(TargetFramework.Contains('-windows')) or $(TargetFramework.StartsWith('net4'))">
-    <UseWindowsForms>true</UseWindowsForms>
-  </PropertyGroup>
-  <!-- Reference WinForms for .NET 7.0 on macOS -->
-  <ItemGroup Condition="!($(TargetFramework.Contains('-windows')) or $(TargetFramework.StartsWith('net4')))">
-    <!-- Rhino 8.11 and later you can use this -->
-    <!-- <FrameworkReference Include="Microsoft.WindowsDesktop.App.WindowsForms" /> -->
-    <!-- Rhino 8.10 and earlier -->
-    <Reference Include="$(PkgMicrosoft_NETFramework_ReferenceAssemblies_net48)\build\.NETFramework\v4.8\System.Windows.Forms.dll" Private="False" />
-  </ItemGroup>
+
+  <!-- Pacchetti usati DIRETTAMENTE nell’assembly -->
   <ItemGroup>
-    <ProjectReference Include="..\ProgesiCore\ProgesiCore.csproj" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
   </ItemGroup>
+
+  <!-- Icone: mantieni tutte le png con lo stesso LogicalName di prima -->
   <ItemGroup>
-    <ProjectReference Include="..\ProgesiRepositories.Sqlite\ProgesiRepositories.Sqlite.csproj" />
+    <EmbeddedResource Include="Resources\*.png">
+      <LogicalName>ProgesiGrasshopperAssembly.Resources.%(Filename)%(Extension)</LogicalName>
+    </EmbeddedResource>
   </ItemGroup>
-  <PropertyGroup>
-    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
-  </PropertyGroup>
-  <ItemGroup>
-    <PackageReference Include="rhinocommon" Version="8.21.25188.17001" />
-    <PackageReference Include="Grasshopper" Version="8.21.25188.17001" />
-    <PackageReference Include="Microsoft.NETFramework.ReferenceAssemblies.net48" Version="1.0.3" />
-    <PackageReference Include="System.Drawing.Common" Version="7.0.0" />
-  </ItemGroup>
+
+  <!-- Dopo build: rinomina dll in .gha accanto all’output -->
+  <Target Name="PostBuildRenameToGha" AfterTargets="Build">
+    <ItemGroup>
+      <BuiltDll Include="$(OutDir)$(AssemblyName).dll" />
+    </ItemGroup>
+    <Copy SourceFiles="@(BuiltDll)" DestinationFiles="$(OutDir)$(AssemblyName).gha" SkipUnchangedFiles="true" />
+  </Target>
+
 </Project>
