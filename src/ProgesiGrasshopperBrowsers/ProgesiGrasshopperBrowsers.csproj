@@ -1,0 +1,61 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <AssemblyName>ProgesiGrasshopperBrowsers</AssemblyName>
+    <RootNamespace>Progesi.Grasshopper.Browsers</RootNamespace>
+    <LangVersion>latest</LangVersion>
+    <Platforms>AnyCPU</Platforms>
+    <DebugType>portable</DebugType>
+    <Deterministic>true</Deterministic>
+
+    <!-- out in bin\<Cfg>\net48\ come da tua soluzione -->
+    <AppendTargetFrameworkToOutputPath>true</AppendTargetFrameworkToOutputPath>
+    <OutDir>$(MSBuildProjectDirectory)\bin\$(Configuration)\net48\</OutDir>
+
+    <!-- Switch CI vs Locale -->
+    <UseNugetRhino Condition="'$(UseNugetRhino)'==''">false</UseNugetRhino>
+    <RhinoInstallDir Condition="'$(RhinoInstallDir)'==''">C:\Program Files\Rhino 8</RhinoInstallDir>
+
+    <!-- Evita duplicati AssemblyInfo se lo gestisci a mano -->
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+  </PropertyGroup>
+
+  <!-- In CI: pacchetti NuGet per Rhino/Grasshopper (niente runtime) -->
+  <ItemGroup Condition="'$(UseNugetRhino)'=='true'">
+    <PackageReference Include="RhinoCommon"  Version="8.*">
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </PackageReference>
+    <PackageReference Include="Grasshopper"  Version="8.*">
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <!-- In locale: DLL dall’installazione di Rhino 8 -->
+  <ItemGroup Condition="'$(UseNugetRhino)'!='true'">
+    <Reference Include="RhinoCommon">
+      <HintPath>$(RhinoInstallDir)\System\RhinoCommon.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="GH_IO">
+      <HintPath>$(RhinoInstallDir)\Plug-ins\Grasshopper\GH_IO.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="Grasshopper">
+      <HintPath>$(RhinoInstallDir)\Plug-ins\Grasshopper\Grasshopper.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <!-- Dipendenze dei Browser (le avevamo già usate) -->
+  <ItemGroup>
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.9" />
+  </ItemGroup>
+
+  <!-- Rinomina la dll in .gha accanto all’output -->
+  <Target Name="PostBuildRenameToGha" AfterTargets="Build">
+    <ItemGroup>
+      <BuiltDll Include="$(OutDir)$(AssemblyName).dll" />
+    </ItemGroup>
+    <Copy SourceFiles="@(BuiltDll)" DestinationFiles="$(OutDir)$(AssemblyName).gha" SkipUnchangedFiles="true" />
+  </Target>
+</Project>

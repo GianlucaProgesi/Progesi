@@ -20,6 +20,10 @@ namespace ProgesiGrasshopperAssembly
 
     public override Guid ComponentGuid => new Guid("2A5D3F35-3C0E-4C3D-91E0-9E1F2B60C9A5");
 
+    public override Grasshopper.Kernel.GH_Exposure Exposure => Grasshopper.Kernel.GH_Exposure.hidden;
+    public override bool IsPreviewCapable => false;
+
+
     // Evita CS8603 (mai restituire null)
     protected override Bitmap Icon => new Bitmap(24, 24);
 

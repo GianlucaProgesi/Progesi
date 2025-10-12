@@ -1,15 +1,10 @@
 ﻿name: PR Labeler
 on:
   pull_request:
-    types: [opened, synchronize, reopened, edited]
-permissions:
-  contents: read
-  pull-requests: write
-concurrency:
-  group: pr-labeler-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+    types: [opened, synchronize, reopened, ready_for_review]
 jobs:
   label:
+    if: ${{ false }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/labeler@v5

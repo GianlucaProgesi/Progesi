@@ -13,6 +13,9 @@ namespace ProgesiGrasshopperAssembly
              "Progesi", "Debug")
     { }
 
+    public override Grasshopper.Kernel.GH_Exposure Exposure => Grasshopper.Kernel.GH_Exposure.hidden;
+    public override bool IsPreviewCapable => false;
+
     public override Guid ComponentGuid => new Guid("279341c6-27e7-4f34-a079-f8101ef0cc8f");
 
     protected override System.Drawing.Bitmap Icon => new System.Drawing.Bitmap(24, 24);
