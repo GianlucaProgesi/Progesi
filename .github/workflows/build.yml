@@ -1,9 +1,9 @@
 name: build-and-pack
 
 on:
-  workflow_dispatch:          # manuale
+  workflow_dispatch:
   push:
-    tags: ['v*']              # release solo su tag
+    tags: ['v*']            # release su tag
 
 permissions:
   contents: write
@@ -16,9 +16,14 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout (ref del trigger: branch o tag)
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 0
 
-      - uses: actions/setup-dotnet@v4
+      - name: Setup .NET SDK
+        uses: actions/setup-dotnet@v4
         with:
           dotnet-version: |
             8.0.x
@@ -43,7 +48,7 @@ jobs:
 
       - name: Package plugin (zip)
         shell: pwsh
-        run: ./tools/Publish-Plugin.ps1 -Configuration Release
+        run: pwsh -File ./tools/Publish-Plugin.ps1 -Configuration Release
 
       - name: Upload artifact (zip)
         uses: actions/upload-artifact@v4
