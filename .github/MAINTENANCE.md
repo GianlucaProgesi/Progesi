@@ -1,19 +1,19 @@
-﻿# Progesi â€“ Manutenzione CI/CD (brevissimo)
+﻿# Progesi – Manutenzione CI/CD (no-surprises)
 
 ## Workflow
-- **CI**: gira su PR (tutti i branch) e su push a `main`.
-  - Required check: `CI / test (pull_request)`.
-- **build-and-pack**: solo `workflow_dispatch` (manuale) e/o tag `v*`.
-- **smoke**: manuale (`Actions â†’ smoke â†’ Run workflow`) con input **ref** (branch da testare).
+- **CI**: parte su Pull Request (tutti i branch) e su push a `main`.
+  - Required check: **CI / test (pull_request)**.
+- **build-and-pack**: manuale (`Actions → build-and-pack → Run`) o su tag `v*`.
+- **smoke**: manuale con input **ref** (branch da testare).
 
-## Trigger rapidi
-```sh
-# CI su main (manuale)
-gh workflow run CI --ref main
+## Comandi rapidi (CLI)
+```powershell
+# CI su PR branch
+gh workflow run CI --ref <branch>
 
-# build-and-pack su main (manuale)
-gh workflow run build-and-pack --ref main
+# build-and-pack manuale (su main o branch)
+gh workflow run build-and-pack --ref <branch>
 
-# Release di prova
-git tag v0.1.0 && git push origin v0.1.0
-
+# release: crea tag e lascia che build-and-pack pubblichi lo zip
+git tag v0.3.0
+git push origin v0.3.0
