@@ -40,6 +40,6 @@ namespace ProgesiGrasshopperAssembly.Infrastructure
     public static Bitmap VarOut => Load("varout.png");
     public static Bitmap Snip => Load("snip.png");
     public static Bitmap DataEx => Load("dataex.png");
-    public static Bitmap refcheck => Load("refcheck.png");
+    public static Bitmap RefCheck => Load("refcheck.png");
   }
 }
