@@ -1,7 +1,7 @@
 name: build-and-pack
 
 on:
-  workflow_dispatch:
+  workflow_dispatch:        # <--- abilita gh workflow run
   push:
     tags: ['v*']            # release su tag
 
@@ -16,7 +16,7 @@ jobs:
   build:
     runs-on: windows-latest
     steps:
-      - name: Checkout (ref del trigger: branch o tag)
+      - name: Checkout (ref del trigger)
         uses: actions/checkout@v4
         with:
           ref: ${{ github.ref }}
