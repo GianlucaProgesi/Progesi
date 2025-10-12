@@ -6,17 +6,11 @@ using System.Text;
 
 namespace Progesi.Grasshopper.Browsers.Internal
 {
-  /// <summary>
-  /// Writer CSV semplice e robusto (UTF-8, senza BOM).
-  /// Accetta headers come IEnumerable<string> e righe come IEnumerable<IEnumerable<string>>
-  /// così vanno bene sia List&lt;string[]&gt; che List&lt;List&lt;string&gt;&gt;.
-  /// </summary>
   internal static class CsvUtils
   {
     public static void Write(string path, IEnumerable<string> headers, IEnumerable<IEnumerable<string>> rows)
     {
-      if (string.IsNullOrWhiteSpace(path))
-        throw new ArgumentException("Percorso CSV vuoto.", nameof(path));
+      if (string.IsNullOrWhiteSpace(path)) throw new ArgumentException("Percorso CSV vuoto.", nameof(path));
       if (headers == null) throw new ArgumentNullException(nameof(headers));
       if (rows == null) throw new ArgumentNullException(nameof(rows));
 
@@ -27,16 +21,14 @@ namespace Progesi.Grasshopper.Browsers.Internal
       using (var sw = new StreamWriter(full, false, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false)))
       {
         sw.WriteLine(Join(headers));
-        foreach (var r in rows)
-          sw.WriteLine(Join(r));
+        foreach (var r in rows) sw.WriteLine(Join(r));
       }
     }
 
     private static string Join(IEnumerable<string> cells)
     {
-      if (cells == null) return "";
       var buf = new List<string>();
-      foreach (var c in cells) buf.Add(Escape(c ?? ""));
+      foreach (var c in cells ?? Array.Empty<string>()) buf.Add(Escape(c ?? ""));
       return string.Join(",", buf);
     }
 

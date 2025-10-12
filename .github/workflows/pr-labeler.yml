@@ -2,10 +2,9 @@
 on:
   pull_request:
     types: [opened, synchronize, reopened, ready_for_review]
-
 jobs:
   label:
-    if: ${{ false }}         # disattivato (sempre skipped)
+    if: ${{ false }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/labeler@v5
