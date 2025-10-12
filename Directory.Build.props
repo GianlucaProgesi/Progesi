@@ -1,13 +1,9 @@
-<Project>
-  <PropertyGroup>
-    <MinVerTagPrefix>v</MinVerTagPrefix>
-    <MinVerDefaultPreReleasePhase></MinVerDefaultPreReleasePhase>
-    <MinVerAutoIncrement>patch</MinVerAutoIncrement>
-    <MinVerBuildMetadata>build.{0:yyyyMMdd-HHmmss}</MinVerBuildMetadata>
-    <Deterministic>true</Deterministic>
-    <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
-  </PropertyGroup>
+﻿<Project>
   <ItemGroup>
-    <PackageReference Include="MinVer" Version="5.0.0" PrivateAssets="All" />
+    <!-- Soft pin per tutta la soluzione -->
+    <PackageReference Update="Microsoft.Data.Sqlite" Version="9.0.9" />
+    <PackageReference Update="SQLitePCLRaw.bundle_e_sqlite3" Version="2.1.10" />
+    <PackageReference Update="SQLitePCLRaw.provider.e_sqlite3" Version="2.1.10" />
+    <PackageReference Update="SQLitePCLRaw.core" Version="2.1.10" />
   </ItemGroup>
 </Project>
