@@ -1,6 +1,5 @@
 ﻿#nullable disable
 using System;
-using System.Diagnostics;
 using System.Reflection;
 using Grasshopper.Kernel;
 using ProgesiGrasshopperAssembly.Infrastructure;
@@ -11,30 +10,33 @@ namespace ProgesiGrasshopperAssembly.Components
   {
     public ProgesiMetadataInComponent()
       : base("ProgesiMetadataIn", "MetIn",
-             "Create/Update/Delete metadata.\n" +
-             "LIVE (SQLite) se PROGESI_LIVE_ON=1 e PROGESI_LIVE_DB punta ad un file .db; altrimenti mock/echo.",
+             "Create/Update/Delete metadata (Rhino repository).",
              "Progesi", "Metadata")
     { }
 
-    public override Guid ComponentGuid => new Guid("9B6AA5E3-6C3B-4C0E-B1B3-86E0B7F1F8C7");
+    public override Guid ComponentGuid => new Guid("0E9C7A49-3F5C-4F0D-9A4C-0C9E2B9A6B17");
+    // FIX: nome icona corretto è MetIn
     protected override System.Drawing.Bitmap Icon => ProgesiIcons.MetIn;
 
+    // IN: Run, Act, Id, By, Description, Ref, Snip
     protected override void RegisterInputParams(GH_InputParamManager p)
     {
       p.AddBooleanParameter("Run", "Run", "Esegui (default FALSE).", GH_ParamAccess.item, false);
       p.AddTextParameter("Act", "Act", "Create | Update | Delete", GH_ParamAccess.item, "Create");
-      p.AddIntegerParameter("Id", "Id", "Id (Update/Delete).", GH_ParamAccess.item, 0);
-      p.AddTextParameter("By", "By", "Autore (es. 'GM').", GH_ParamAccess.item, "");
-      p.AddTextParameter("Info", "Info", "Descrizione breve.", GH_ParamAccess.item, "");
-      p.AddTextParameter("Ref", "Ref", "Riferimento (URL http/https o file esistente).", GH_ParamAccess.item, "");
-      p.AddTextParameter("Snip", "Snip", "Snip normalizzato (snip:*/data-url/base64/path/url).", GH_ParamAccess.item, "");
+      p.AddIntegerParameter("Id", "Id", "Id per Update/Delete.", GH_ParamAccess.item, 0);
+      p.AddTextParameter("By", "By", "Autore (es. GM).", GH_ParamAccess.item, "");
+      // rinominato: Info -> Description (evita collisione con l'output Info)
+      p.AddTextParameter("Description", "Descr", "Descrizione / note (usata per dedupe con By).", GH_ParamAccess.item, "");
+      p.AddTextParameter("Ref", "Ref", "Riferimenti separati da '|'.", GH_ParamAccess.item, "");
+      p.AddTextParameter("Snip", "Snip", "Snip in formato supportato (snip:/data-url/base64/path/url).", GH_ParamAccess.item, "");
     }
 
+    // OUT
     protected override void RegisterOutputParams(GH_OutputParamManager p)
     {
       p.AddIntegerParameter("Id", "Id", "Id risultante.", GH_ParamAccess.item);
-      p.AddTextParameter("Hash", "Hash", "Hash risultante.", GH_ParamAccess.item);
-      p.AddTextParameter("Info", "Info", "Esito/diagnostica (OK / invalid ref/snip / errore).", GH_ParamAccess.item);
+      p.AddTextParameter("Hash", "Hash", "Riepilogo umano: ID/BY/DESC (non include Ref/Snip).", GH_ParamAccess.item);
+      p.AddTextParameter("Info", "Info", "Esito/diagnostica.", GH_ParamAccess.item);
     }
 
     protected override void SolveInstance(IGH_DataAccess DA)
@@ -49,78 +51,97 @@ namespace ProgesiGrasshopperAssembly.Components
       DA.GetData(6, ref snIn);
 
       int outId = 0; string outHash = ""; string outInfo = "";
-
       if (!run) { Emit(DA, outId, outHash, "Idle"); return; }
 
       bool isCreate = act.Equals("Create", StringComparison.OrdinalIgnoreCase);
       bool isUpdate = act.Equals("Update", StringComparison.OrdinalIgnoreCase);
       bool isDelete = act.Equals("Delete", StringComparison.OrdinalIgnoreCase);
 
-      if (!(isCreate || isUpdate || isDelete)) { Emit(DA, outId, outHash, "Input non valido: Act (Create|Update|Delete)"); return; }
+      if (!(isCreate || isUpdate || isDelete)) { Emit(DA, outId, outHash, "Input non valido: Act"); return; }
       if ((isUpdate || isDelete) && inId <= 0) { Emit(DA, outId, outHash, "Input non valido: Id (>0) richiesto per Update/Delete)"); return; }
 
-      // --- Normalizzazione/validazione Ref & Snip
+      // Normalizzazione/validazione Ref & Snip
       string rfNorm = "", refWhy = "";
       if (!string.IsNullOrWhiteSpace(rfIn))
       {
-        if (!SnipHelpers.TryNormalizeRef(rfIn, out rfNorm, out refWhy))
+        var refs = rfIn.Split('|');
+        var normList = new System.Collections.Generic.List<string>();
+        foreach (var r in refs)
         {
-          Emit(DA, outId, outHash, "Invalid Ref: " + refWhy);
-          return;
+          var s = r?.Trim(); if (string.IsNullOrEmpty(s)) continue;
+          if (SnipHelpers.TryNormalizeRef(s, out var n, out var why)) normList.Add(n);
+          else { refWhy = string.IsNullOrWhiteSpace(refWhy) ? why : (refWhy + "; " + why); }
         }
+        rfNorm = string.Join("|", normList);
       }
 
       string snNorm = "", snWhy = "";
       if (!string.IsNullOrWhiteSpace(snIn))
       {
-        // Usa TryMake per uniformare la forma snip:*
-        if (!SnipHelpers.TryMake(snIn, descr ?? "", 1, out snNorm, out snWhy))
-        {
-          Emit(DA, outId, outHash, "Invalid Snip: " + snWhy);
-          return;
-        }
+        if (!SnipHelpers.TryMake(snIn, caption: "", index: 1, out snNorm, out snWhy))
+          snNorm = ""; // silenzioso
       }
 
-      // Ottieni repository
-      object repoObj; string hubInfo;
-      ServiceHub.TryGetMetadataRepository(out repoObj, out hubInfo);
+      object repo; string hub;
+      ServiceHub.TryGetMetadataRepository(out repo, out hub);
 
       try
       {
         if (isDelete)
         {
-          string delInfo; bool ok = MetadataRepositoryCompatExtensions.TryDelete(repoObj, inId, out delInfo);
-          outId = inId > 0 ? inId : 0;
-          outInfo = string.IsNullOrWhiteSpace(delInfo) ? (ok ? "OK" : "Operazione non riuscita") : delInfo;
-          Emit(DA, outId, outHash, outInfo);
-          return;
+          string info; bool ok = MetadataRepositoryCompatExtensions.TryDelete(repo, inId, out info);
+          outId = inId > 0 ? inId : 0; outHash = ""; outInfo = string.IsNullOrWhiteSpace(info) ? (ok ? "OK" : "Operazione non riuscita") : info;
+          Emit(DA, outId, outHash, outInfo); return;
         }
 
-        var payload = new InPayload
+        var payload = new
         {
           id = inId,
           by = by ?? "",
-          info = descr ?? "",
+          info = descr ?? "",   // NB: “info” = Description
           rf = rfNorm ?? "",
           sn = snNorm ?? ""
         };
 
         object saved; string upInfo;
-        bool upOk = MetadataRepositoryCompatExtensions.TryUpsert(repoObj, payload, out saved, out upInfo);
+        bool upOk = MetadataRepositoryCompatExtensions.TryUpsert(repo, payload, out saved, out upInfo);
 
         if (saved != null) { ReadIf(saved, "Id", ref outId); ReadIf(saved, "Hash", ref outHash); }
         else { outId = inId > 0 ? inId : 0; outHash = ""; }
 
-        outInfo = string.IsNullOrWhiteSpace(upInfo) ? (upOk ? "OK" : "Operazione non riuscita") : upInfo;
+        string summary = ""; ReadIf(saved, "Summary", ref summary);
+        var prefix = string.IsNullOrWhiteSpace(upInfo) ? (upOk ? "OK" : "Operazione non riuscita") : upInfo;
+        outInfo = string.IsNullOrWhiteSpace(summary) ? prefix : $"{prefix} | {summary}";
+
         Emit(DA, outId, outHash, outInfo);
       }
       catch (Exception ex) { Emit(DA, outId, outHash, "Errore: " + ex.Message); }
     }
 
-    // helpers
-    private sealed class InPayload { public int id { get; set; } public string by { get; set; } public string info { get; set; } public string rf { get; set; } public string sn { get; set; } }
-    private static void ReadIf(object obj, string prop, ref int target) { if (obj == null) return; var pi = obj.GetType().GetProperty(prop, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase); if (pi == null) return; var v = pi.GetValue(obj, null); int n; if (v is int i) target = i; else if (v != null && int.TryParse(v.ToString(), out n)) target = n; }
-    private static void ReadIf(object obj, string prop, ref string target) { if (obj == null) return; var pi = obj.GetType().GetProperty(prop, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase); if (pi == null) return; var v = pi.GetValue(obj, null); var s = (v == null ? "" : v.ToString() ?? "").Trim(); if (s.Length > 0) target = s; }
-    private static void Emit(IGH_DataAccess DA, int id, string hash, string info) { DA.SetData(0, id); DA.SetData(1, hash ?? ""); DA.SetData(2, info ?? ""); }
+    private static void ReadIf(object obj, string prop, ref int target)
+    {
+      if (obj == null) return;
+      var pi = obj.GetType().GetProperty(prop, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+      if (pi == null) return;
+      var v = pi.GetValue(obj, null);
+      if (v == null) return;
+      int n; if (int.TryParse(v.ToString(), out n)) target = n;
+    }
+
+    private static void ReadIf(object obj, string prop, ref string target)
+    {
+      if (obj == null) return;
+      var pi = obj.GetType().GetProperty(prop, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+      if (pi == null) return;
+      var v = pi.GetValue(obj, null);
+      target = v == null ? "" : v.ToString();
+    }
+
+    private void Emit(IGH_DataAccess DA, int id, string hash, string info)
+    {
+      DA.SetData(0, id);
+      DA.SetData(1, hash ?? "");
+      DA.SetData(2, info ?? "");
+    }
   }
 }
