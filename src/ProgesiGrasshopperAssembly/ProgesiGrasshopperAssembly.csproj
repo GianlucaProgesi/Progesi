@@ -9,31 +9,26 @@
     <PlatformTarget>x64</PlatformTarget>
     <Prefer32Bit>false</Prefer32Bit>
 
-    <!-- output come nel tuo file -->
+    <!-- Output .gha accanto alle DLL net48 -->
     <AppendTargetFrameworkToOutputPath>true</AppendTargetFrameworkToOutputPath>
     <OutDir>$(MSBuildProjectDirectory)\bin\$(Configuration)\net48\</OutDir>
 
-    <!-- Switch: in CI usiamo pacchetti, in locale DLL installate -->
-    <UseNugetRhino Condition="'$(UseNugetRhino)'==''">false</UseNugetRhino>
-    <RhinoInstallDir Condition="'$(RhinoInstallDir)'==''">C:\Program Files\Rhino 8</RhinoInstallDir>
+    <!-- Soppressione mirata dei warning di nullability del solo GH assembly -->
+    <NoWarn>$(NoWarn);CS8603</NoWarn>
   </PropertyGroup>
 
-  <!-- CI: pacchetti Rhino/Grasshopper (niente runtime, ci pensa Rhino a runtime) -->
-  <ItemGroup Condition="'$(UseNugetRhino)'=='true'">
-    <PackageReference Include="RhinoCommon" Version="8.*">
-      <ExcludeAssets>runtime</ExcludeAssets>
-    </PackageReference>
-    <PackageReference Include="Grasshopper" Version="8.*">
-      <ExcludeAssets>runtime</ExcludeAssets>
-    </PackageReference>
+  <!-- Riferimenti runtime: RhinoCommon via NuGet 8.23; Grasshopper e GH_IO dal percorso installato -->
+  <ItemGroup>
+    <PackageReference Include="RhinoCommon" Version="8.23.25251.13001" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
   </ItemGroup>
 
-  <!-- Locale: DLL dall’installazione di Rhino 8 -->
-  <ItemGroup Condition="'$(UseNugetRhino)'!='true'">
-    <Reference Include="RhinoCommon">
-      <HintPath>$(RhinoInstallDir)\System\RhinoCommon.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
+  <PropertyGroup>
+    <!-- Percorso standard installazione Rhino 8 (usato per GH_IO & Grasshopper) -->
+    <RhinoInstallDir>$(ProgramFiles)\Rhino 8</RhinoInstallDir>
+  </PropertyGroup>
+
+  <ItemGroup>
     <Reference Include="GH_IO">
       <HintPath>$(RhinoInstallDir)\Plug-ins\Grasshopper\GH_IO.dll</HintPath>
       <Private>false</Private>
@@ -44,29 +39,30 @@
     </Reference>
   </ItemGroup>
 
-  <!-- Riferimenti ai tuoi progetti usati dall'assembly GH -->
+  <!-- Progetti interni necessari -->
   <ItemGroup>
     <ProjectReference Include="..\ProgesiDataExchange\ProgesiDataExchange.csproj" />
     <ProjectReference Include="..\ProgesiCore\ProgesiCore.csproj" />
     <ProjectReference Include="..\ProgesiRepositories.Rhino\ProgesiRepositories.Rhino.csproj" />
-    <ProjectReference Include="..\ProgesiRepositories.Sqlite\ProgesiRepositories.Sqlite.csproj" />
-    <!-- >>> AGGIUNTO: in-memory repositories <<< -->
+    <!-- RIMOSSO: ProgesiRepositories.Sqlite (non deve più essere referenziato nel GH assembly) -->
     <ProjectReference Include="..\ProgesiRepositories.InMemory\ProgesiRepositories.InMemory.csproj" />
   </ItemGroup>
 
-  <!-- Pacchetti usati DIRETTAMENTE nell’assembly -->
+  <!-- Escludi i componenti di “smoke” per Sqlite dal GH assembly -->
   <ItemGroup>
-    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <Compile Remove="SqliteVariableRepositorySmokeComponent.cs" />
+    <!-- In caso ci fossero altri file “smoke” simili in futuro -->
+    <Compile Remove="**\*Sqlite*Smoke*.cs" />
   </ItemGroup>
 
-  <!-- Icone: mantieni tutte le png con lo stesso LogicalName di prima -->
+  <!-- Icone -->
   <ItemGroup>
     <EmbeddedResource Include="Resources\*.png">
       <LogicalName>ProgesiGrasshopperAssembly.Resources.%(Filename)%(Extension)</LogicalName>
     </EmbeddedResource>
   </ItemGroup>
 
-  <!-- Dopo build: rinomina dll in .gha accanto all’output -->
+  <!-- Dopo build: duplica dll in .gha -->
   <Target Name="PostBuildRenameToGha" AfterTargets="Build">
     <ItemGroup>
       <BuiltDll Include="$(OutDir)$(AssemblyName).dll" />

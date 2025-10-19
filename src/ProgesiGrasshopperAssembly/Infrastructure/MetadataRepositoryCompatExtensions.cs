@@ -1,17 +1,22 @@
 ﻿// MetadataRepositoryCompatExtensions.cs
 #nullable disable
 using System;
-using System.Collections;
-using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
-using Microsoft.Data.Sqlite;
+using Rhino;
+using Rhino.DocObjects.Tables;
+using ProgesiCore;
+using ProgesiRepositories.Rhino;
 
 namespace ProgesiGrasshopperAssembly.Infrastructure
 {
+  /// <summary>
+  /// Adattatori compatibili per i componenti GH.
+  /// Versione RHINO-ONLY: niente SQLite né mock file.
+  /// </summary>
   internal static class MetadataRepositoryCompatExtensions
   {
-    // ===== DTO riflessione-friendly =====
+    // ---- DTO minimi per l'UI ----
     private sealed class LiveMetaDto
     {
       public int Id { get; set; }
@@ -33,19 +38,12 @@ namespace ProgesiGrasshopperAssembly.Infrastructure
       public string LastModified { get; set; }
     }
 
-    // ===== Utility comuni =====
-    private static string[] SplitPipe(string s)
-    {
-      if (string.IsNullOrEmpty(s)) return new string[0];
-      var p = s.Split('|');
-      for (int i = 0; i < p.Length; i++) p[i] = (p[i] ?? "").Trim();
-      return p;
-    }
-
+    // ---- helpers generici ----
     private static string ReadString(object obj, string name)
     {
       if (obj == null) return "";
-      var pi = obj.GetType().GetProperty(name, System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.IgnoreCase);
+      var pi = obj.GetType().GetProperty(name,
+        System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.IgnoreCase);
       if (pi == null) return "";
       var v = pi.GetValue(obj, null);
       return v == null ? "" : v.ToString();
@@ -54,86 +52,85 @@ namespace ProgesiGrasshopperAssembly.Infrastructure
     private static int ReadInt(object obj, string name)
     {
       if (obj == null) return 0;
-      var pi = obj.GetType().GetProperty(name, System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.IgnoreCase);
+      var pi = obj.GetType().GetProperty(name,
+        System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.IgnoreCase);
       if (pi == null) return 0;
       var v = pi.GetValue(obj, null);
       if (v == null) return 0;
-      int n;
-      return int.TryParse(v.ToString(), out n) ? n : 0;
+      return int.TryParse(v.ToString(), out var n) ? n : 0;
     }
 
-    private static string IsoNowUtc() => DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss");
+    private static string IsoNowUtc() => DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
 
-    // ========= METADATA =========
+    // ---- helpers RHINO (StringTable come KV store) ----
+    private static int NextId(StringTable table, string scope, string counterKey)
+    {
+      if (table == null) return 1;
+      var s = table.GetValue(scope, counterKey) ?? string.Empty;
+      if (!int.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out var cur)) cur = 0;
+      var next = (cur <= 0 ? 1 : cur + 1);
+      table.SetString(scope, counterKey, next.ToString(CultureInfo.InvariantCulture));
+      return next;
+    }
+
+    private static bool TryResolveIdByHash(StringTable table, string indexScope, string hash, out int id)
+    {
+      id = 0;
+      if (table == null || string.IsNullOrWhiteSpace(hash)) return false;
+      var val = table.GetValue(indexScope, hash) ?? string.Empty;
+      return int.TryParse(val, NumberStyles.Integer, CultureInfo.InvariantCulture, out id) && id > 0;
+    }
+
+    private static void IndexHash(StringTable table, string indexScope, string hash, int id)
+    {
+      if (table == null || string.IsNullOrWhiteSpace(hash) || id <= 0) return;
+      table.SetString(indexScope, hash, id.ToString(CultureInfo.InvariantCulture));
+    }
+
+    private static void UnindexHash(StringTable table, string indexScope, string hash)
+    {
+      if (table == null || string.IsNullOrWhiteSpace(hash)) return;
+      table.Delete(indexScope, hash);
+    }
+
+    private static string[] SplitPipe(string s)
+      => string.IsNullOrEmpty(s) ? Array.Empty<string>() : s.Split(new[] { '|' }, StringSplitOptions.RemoveEmptyEntries);
+
+    // ================= METADATA =================
 
     public static bool TryGetByHashThenId(object repoObj, string hash, int id, out object metadata, out string info)
     {
       metadata = null; info = string.Empty;
 
-      var live = repoObj as ServiceHub.LiveSqliteContext;
-      if (live != null)
+      if (repoObj is ServiceHub.RhinoContext rh)
       {
-        if (!System.IO.File.Exists(live.DbPath)) { info = "DB non trovato (live)"; return false; }
+        var doc = rh.Doc;
+        var table = doc.Strings;
+        var rid = id;
 
-        try
+        if (!string.IsNullOrWhiteSpace(hash) && rid <= 0)
+          TryResolveIdByHash(table, "Progesi.MetaHash", hash, out rid);
+
+        if (rid <= 0) { info = "Input non valido (hash/id)."; return false; }
+
+        var repo = new RhinoMetadataRepository(doc);
+        var m = repo.GetAsync(rid).GetAwaiter().GetResult();
+        if (m == null) { info = "Non trovato (rhino)"; return false; }
+
+        metadata = new LiveMetaDto
         {
-          using (var cn = new SqliteConnection("Data Source=" + live.DbPath))
-          {
-            cn.Open();
-            using (var cmd = cn.CreateCommand())
-            {
-              if (!string.IsNullOrWhiteSpace(hash))
-              {
-                cmd.CommandText = "SELECT Id,Hash,By,Ref,Snips,LastModifiedUtc FROM metadata WHERE Hash=@h LIMIT 1;";
-                cmd.Parameters.AddWithValue("@h", hash);
-              }
-              else if (id > 0)
-              {
-                cmd.CommandText = "SELECT Id,Hash,By,Ref,Snips,LastModifiedUtc FROM metadata WHERE Id=@i LIMIT 1;";
-                cmd.Parameters.AddWithValue("@i", id);
-              }
-              else { info = "Input non valido (hash/id)."; return false; }
-
-              using (var rd = cmd.ExecuteReader())
-              {
-                if (!rd.Read()) { info = "Non trovato (live)"; return false; }
-
-                metadata = new LiveMetaDto
-                {
-                  Id = rd.IsDBNull(0) ? 0 : rd.GetInt32(0),
-                  Hash = rd.IsDBNull(1) ? "" : rd.GetString(1),
-                  By = rd.IsDBNull(2) ? "" : rd.GetString(2),
-                  Refs = SplitPipe(rd.IsDBNull(3) ? "" : rd.GetString(3)),
-                  Snips = SplitPipe(rd.IsDBNull(4) ? "" : rd.GetString(4)),
-                  LastModified = rd.IsDBNull(5) ? "" : rd.GetString(5)
-                };
-                info = "OK";
-                return true;
-              }
-            }
-          }
-        }
-        catch (Exception ex) { info = "Errore live: " + ex.Message; return false; }
+          Id = m.Id,
+          Hash = ProgesiHash.Compute(m),
+          By = m.CreatedBy ?? "",
+          Refs = m.References?.Select(u => u.ToString()).ToArray() ?? Array.Empty<string>(),
+          Snips = m.Snips?.Select(_ => "snip:" + _.MimeType).ToArray() ?? Array.Empty<string>(),
+          LastModified = m.LastModified.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)
+        };
+        info = "OK";
+        return true;
       }
 
-      var mock = repoObj as FileMockMetadataRepository;
-      if (mock != null)
-      {
-        if (!string.IsNullOrWhiteSpace(hash))
-        {
-          if (mock.TryGetByHash(hash, out var dto, out info)) { metadata = dto; return true; }
-          return false;
-        }
-        if (id > 0)
-        {
-          if (mock.TryGetById(id, out var dto, out info)) { metadata = dto; return true; }
-          return false;
-        }
-        info = "Input non valido (hash/id).";
-        return false;
-      }
-
-      info = "OK (nessun repo collegato)";
+      info = "Repo non supportato (serve RHINO).";
       return false;
     }
 
@@ -141,177 +138,103 @@ namespace ProgesiGrasshopperAssembly.Infrastructure
     {
       persisted = null; info = "OK";
 
-      var live = repoObj as ServiceHub.LiveSqliteContext;
-      if (live != null)
+      if (repoObj is ServiceHub.RhinoContext rh)
       {
-        try
+        var doc = rh.Doc;
+        var table = doc.Strings;
+
+        var id = ReadInt(payload, "id");
+        var by = ReadString(payload, "by");
+        var descr = ReadString(payload, "info");
+        var rf = ReadString(payload, "rf"); // refs pipe-sep.
+        var sn = ReadString(payload, "sn"); // snips pipe-sep. (ignorato per HF)
+
+        if (id <= 0) id = NextId(table, "Progesi.Meta", "__next__");
+
+        var meta = ProgesiMetadata.Create(by ?? string.Empty, descr ?? string.Empty, null, null, DateTime.UtcNow, id);
+
+        if (!string.IsNullOrWhiteSpace(rf))
         {
-          int id = ReadInt(payload, "id");
-          string by = ReadString(payload, "by");
-          string rf = ReadString(payload, "rf");
-          string sn = ReadString(payload, "sn");
-          string nowIso = IsoNowUtc();
-          string hash = "mock-" + (id > 0 ? id : 0).ToString("00000000");
-
-          using (var cn = new SqliteConnection("Data Source=" + live.DbPath))
-          {
-            cn.Open();
-            using (var tr = cn.BeginTransaction())
-            using (var cmd = cn.CreateCommand())
-            {
-              if (id <= 0)
-              {
-                cmd.CommandText = "SELECT IFNULL(MAX(Id),0)+1 FROM metadata;";
-                id = Convert.ToInt32(cmd.ExecuteScalar());
-                hash = "mock-" + id.ToString("00000000");
-              }
-
-              cmd.CommandText = @"
-INSERT INTO metadata(Id,Hash,By,Ref,Snips,LastModifiedUtc)
-VALUES(@id, @hash, @by, @ref, @sn, @lm)
-ON CONFLICT(Id) DO UPDATE SET
-  Hash=@hash, By=@by, Ref=@ref, Snips=@sn, LastModifiedUtc=@lm;";
-              cmd.Parameters.AddWithValue("@id", id);
-              cmd.Parameters.AddWithValue("@hash", hash);
-              cmd.Parameters.AddWithValue("@by", by ?? "");
-              cmd.Parameters.AddWithValue("@ref", rf ?? "");
-              cmd.Parameters.AddWithValue("@sn", sn ?? "");
-              cmd.Parameters.AddWithValue("@lm", nowIso);
-              cmd.ExecuteNonQuery();
-
-              tr.Commit();
-            }
-          }
-
-          persisted = new LiveMetaDto
-          {
-            Id = id,
-            Hash = hash,
-            By = by ?? "",
-            Refs = SplitPipe(rf ?? ""),
-            Snips = SplitPipe(sn ?? ""),
-            LastModified = nowIso
-          };
-          info = "OK";
-          return true;
+          foreach (var r in rf.Split('|'))
+            if (Uri.TryCreate(r, UriKind.RelativeOrAbsolute, out var u)) meta.AddReference(u);
         }
-        catch (Exception ex) { info = "Errore live: " + ex.Message; return false; }
+
+        var repo = new RhinoMetadataRepository(doc);
+        repo.UpsertAsync(meta).GetAwaiter().GetResult();
+
+        var newHash = ProgesiHash.Compute(meta);
+        IndexHash(table, "Progesi.MetaHash", newHash, id);
+
+        persisted = new { Id = id, Hash = newHash };
+        return true;
       }
 
-      // Nessun repo: echo permissivo
-      int echoId = ReadInt(payload, "id"); if (echoId <= 0) echoId = 1;
-      string echoHash = "mock-" + echoId.ToString("00000000");
-      persisted = new LiveMetaDto
-      {
-        Id = echoId,
-        Hash = echoHash,
-        By = ReadString(payload, "by"),
-        Refs = SplitPipe(ReadString(payload, "rf")),
-        Snips = SplitPipe(ReadString(payload, "sn")),
-        LastModified = IsoNowUtc()
-      };
-      info = "OK (nessun repo collegato)";
-      return true;
+      info = "Repo non supportato (serve RHINO).";
+      return false;
     }
 
     public static bool TryDelete(object repoObj, int id, out string info)
     {
       info = "OK";
-      var live = repoObj as ServiceHub.LiveSqliteContext;
-      if (live != null)
+
+      if (repoObj is ServiceHub.RhinoContext rh)
       {
-        try
+        var doc = rh.Doc;
+        var table = doc.Strings;
+        var repo = new RhinoMetadataRepository(doc);
+
+        var current = repo.GetAsync(id).GetAwaiter().GetResult();
+        if (current != null)
         {
-          using (var cn = new SqliteConnection("Data Source=" + live.DbPath))
-          {
-            cn.Open();
-            using (var cmd = cn.CreateCommand())
-            {
-              cmd.CommandText = "DELETE FROM metadata WHERE Id=@i;";
-              cmd.Parameters.AddWithValue("@i", id);
-              var n = cmd.ExecuteNonQuery();
-              info = (n > 0) ? "OK" : "Non trovato (live)";
-              return n > 0;
-            }
-          }
+          var h = ProgesiHash.Compute(current);
+          UnindexHash(table, "Progesi.MetaHash", h);
         }
-        catch (Exception ex) { info = "Errore live: " + ex.Message; return false; }
+
+        var ok = repo.DeleteAsync(id).GetAwaiter().GetResult();
+        info = ok ? "OK" : "Delete non riuscita";
+        return ok;
       }
-      info = "OK (nessun repo collegato)";
+
+      info = "Repo non supportato (serve RHINO).";
       return false;
     }
 
-    // ========= VARIABLES =========
+    // ================= VARIABLES =================
 
     public static bool TryGetVariableByHashThenId(object repoObj, string hash, int id, out object variable, out string info)
     {
       variable = null; info = string.Empty;
 
-      var live = repoObj as ServiceHub.LiveSqliteContext;
-      if (live != null)
+      if (repoObj is ServiceHub.RhinoContext rh)
       {
-        if (!System.IO.File.Exists(live.DbPath)) { info = "DB non trovato (live)"; return false; }
+        var doc = rh.Doc;
+        var table = doc.Strings;
+        var rid = id;
 
-        try
-        {
-          using (var cn = new SqliteConnection("Data Source=" + live.DbPath))
-          {
-            cn.Open();
-            using (var cmd = cn.CreateCommand())
-            {
-              if (!string.IsNullOrWhiteSpace(hash))
-              {
-                cmd.CommandText = "SELECT Id,Hash,Name,Value,Unit,By,LastModifiedUtc FROM variables WHERE Hash=@h LIMIT 1;";
-                cmd.Parameters.AddWithValue("@h", hash);
-              }
-              else if (id > 0)
-              {
-                cmd.CommandText = "SELECT Id,Hash,Name,Value,Unit,By,LastModifiedUtc FROM variables WHERE Id=@i LIMIT 1;";
-                cmd.Parameters.AddWithValue("@i", id);
-              }
-              else { info = "Input non valido (hash/id)."; return false; }
+        if (!string.IsNullOrWhiteSpace(hash) && rid <= 0)
+          TryResolveIdByHash(table, "Progesi.VarHash", hash, out rid);
 
-              using (var rd = cmd.ExecuteReader())
-              {
-                if (!rd.Read()) { info = "Non trovato (live)"; return false; }
+        if (rid <= 0) { info = "Input non valido (hash/id)."; return false; }
 
-                variable = new LiveVarDto
-                {
-                  Id = rd.IsDBNull(0) ? 0 : rd.GetInt32(0),
-                  Hash = rd.IsDBNull(1) ? "" : rd.GetString(1),
-                  Name = rd.IsDBNull(2) ? "" : rd.GetString(2),
-                  Value = rd.IsDBNull(3) ? "" : rd.GetString(3),
-                  Unit = rd.IsDBNull(4) ? "" : rd.GetString(4),
-                  By = rd.IsDBNull(5) ? "" : rd.GetString(5),
-                  LastModified = rd.IsDBNull(6) ? "" : rd.GetString(6)
-                };
-                info = "OK";
-                return true;
-              }
-            }
-          }
-        }
-        catch (Exception ex) { info = "Errore live: " + ex.Message; return false; }
-      }
+        var repo = new RhinoVariableRepository(doc);
+        var v = repo.GetByIdAsync(rid).GetAwaiter().GetResult();
+        if (v == null) { info = "Non trovato (rhino)"; return false; }
 
-      // MOCK / NONE – echo base
-      if (!string.IsNullOrWhiteSpace(hash) || id > 0)
-      {
         variable = new LiveVarDto
         {
-          Id = id > 0 ? id : 1,
-          Hash = string.IsNullOrWhiteSpace(hash) ? ("mock-" + (id > 0 ? id : 1).ToString("00000000")) : hash,
-          Name = "",
-          Value = "",
+          Id = v.Id,
+          Hash = ProgesiHash.Compute(v),
+          Name = v.Name ?? "",
+          Value = v.Value?.ToString() ?? "",
           Unit = "",
           By = "",
           LastModified = IsoNowUtc()
         };
-        info = "OK (nessun repo collegato)";
+        info = "OK";
         return true;
       }
 
-      info = "Input non valido (hash/id).";
+      info = "Repo non supportato (serve RHINO).";
       return false;
     }
 
@@ -319,121 +242,79 @@ ON CONFLICT(Id) DO UPDATE SET
     {
       persisted = null; info = "OK";
 
-      string name = ReadString(payload, "name");
-      string value = ReadString(payload, "value");
-      string unit = ReadString(payload, "unit");
-      string by = ReadString(payload, "by");
-      int id = ReadInt(payload, "id");
-
-      // >>> FIX: se value e unit sono numerici, applica fattore e azzera Unit (robustezza anche nel ramo LIVE)
-      var inv = CultureInfo.InvariantCulture;
-      double vFix, uFix;
-      if (double.TryParse(value, NumberStyles.Any, inv, out vFix) &&
-          double.TryParse(unit, NumberStyles.Any, inv, out uFix))
+      if (repoObj is ServiceHub.RhinoContext rh)
       {
-        var combined = vFix * uFix;
-        value = combined.ToString(inv);
-        unit = "";
-      }
+        var doc = rh.Doc;
+        var table = doc.Strings;
 
-      string nowIso = IsoNowUtc();
-      string hash = string.Format(inv, "{0}|{1}|{2}|{3}|{4}|{5}", id, (name ?? "").Trim().ToUpperInvariant(),
-                                    value ?? "", (unit ?? "").Trim().ToUpperInvariant(), (by ?? "").Trim().ToUpperInvariant(), nowIso);
+        var id = ReadInt(payload, "id");
+        var name = ReadString(payload, "name");
+        var value = ReadString(payload, "value");
+        var unit = ReadString(payload, "unit");
 
-      var live = repoObj as ServiceHub.LiveSqliteContext;
-      if (live != null)
-      {
-        try
+        var inv = CultureInfo.InvariantCulture;
+        if (double.TryParse(value, NumberStyles.Any, inv, out var vFix) &&
+            !string.IsNullOrWhiteSpace(unit) &&
+            double.TryParse(unit, NumberStyles.Any, inv, out var uFix))
         {
-          using (var cn = new SqliteConnection("Data Source=" + live.DbPath))
-          {
-            cn.Open();
-            using (var tr = cn.BeginTransaction())
-            using (var cmd = cn.CreateCommand())
-            {
-              if (id <= 0)
-              {
-                cmd.CommandText = "SELECT IFNULL(MAX(Id),0)+1 FROM variables;";
-                id = Convert.ToInt32(cmd.ExecuteScalar());
-                hash = string.Format(inv, "{0}|{1}|{2}|{3}|{4}|{5}", id, (name ?? "").Trim().ToUpperInvariant(),
-                                     value ?? "", (unit ?? "").Trim().ToUpperInvariant(), (by ?? "").Trim().ToUpperInvariant(), nowIso);
-              }
-
-              cmd.CommandText = @"
-INSERT INTO variables(Id,Hash,Name,Value,Unit,By,LastModifiedUtc)
-VALUES(@id,@hash,@name,@value,@unit,@by,@lm)
-ON CONFLICT(Id) DO UPDATE SET
-  Hash=@hash, Name=@name, Value=@value, Unit=@unit, By=@by, LastModifiedUtc=@lm;";
-              cmd.Parameters.AddWithValue("@id", id);
-              cmd.Parameters.AddWithValue("@hash", hash ?? "");
-              cmd.Parameters.AddWithValue("@name", name ?? "");
-              cmd.Parameters.AddWithValue("@value", value ?? "");
-              cmd.Parameters.AddWithValue("@unit", unit ?? "");
-              cmd.Parameters.AddWithValue("@by", by ?? "");
-              cmd.Parameters.AddWithValue("@lm", nowIso);
-              cmd.ExecuteNonQuery();
-
-              tr.Commit();
-            }
-          }
-
-          persisted = new LiveVarDto
-          {
-            Id = id,
-            Hash = hash,
-            Name = name ?? "",
-            Value = value ?? "",
-            Unit = unit ?? "",
-            By = by ?? "",
-            LastModified = nowIso
-          };
-          info = "OK";
-          return true;
+          value = (vFix * uFix).ToString(inv);
+          unit = "";
         }
-        catch (Exception ex) { info = "Errore live: " + ex.Message; return false; }
+
+        if (id <= 0) id = NextId(table, "Progesi.Var", "__next__");
+
+        object typedValue = value;
+        if (int.TryParse(value, NumberStyles.Integer, inv, out var asInt)) typedValue = asInt;
+        else if (double.TryParse(value, NumberStyles.Float, inv, out var asDbl)) typedValue = asDbl;
+        else if (string.Equals(value, "true", StringComparison.OrdinalIgnoreCase)) typedValue = true;
+        else if (string.Equals(value, "false", StringComparison.OrdinalIgnoreCase)) typedValue = false;
+
+        var repo = new RhinoVariableRepository(doc);
+
+        var current = repo.GetByIdAsync(id).GetAwaiter().GetResult();
+        if (current != null)
+        {
+          var oldHash = ProgesiHash.Compute(current);
+          UnindexHash(table, "Progesi.VarHash", oldHash);
+        }
+
+        var variableNew = new ProgesiVariable(id, name ?? string.Empty, typedValue, dependsFrom: Array.Empty<int>(), metadataId: null);
+        repo.SaveAsync(variableNew).GetAwaiter().GetResult();
+
+        var newHash = ProgesiHash.Compute(variableNew);
+        IndexHash(table, "Progesi.VarHash", newHash, id);
+
+        persisted = new { Id = id, Hash = newHash, Name = name ?? string.Empty, Value = value ?? "" };
+        return true;
       }
 
-      // MOCK / NONE
-      int echoId = id > 0 ? id : 1;
-      persisted = new LiveVarDto
-      {
-        Id = echoId,
-        Hash = string.Format(inv, "{0}|{1}|{2}|{3}|{4}|{5}", echoId, (name ?? "").Trim().ToUpperInvariant(),
-                               value ?? "", (unit ?? "").Trim().ToUpperInvariant(), (by ?? "").Trim().ToUpperInvariant(), nowIso),
-        Name = name ?? "",
-        Value = value ?? "",
-        Unit = unit ?? "",
-        By = by ?? "",
-        LastModified = nowIso
-      };
-      info = "OK (nessun repo collegato)";
-      return true;
+      info = "Repo non supportato (serve RHINO).";
+      return false;
     }
 
     public static bool TryDeleteVariable(object repoObj, int id, out string info)
     {
       info = "OK";
-      var live = repoObj as ServiceHub.LiveSqliteContext;
-      if (live != null)
+
+      if (repoObj is ServiceHub.RhinoContext rh)
       {
-        try
+        var doc = rh.Doc;
+        var table = doc.Strings;
+        var repo = new RhinoVariableRepository(doc);
+
+        var current = repo.GetByIdAsync(id).GetAwaiter().GetResult();
+        if (current != null)
         {
-          using (var cn = new SqliteConnection("Data Source=" + live.DbPath))
-          {
-            cn.Open();
-            using (var cmd = cn.CreateCommand())
-            {
-              cmd.CommandText = "DELETE FROM variables WHERE Id=@i;";
-              cmd.Parameters.AddWithValue("@i", id);
-              var n = cmd.ExecuteNonQuery();
-              info = (n > 0) ? "OK" : "Non trovato (live)";
-              return n > 0;
-            }
-          }
+          var h = ProgesiHash.Compute(current);
+          UnindexHash(table, "Progesi.VarHash", h);
         }
-        catch (Exception ex) { info = "Errore live: " + ex.Message; return false; }
+
+        var ok = repo.DeleteAsync(id).GetAwaiter().GetResult();
+        info = ok ? "OK" : "Delete non riuscita";
+        return ok;
       }
-      info = "OK (nessun repo collegato)";
+
+      info = "Repo non supportato (serve RHINO).";
       return false;
     }
   }

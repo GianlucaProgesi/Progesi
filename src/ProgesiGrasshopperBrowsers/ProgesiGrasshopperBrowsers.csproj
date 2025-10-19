@@ -18,6 +18,9 @@
 
     <!-- Evita duplicati AssemblyInfo se lo gestisci a mano -->
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+
+    <!-- Demota i warning MSBuild di conflitto assembly a messaggi -->
+    <MSBuildWarningsAsMessages>$(MSBuildWarningsAsMessages);MSB3277</MSBuildWarningsAsMessages>
   </PropertyGroup>
 
   <!-- In CI: pacchetti NuGet per Rhino/Grasshopper (niente runtime) -->

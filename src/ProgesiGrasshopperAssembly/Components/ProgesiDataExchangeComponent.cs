@@ -5,6 +5,11 @@ using ProgesiGrasshopperAssembly.Infrastructure;
 using System;
 using System.Drawing;
 
+// PATCH: reflection per Dirty-mark
+using System.Reflection;
+using System.Collections;
+using System.Collections.Generic;
+
 namespace Progesi.GrasshopperAssembly.Components
 {
   public sealed class ProgesiDataExchangeComponent : GH_Component
@@ -35,9 +40,7 @@ namespace Progesi.GrasshopperAssembly.Components
     }
 
     protected override void RegisterOutputParams(GH_OutputParamManager p)
-    {
-      p.AddTextParameter("Info", "Info", "Log sintetico dell'operazione (ins/upd/skip + destinazioni).", GH_ParamAccess.item);
-    }
+      => p.AddTextParameter("Info", "Info", "Log sintetico dell'operazione (ins/upd/skip + destinazioni).", GH_ParamAccess.item);
 
     protected override void SolveInstance(IGH_DataAccess da)
     {
@@ -49,21 +52,82 @@ namespace Progesi.GrasshopperAssembly.Components
 
       if (!run) { da.SetData(0, "Idle"); return; }
 
+      // bootstrap
       RhinoBridgeBootstrap.EnsureConfigured();
-      var rhino = RhinoBridge.GetRhinoStore();
-      if (rhino == null) { da.SetData(0, "Error: RhinoBridge non configurato."); return; }
+      var store = RhinoBridge.GetRhinoStore();
+      if (store == null) { da.SetData(0, "Error: RhinoBridge non configurato."); return; }
 
-      var act = string.Equals(action, "Write", StringComparison.OrdinalIgnoreCase) ? DataExchangeAction.Write : DataExchangeAction.Read;
+      var act = string.Equals(action, "Write", StringComparison.OrdinalIgnoreCase)
+                ? DataExchangeAction.Write
+                : DataExchangeAction.Read;
 
       try
       {
-        var report = DataExchangeRunner.Run(act, rhino, db, xlsx, createDbIfMissing: true);
-        da.SetData(0, report.ToString());
+        // PATCH: prima di scrivere → marca tutto “dirty” (robustezza GH 8.21/8.22)
+        if (act == DataExchangeAction.Write)
+          MarkAllAsDirtySafe(store);
+
+        var report = DataExchangeRunner.Run(act, store, db, xlsx, createDbIfMissing: true);
+
+        // PATCH: dopo un Read → marca dirty per le solve successive (Write)
+        if (act == DataExchangeAction.Read)
+          MarkAllAsDirtySafe(store);
+
+        da.SetData(0, report?.ToString() ?? "OK");
       }
       catch (Exception ex)
       {
         da.SetData(0, "Error: " + ex.Message);
       }
+    }
+
+    // ---------------- helpers PATCH ----------------
+
+    /// <summary>Marca come “dirty” tutte le entità presenti nello Store.
+    /// Tenta prima Store.MarkAllAsDirty(); se assente, setta IsDirty=true via reflection.</summary>
+    private static void MarkAllAsDirtySafe(object store)
+    {
+      if (store == null) return;
+
+      // 1) metodo diretto, se esiste
+      var m = store.GetType().GetMethod("MarkAllAsDirty",
+              BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+      if (m != null) { try { m.Invoke(store, null); return; } catch { } }
+
+      // 2) altrimenti: attraversa le collezioni e imposta IsDirty=true
+      foreach (var it in Enumerate(store, "Variables")) SetBool(it, "IsDirty", true);
+      foreach (var it in Enumerate(store, "Metadata")) SetBool(it, "IsDirty", true);
+      foreach (var it in Enumerate(store, "AxisVars", "AxisVariables", "Axis")) SetBool(it, "IsDirty", true);
+    }
+
+    private static IEnumerable<object> Enumerate(object store, params string[] propNames)
+    {
+      if (store == null) yield break;
+      foreach (var pn in propNames ?? Array.Empty<string>())
+      {
+        var p = store.GetType().GetProperty(pn,
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+        if (p == null) continue;
+
+        if (p.GetValue(store) is IEnumerable en)
+        {
+          foreach (var it in en) yield return it;  // non-generic → object
+          yield break;
+        }
+      }
+    }
+
+    private static void SetBool(object o, string prop, bool value)
+    {
+      if (o == null) return;
+      try
+      {
+        var p = o.GetType().GetProperty(prop,
+            BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic);
+        if (p != null && p.CanWrite)
+          p.SetValue(o, value, null);
+      }
+      catch { /* ignore */ }
     }
   }
 }
