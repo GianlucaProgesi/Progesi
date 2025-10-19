@@ -31,15 +31,14 @@ namespace ProgesiRepositories.Rhino
         ValueType = TypeOf(variable.Value),
         Value = Stringify(variable.Value),
         variable.MetadataId,
-        Depends = variable.DependsFrom ?? Array.Empty<int>()
+        Depends = variable.DependsFrom ?? Array.Empty<int>(),
+        variable.IsAssumption
       };
       var json = JsonConvert.SerializeObject(payload) ?? string.Empty;
-      _table.SetString("Progesi.Var", key, json); // ? niente var = ...
+      _table.SetString("Progesi.Var", key, json);
       return Task.FromResult(variable);
     }
 
-    // NOTA: l'interfaccia prevede non-nullable; se non trovato, ritorna null a runtime.
-    // Per evitare warning (TreatWarningsAsErrors), disabilitiamo la nullability solo per questo metodo.
 #nullable disable
     public Task<ProgesiVariable> GetByIdAsync(int id, CancellationToken ct = default)
     {
@@ -52,7 +51,9 @@ namespace ProgesiRepositories.Rhino
 
       var value = ParseValue(dto.Value ?? string.Empty, dto.ValueType ?? "string");
       var depends = dto.Depends ?? Array.Empty<int>();
-      return Task.FromResult(new ProgesiVariable(dto.Id, dto.Name ?? string.Empty, value, depends, dto.MetadataId));
+      var isAss = dto.IsAssumption ?? false;
+
+      return Task.FromResult(new ProgesiVariable(dto.Id, dto.Name ?? string.Empty, value, depends, dto.MetadataId, isAss));
     }
 #nullable enable
 
@@ -66,8 +67,8 @@ namespace ProgesiRepositories.Rhino
     public Task<bool> DeleteAsync(int id, CancellationToken ct = default)
     {
       var key = KeyOf(id);
-      _table.Delete("Progesi.Var", key);   // Delete non ritorna nulla
-      return Task.FromResult(true);        // => restituiamo true esplicito
+      _table.Delete("Progesi.Var", key);
+      return Task.FromResult(true);
     }
 
     public async Task<int> DeleteManyAsync(IEnumerable<int> idsToDelete, CancellationToken ct = default)
@@ -91,6 +92,7 @@ namespace ProgesiRepositories.Rhino
       public string? Value { get; set; }
       public int? MetadataId { get; set; }
       public int[]? Depends { get; set; }
+      public bool? IsAssumption { get; set; }
     }
 
     // ---- helpers (null-safe)
@@ -101,7 +103,10 @@ namespace ProgesiRepositories.Rhino
       {
         string _ => "string",
         int _ => "int",
+        long _ => "long",
         double _ => "double",
+        float _ => "double",
+        decimal _ => "double",
         bool _ => "bool",
         _ => obj.GetType().AssemblyQualifiedName ?? "object"
       };
@@ -114,7 +119,10 @@ namespace ProgesiRepositories.Rhino
       {
         string s => s,
         int i => i.ToString(),
+        long l => l.ToString(),
         double d => d.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        float f => ((double)f).ToString(System.Globalization.CultureInfo.InvariantCulture),
+        decimal m => ((double)m).ToString(System.Globalization.CultureInfo.InvariantCulture),
         bool b => b ? "true" : "false",
         _ => JsonConvert.SerializeObject(obj) ?? string.Empty
       };
@@ -127,6 +135,7 @@ namespace ProgesiRepositories.Rhino
       {
         "string" => value,
         "int" => int.Parse(value),
+        "long" => long.Parse(value),
         "double" => double.Parse(value, System.Globalization.CultureInfo.InvariantCulture),
         "bool" => value == "true",
         _ => DeserializeOrReturn(value, valueType)
