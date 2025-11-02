@@ -47,15 +47,16 @@ namespace ProgesiGrasshopperAssembly.Components
       p.AddTextParameter("Action", "Act", "ExportExcel | ImportExcel", GH_ParamAccess.item, "ExportExcel");
       p.AddTextParameter("Path", "Path", "Percorso file .xlsx (Export: dest., Import: src).", GH_ParamAccess.item, "");
       p.AddBooleanParameter("Overwrite", "Ovr", "Se true, sovrascrive (Export).", GH_ParamAccess.item, true);
-      p.AddBooleanParameter("DryRun", "Dry", "Se TRUE: valida e logga senza scrivere nel repository.", GH_ParamAccess.item, false);
-
 
       // Validazione Import
       p.AddTextParameter("Mode", "Mode", "Import: 'Strict' oppure 'Lenient'.", GH_ParamAccess.item, "Lenient");
       p.AddBooleanParameter("FailOnError", "Fail", "Stop import se errori ≥ MaxErr.", GH_ParamAccess.item, false);
       p.AddIntegerParameter("MaxErrors", "MaxErr", "Soglia errori per stop (default 1000).", GH_ParamAccess.item, 1000);
       p.AddTextParameter("Map", "Map", "JSON alias colonne (opzionale).", GH_ParamAccess.item, "");
-     }
+      p.AddBooleanParameter("DryRun", "Dry", "Se TRUE: valida e logga senza scrivere nel repository.", GH_ParamAccess.item, false);
+      // alla fine di RegisterInputParams(...)
+      for (int i = 1; i < Params.Input.Count; i++) Params.Input[i].Optional = true; // lascia Run non opzionale
+    }
 
     // OUT: 0 Info, 1 Path/Log, 2 Warn(tree 0=Meta/1=Vars), 3 Errors(tree 0=Meta/1=Vars), 4 Counts(tree)
     protected override void RegisterOutputParams(GH_OutputParamManager p)
@@ -85,6 +86,9 @@ namespace ProgesiGrasshopperAssembly.Components
       DA.GetData(6, ref maxErrors);
       DA.GetData(7, ref mapJson);
       DA.GetData(8, ref dryRun);
+      // Modalità strict/lenient comune a tutte le azioni
+      bool strictMode = string.Equals((mode ?? "").Trim(), "STRICT", StringComparison.OrdinalIgnoreCase);
+
 
       var warnTree = new GH_Structure<GH_String>();
       var errTree = new GH_Structure<GH_String>();
@@ -115,12 +119,43 @@ namespace ProgesiGrasshopperAssembly.Components
           DA.SetDataTree(4, counts);
           return;
         }
+        if (act == "EXPORTSQLITE")
+        {
+          var (outDb, msg) = ExportSqlite(path);
+          DA.SetData(0, msg);
+          DA.SetData(1, outDb ?? "");
+          DA.SetDataTree(2, new GH_Structure<GH_String>());
+          DA.SetDataTree(3, new GH_Structure<GH_String>());
+          var countsOut = new GH_Structure<GH_String>();
+          countsOut.Append(new GH_String("ExportSqlite: OK"), new GH_Path(0));
+          DA.SetDataTree(4, countsOut);
+
+          return;
+        }
+
+        if (act == "IMPORTSQLITE")
+        {
+          var (srcDb, logPath, wTree, eTree, cTree, rcTree, info) =
+              ImportSqlite(path, strictMode, dryRun);
+
+          DA.SetData(0, info);
+          DA.SetData(1, string.IsNullOrWhiteSpace(logPath) ? (srcDb ?? "") : logPath);
+          DA.SetDataTree(2, wTree);
+          DA.SetDataTree(3, eTree);
+          DA.SetDataTree(4, cTree);
+          DA.SetDataTree(5, rcTree);       // << ErrRC (row,col)
+          return;
+        }
+
+
 
         if (act == "IMPORTEXCEL")
         {
           bool strict = string.Equals((mode ?? "").Trim(), "STRICT", StringComparison.OrdinalIgnoreCase);
+          // prima: bool strict = string.Equals(...);
           var (src, logPath, wTree, eTree, cTree, errRcTree, info) =
-              ImportExcelValidated(path, strict, fail, Math.Max(0, maxErrors), mapJson, dryRun);
+              ImportExcelValidated(path, strictMode, fail, Math.Max(0, maxErrors), mapJson, dryRun);
+
 
           DA.SetData(0, info);
           DA.SetData(1, string.IsNullOrWhiteSpace(logPath) ? (src ?? "") : logPath);
@@ -259,10 +294,12 @@ namespace ProgesiGrasshopperAssembly.Components
       Action<int, string> ERR = (br, msg) => { errTree.Append(new GH_String(msg), new GH_Path(br)); LOG("ERROR", msg); };
       Action<int, int, int> AddErrRC = (br, row, col) =>
       {
-        var path = new GH_Path(br, errTree.get_Branch(br)?.Count ?? 0);
+        // un solo branch per sezione (0=Meta, 1=Vars), due interi consecutivi per ogni errore [row,col]
+        var path = new GH_Path(br);
         errRC.Append(new GH_Integer(row), path);
         errRC.Append(new GH_Integer(col), path);
       };
+
 
       object repo; string hubInfo;
       if (!ServiceHub.TryGetMetadataRepository(out repo, out hubInfo))
@@ -461,6 +498,356 @@ namespace ProgesiGrasshopperAssembly.Components
                     $"Vars {varOk}/{varRows} (warn:{varWarn}, err:{varErr}) | Log: {(string.IsNullOrWhiteSpace(logPath) ? "-" : logPath)}";
 
       return (p, logPath, warnTree, errTree, counts, errRC, info);
+    }
+
+    // =========================== SQLITE – EXPORT ===========================
+    private static (string dbPath, string info) ExportSqlite(string inPath)
+    {
+      // 1) Path DB
+      string db = (inPath ?? "").Trim();
+      if (string.IsNullOrEmpty(db))
+      {
+        string home = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
+        if (string.IsNullOrEmpty(home)) home = AppDomain.CurrentDomain.BaseDirectory;
+        db = Path.Combine(home, "Progesi_Data.sqlite");
+      }
+      if (Directory.Exists(db)) db = Path.Combine(db, "Progesi_Data.sqlite");
+
+      // 2) Leggi dal repo RHINO
+      var doc = RhinoDoc.ActiveDoc ?? throw new InvalidOperationException("RhinoDoc.ActiveDoc is null.");
+      StringTable table = doc.Strings ?? throw new InvalidOperationException("RhinoDoc.Strings is null.");
+      var vars = ReadAllVarsFromTable(table);    // esiste già nel file
+      var metas = ReadAllMetasFromTable(table);   // esiste già nel file
+
+      // 3) Se il file esiste ed è bloccato, cambia nome (non fallire)
+      if (File.Exists(db))
+      {
+        try { File.Delete(db); }
+        catch
+        {
+          string dir = Path.GetDirectoryName(db) ?? "";
+          string name = Path.GetFileNameWithoutExtension(db);
+          string ext = Path.GetExtension(db);
+          string ts = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+          db = Path.Combine(dir, name + "_" + ts + ext);
+        }
+      }
+
+      // 4) Per sicurezza: set degli Id meta presenti (per NULL-izzare i MetaId “orfani”)
+      var metaIdSet = new HashSet<int>(Array.ConvertAll(metas, m => m.Id));
+
+      // 5) Crea DB e schema + INSERT
+      using (var cn = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={db};Mode=ReadWriteCreate"))
+      {
+        cn.Open();
+        using (var cmd = cn.CreateCommand())
+        {
+          // FK ON
+          cmd.CommandText = "PRAGMA foreign_keys=ON;";
+          cmd.ExecuteNonQuery();
+
+          // Schema senza UNIQUE su Hash (evita FK fail su duplicati)
+          cmd.CommandText = @"
+CREATE TABLE IF NOT EXISTS Metadata (
+  Id     INTEGER PRIMARY KEY,
+  Hash   TEXT NOT NULL,
+  By     TEXT,
+  Description TEXT,
+  LM     TEXT
+);
+CREATE TABLE IF NOT EXISTS Refs (
+  MetaId INTEGER NOT NULL,
+  Ref    TEXT    NOT NULL,
+  PRIMARY KEY (MetaId, Ref),
+  FOREIGN KEY (MetaId) REFERENCES Metadata(Id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS Variables (
+  Id     INTEGER PRIMARY KEY,
+  Hash   TEXT NOT NULL,
+  Name   TEXT NOT NULL,
+  Value  TEXT,
+  ValC   TEXT,
+  MetaId INTEGER NULL,
+  Assumption INTEGER NOT NULL DEFAULT 0,
+  FOREIGN KEY (MetaId) REFERENCES Metadata(Id) ON DELETE SET NULL
+);
+CREATE TABLE IF NOT EXISTS VariableDepends (
+  VarId  INTEGER NOT NULL,
+  DepId  INTEGER NOT NULL,
+  PRIMARY KEY (VarId, DepId),
+  FOREIGN KEY (VarId) REFERENCES Variables(Id) ON DELETE CASCADE
+);";
+          cmd.ExecuteNonQuery();
+
+          // ---- Metadata
+          cmd.CommandText = "INSERT OR IGNORE INTO Metadata(Id,Hash,By,Description,LM) VALUES (@i,@h,@b,@d,@lm)";
+          var pMi = cmd.CreateParameter(); pMi.ParameterName = "@i";
+          var pMh = cmd.CreateParameter(); pMh.ParameterName = "@h";
+          var pMb = cmd.CreateParameter(); pMb.ParameterName = "@b";
+          var pMd = cmd.CreateParameter(); pMd.ParameterName = "@d";
+          var pMl = cmd.CreateParameter(); pMl.ParameterName = "@lm";
+          cmd.Parameters.Clear(); cmd.Parameters.AddRange(new[] { pMi, pMh, pMb, pMd, pMl });
+
+          foreach (var m in metas)
+          {
+            pMi.Value = m.Id; pMh.Value = m.Hash ?? ""; pMb.Value = m.By ?? "";
+            pMd.Value = m.Description ?? ""; pMl.Value = m.LM ?? "";
+            cmd.ExecuteNonQuery();
+
+            // Refs
+            if (m.Refs != null && m.Refs.Length > 0)
+            {
+              cmd.CommandText = "INSERT OR IGNORE INTO Refs(MetaId,Ref) VALUES (@mid,@r)";
+              var pm = cmd.CreateParameter(); pm.ParameterName = "@mid"; pm.Value = m.Id;
+              var pr = cmd.CreateParameter(); pr.ParameterName = "@r";
+              cmd.Parameters.Clear(); cmd.Parameters.Add(pm); cmd.Parameters.Add(pr);
+              foreach (var r in m.Refs) { pr.Value = r ?? ""; cmd.ExecuteNonQuery(); }
+
+              // ripristina
+              cmd.CommandText = "INSERT OR IGNORE INTO Metadata(Id,Hash,By,Description,LM) VALUES (@i,@h,@b,@d,@lm)";
+              cmd.Parameters.Clear(); cmd.Parameters.AddRange(new[] { pMi, pMh, pMb, pMd, pMl });
+            }
+          }
+
+          // ---- Variables (MetaId NULL se assente)
+          cmd.CommandText = "INSERT OR IGNORE INTO Variables(Id,Hash,Name,Value,ValC,MetaId,Assumption) VALUES (@i,@h,@n,@v,@vc,@m,@a)";
+          var pvI = cmd.CreateParameter(); pvI.ParameterName = "@i";
+          var pvH = cmd.CreateParameter(); pvH.ParameterName = "@h";
+          var pvN = cmd.CreateParameter(); pvN.ParameterName = "@n";
+          var pvV = cmd.CreateParameter(); pvV.ParameterName = "@v";
+          var pvC = cmd.CreateParameter(); pvC.ParameterName = "@vc";
+          var pvM = cmd.CreateParameter(); pvM.ParameterName = "@m";
+          var pvA = cmd.CreateParameter(); pvA.ParameterName = "@a";
+          cmd.Parameters.Clear(); cmd.Parameters.AddRange(new[] { pvI, pvH, pvN, pvV, pvC, pvM, pvA });
+
+          foreach (var v in vars)
+          {
+            pvI.Value = v.Id; pvH.Value = v.Hash ?? ""; pvN.Value = v.Name ?? "";
+            pvV.Value = v.Value ?? ""; pvC.Value = v.ValC ?? "";
+            pvM.Value = (v.MetaId > 0 && metaIdSet.Contains(v.MetaId)) ? (object)v.MetaId : (object)DBNull.Value; // << fix FK
+            pvA.Value = v.Assumption ? 1 : 0;
+            cmd.ExecuteNonQuery();
+
+            if (v.Depends != null && v.Depends.Length > 0)
+            {
+              cmd.CommandText = "INSERT OR IGNORE INTO VariableDepends(VarId,DepId) VALUES (@vid,@dep)";
+              var pVid = cmd.CreateParameter(); pVid.ParameterName = "@vid"; pVid.Value = v.Id;
+              var pDep = cmd.CreateParameter(); pDep.ParameterName = "@dep";
+              cmd.Parameters.Clear(); cmd.Parameters.Add(pVid); cmd.Parameters.Add(pDep);
+              foreach (var d in v.Depends) { pDep.Value = d; cmd.ExecuteNonQuery(); }
+              cmd.CommandText = "INSERT OR IGNORE INTO Variables(Id,Hash,Name,Value,ValC,MetaId,Assumption) VALUES (@i,@h,@n,@v,@vc,@m,@a)";
+              cmd.Parameters.Clear(); cmd.Parameters.AddRange(new[] { pvI, pvH, pvN, pvV, pvC, pvM, pvA });
+            }
+          }
+        }
+      }
+
+      string info = $"OK ExportSqlite → {db} (Vars:{vars.Length}, Meta:{metas.Length})";
+      return (db, info);
+    }
+
+
+    // =========================== SQLITE – IMPORT ===========================
+    private static (string srcDb,
+                 string logPath,
+                 GH_Structure<GH_String> warnOut,
+                 GH_Structure<GH_String> errOut,
+                 GH_Structure<GH_String> countsOut,
+                 GH_Structure<GH_Integer> errRcOut,
+                 string info)
+ ImportSqlite(string inDbPath, bool strict, bool dryRun)
+    {
+      string db = (inDbPath ?? "").Trim();
+      if (string.IsNullOrEmpty(db)) throw new ArgumentException("SQLite path not specified.");
+      if (!File.Exists(db)) throw new FileNotFoundException("SQLite file not found.", db);
+
+      var warnTree = new GH_Structure<GH_String>();
+      var errTree = new GH_Structure<GH_String>();
+      var counts = new GH_Structure<GH_String>();
+      var errRC = new GH_Structure<GH_Integer>(); // {branch} → coppie [row,col]
+
+      var logLines = new List<string>();
+      Action<string, string> LOG = (lvl, msg) => logLines.Add($"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] {lvl}: {msg}");
+      Action<int, string> WARN = (br, msg) => { warnTree.Append(new GH_String(msg), new GH_Path(br)); LOG("WARN", msg); };
+      Action<int, string> ERR = (br, msg) => { errTree.Append(new GH_String(msg), new GH_Path(br)); LOG("ERROR", msg); };
+      Action<int, int, int> AddErrRC = (br, row, col) =>
+      {
+        var path = new GH_Path(br);
+        errRC.Append(new GH_Integer(row), path);
+        errRC.Append(new GH_Integer(col), path);
+      };
+
+      object repo; string hub;
+      if (!ServiceHub.TryGetMetadataRepository(out repo, out hub))
+        throw new InvalidOperationException("RHINO repository not available.");
+
+      // controlli extra coerenti con Excel
+      const int NAME_MAX = 128;
+      const int DESC_MAX = 512;
+      Func<string, bool> IsPrintable = s => string.IsNullOrEmpty(s) || s.All(ch => ch >= 32 && ch != 127);
+      Func<string, bool> IsHttpUrl = s => Uri.TryCreate(s, UriKind.Absolute, out var u) && (u.Scheme == "http" || u.Scheme == "https");
+      Func<string, bool> IsAbsPath = s => !string.IsNullOrEmpty(s) && Path.IsPathRooted(s);
+
+      int metaRows = 0, metaOk = 0, metaWarn = 0, metaErr = 0;
+      int varRows = 0, varOk = 0, varWarn = 0, varErr = 0;
+
+      using (var cn = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={db};Mode=ReadOnly"))
+      {
+        cn.Open();
+
+        // Verifica schema
+        Func<string, bool> HasTable = name => {
+          using (var chk = cn.CreateCommand())
+          {
+            chk.CommandText = "SELECT name FROM sqlite_master WHERE type='table' AND name=@n";
+            chk.Parameters.AddWithValue("@n", name);
+            var r = chk.ExecuteScalar();
+            return r != null && r != DBNull.Value;
+          }
+        };
+
+        if (!HasTable("Metadata") || !HasTable("Variables"))
+        {
+          ERR(0, "SQLite schema not found (Metadata/Variables). Did export fail previously?");
+          string bad = db + ".import.log.txt";
+          try { File.WriteAllLines(bad, logLines, Encoding.UTF8); } catch { bad = ""; }
+          return (db, bad, warnTree, errTree, counts, errRC, "Error: missing tables in SQLite database.");
+        }
+
+        // ===== METADATA =====
+        using (var cmd = cn.CreateCommand())
+        {
+          cmd.CommandText = "SELECT Id, By, Description, LM FROM Metadata ORDER BY Id";
+          using (var rd = cmd.ExecuteReader())
+          {
+            int row = 0; // 1-based “visuale”
+            while (rd.Read())
+            {
+              row++; metaRows++;
+              int id = rd.IsDBNull(0) ? 0 : rd.GetInt32(0);
+              string by = rd.IsDBNull(1) ? "" : rd.GetString(1);
+              string ds = rd.IsDBNull(2) ? "" : rd.GetString(2);
+
+              // controlli extra
+              if (by.Length > NAME_MAX || !IsPrintable(by))
+              { var msg = $"[Meta R{row}] BY invalid (len/charset)"; (strict ? ERR : WARN)(0, msg); AddErrRC(0, row, 2); if (strict) { metaErr++; continue; } else { metaWarn++; } }
+
+              if (ds.Length > DESC_MAX || !IsPrintable(ds))
+              { var msg = $"[Meta R{row}] DESCRIPTION invalid (len/charset)"; (strict ? ERR : WARN)(0, msg); AddErrRC(0, row, 3); if (strict) { metaErr++; continue; } else { metaWarn++; } }
+
+              // refs: leggi e valida
+              string refsJoined = "";
+              using (var cmdR = cn.CreateCommand())
+              {
+                cmdR.CommandText = "SELECT Ref FROM Refs WHERE MetaId=@id";
+                cmdR.Parameters.AddWithValue("@id", id);
+                using (var rr = cmdR.ExecuteReader())
+                {
+                  var refs = new List<string>();
+                  while (rr.Read())
+                  {
+                    string rfs = rr.IsDBNull(0) ? "" : rr.GetString(0);
+                    if (!string.IsNullOrWhiteSpace(rfs))
+                    {
+                      if (!(IsHttpUrl(rfs) || IsAbsPath(rfs)))
+                      { var msg = $"[Meta R{row}] REF invalid: {rfs}"; (strict ? ERR : WARN)(0, msg); AddErrRC(0, row, 5); if (strict) { metaErr++; refs.Clear(); break; } else { metaWarn++; } }
+                      refs.Add(rfs);
+                    }
+                  }
+                  refsJoined = refs.Count > 0 ? string.Join("|", refs) : "";
+                }
+              }
+
+              if (!dryRun)
+              {
+                var payload = new { id = id, by = by ?? "", info = ds ?? "", rf = refsJoined, sn = "" };
+                object persisted; string upInfo;
+                bool ok = MetadataRepositoryCompatExtensions.TryUpsert(repo, payload, out persisted, out upInfo);
+                if (!ok) { ERR(0, $"[Meta R{row}] import failed: {upInfo ?? "unknown"}"); metaErr++; continue; }
+              }
+
+              metaOk++;
+            }
+          }
+        }
+
+        // ===== VARIABLES =====
+        using (var cmd = cn.CreateCommand())
+        {
+          cmd.CommandText = "SELECT Id, Name, Value, MetaId, Assumption FROM Variables ORDER BY Id";
+          using (var rd = cmd.ExecuteReader())
+          {
+            int row = 0;
+            while (rd.Read())
+            {
+              row++; varRows++;
+              int id = rd.IsDBNull(0) ? 0 : rd.GetInt32(0);
+              string nm = rd.IsDBNull(1) ? "" : rd.GetString(1);
+              string vl = rd.IsDBNull(2) ? "" : rd.GetString(2);
+              int mid = rd.IsDBNull(3) ? 0 : rd.GetInt32(3);
+              bool ass = !rd.IsDBNull(4) && (rd.GetInt32(4) != 0);
+
+              // extra: NAME
+              if (nm.Length > NAME_MAX || !IsPrintable(nm))
+              { var msg = $"[Var R{row}] NAME invalid (len/charset)"; (strict ? ERR : WARN)(1, msg); AddErrRC(1, row, 2); if (strict) { varErr++; continue; } else { varWarn++; } }
+
+              // depends
+              int[] dep = Array.Empty<int>();
+              using (var cmdD = cn.CreateCommand())
+              {
+                cmdD.CommandText = "SELECT DepId FROM VariableDepends WHERE VarId=@id ORDER BY DepId";
+                cmdD.Parameters.AddWithValue("@id", id);
+                using (var rr = cmdD.ExecuteReader())
+                {
+                  var tmp = new List<int>(); while (rr.Read()) tmp.Add(rr.GetInt32(0)); dep = tmp.ToArray();
+                }
+              }
+
+              // metaId: se specificato deve esistere (preview = controllo; run = controllo + eventuale dedupe lato compat)
+              if (mid > 0)
+              {
+                object dummy; string lookupInfo;
+                bool okMeta = MetadataRepositoryCompatExtensions.TryGetByHashThenId(repo, "", mid, out dummy, out lookupInfo);
+                if (!okMeta)
+                { var msg = $"[Var R{row}] METAID not found: {mid}"; (strict ? ERR : WARN)(1, msg); AddErrRC(1, row, 4); if (strict) { varErr++; continue; } else { varWarn++; mid = 0; } }
+              }
+
+              if (!dryRun)
+              {
+                var payload = new
+                {
+                  id = id,
+                  name = nm ?? "",
+                  value = vl ?? "",
+                  unit = "",
+                  by = "",
+                  isAssumption = ass,
+                  mid = (mid > 0 ? mid.ToString(CultureInfo.InvariantCulture) : ""),
+                  depends = (object)dep
+                };
+                object persisted; string upInfo;
+                bool ok = MetadataRepositoryCompatExtensions.TryUpsertVariable(repo, payload, out persisted, out upInfo);
+                if (!ok) { ERR(1, $"[Var R{row}] import failed: {upInfo ?? "unknown"}"); varErr++; continue; }
+              }
+
+              varOk++;
+            }
+          }
+        }
+      }
+
+      // counts + log
+      counts.Append(new GH_String($"Meta rows={metaRows} ok={metaOk} warn={metaWarn} err={metaErr}"), new GH_Path(0));
+      counts.Append(new GH_String($"Vars rows={varRows} ok={varOk} warn={varWarn} err={varErr}"), new GH_Path(1));
+
+      string logPath = db + ".import.log.txt";
+      try { File.WriteAllLines(logPath, logLines, Encoding.UTF8); } catch { logPath = ""; }
+
+      string prefix = dryRun ? "PREVIEW " : "OK ";
+      string info = $"{prefix}ImportSqlite ← {db} | Meta {metaOk}/{metaRows} (warn:{metaWarn}, err:{metaErr}) | " +
+                    $"Vars {varOk}/{varRows} (warn:{varWarn}, err:{varErr}) | Log: {(string.IsNullOrWhiteSpace(logPath) ? "-" : logPath)}";
+
+      return (db, logPath, warnTree, errTree, counts, errRC, info);
     }
 
 

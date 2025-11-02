@@ -11,6 +11,8 @@
     <AppendTargetFrameworkToOutputPath>true</AppendTargetFrameworkToOutputPath>
     <OutDir>$(MSBuildProjectDirectory)\bin\$(Configuration)\net48\</OutDir>
     <NoWarn>$(NoWarn);CS8603</NoWarn>
+    <!-- Demota i conflitti assembly a messaggi (niente warning a build) -->
+    <MSBuildWarningsAsMessages>$(MSBuildWarningsAsMessages);MSB3277</MSBuildWarningsAsMessages>
   </PropertyGroup>
 
   <ItemGroup>
@@ -18,6 +20,10 @@
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <!-- FIX: allinea la versione a quella risolta da NuGet per eliminare NU1603 -->
     <PackageReference Include="ClosedXML" Version="0.104.0" />
+    <!-- SQLite (runtime self-contained grazie al bundle) -->
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.9" />
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="2.1.10" />
+    
   </ItemGroup>
 
   <PropertyGroup>
