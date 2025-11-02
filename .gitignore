@@ -53,3 +53,8 @@ artifacts/
 # local helper
 /tools/Run-Local.ps1
 
+
+# Chat / browser snapshots
+*Sistema*Versione*Beta*.html
+*Sistema*Versione*Beta*_files/
+
