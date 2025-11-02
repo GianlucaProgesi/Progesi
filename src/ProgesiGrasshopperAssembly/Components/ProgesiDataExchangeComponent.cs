@@ -4,6 +4,8 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Linq;
+using System.Text;
 using Grasshopper.Kernel;
 using Newtonsoft.Json;
 using ProgesiCore;
@@ -14,48 +16,53 @@ using ClosedXML.Excel;
 namespace ProgesiGrasshopperAssembly.Components
 {
   /// <summary>
-  /// Unico DataEx per import/export.
-  /// S1-5/A: ExportExcel  → crea un .xlsx con Variabili e Metadata dal repo Rhino
-  /// S1-5/B: ImportExcel  → importa da .xlsx nel repo Rhino (dedupe coerenti con VarIn/MetIn)
+  /// Unico DataEx per import/export (repo Rhino ↔ Excel/SQLite/EF).
+  /// S1-5/A: ExportExcel
+  /// S1-5/B: ImportExcel (dedupe coerenti con Var/Meta)
+  /// S1-5/C: ImportExcel Validation & Errori (Strict/Lenient, header/mapping/coercizione, log dettagliato)
   ///
   /// Act supportati (case-insensitive):
   ///   ExportExcel | ImportExcel
-  ///   (placeholder futuri: ExportSqlite | ImportSqlite | ExportEf | ImportEf)
+  /// (placeholder futuri: ExportSqlite | ImportSqlite | ExportEf | ImportEf)
   /// </summary>
   public sealed class ProgesiDataExchangeComponent : GH_Component
   {
     public ProgesiDataExchangeComponent()
       : base("ProgesiDataExchange", "DataEx",
-             "Importa/Esporta i dati Progesi (repo Rhino ↔ Excel/SQLite/EF).  S1-5A/B: ExportExcel / ImportExcel.",
+             "Importa/Esporta i dati Progesi (repo Rhino ↔ Excel/SQLite/EF).  S1-5A/B/C: ExportExcel / ImportExcel (+validazione).",
              "Progesi", "IO")
     { }
 
     public override Guid ComponentGuid => new Guid("E5C4F9D7-1C2E-4C1A-9F3D-7C7A8C5AC101");
     protected override System.Drawing.Bitmap Icon => ProgesiGrasshopperAssembly.Infrastructure.ProgesiIcons.DataEx;
 
-    // IN: Run, Act, Path, Overwrite
+    // IN: Run, Act, Path, Overwrite, Mode
     protected override void RegisterInputParams(GH_InputParamManager p)
     {
       p.AddBooleanParameter("Run", "Run", "Esegui (default FALSE).", GH_ParamAccess.item, false);
       p.AddTextParameter("Act", "Act", "ExportExcel | ImportExcel", GH_ParamAccess.item, "ExportExcel");
-      p.AddTextParameter("Path", "Path", "Percorso file .xlsx (in Export: destinazione; in Import: sorgente).", GH_ParamAccess.item, "");
+      p.AddTextParameter("Path", "Path", "Percorso file .xlsx (Export: destinazione; Import: sorgente).", GH_ParamAccess.item, "");
       p.AddBooleanParameter("Overwrite", "Ovr", "Export: sovrascrive il file esistente. Import: ignorato.", GH_ParamAccess.item, true);
+
+      // S1-5/C: Strict | Lenient (default)
+      p.AddTextParameter("Mode", "Mode", "Import: Strict (rigido) oppure Lenient (tollerante).", GH_ParamAccess.item, "Lenient");
     }
 
     // OUT: Info, Path
     protected override void RegisterOutputParams(GH_OutputParamManager p)
     {
       p.AddTextParameter("Info", "Info", "Esito/diagnostica.", GH_ParamAccess.item);
-      p.AddTextParameter("Path", "Path", "Percorso completo del file usato/creato.", GH_ParamAccess.item);
+      p.AddTextParameter("Path", "Path", "Percorso completo del file usato/creato (o log).", GH_ParamAccess.item);
     }
 
     protected override void SolveInstance(IGH_DataAccess DA)
     {
-      bool run = false; string act = "ExportExcel"; string path = ""; bool overwrite = true;
+      bool run = false; string act = "ExportExcel"; string path = ""; bool overwrite = true; string mode = "Lenient";
       DA.GetData(0, ref run);
       DA.GetData(1, ref act);
       DA.GetData(2, ref path);
       DA.GetData(3, ref overwrite);
+      DA.GetData(4, ref mode);
 
       if (!run) { DA.SetData(0, "Idle"); DA.SetData(1, ""); return; }
 
@@ -73,9 +80,10 @@ namespace ProgesiGrasshopperAssembly.Components
             }
           case "IMPORTEXCEL":
             {
-              var (src, msg) = ImportExcel(path);
+              var strict = string.Equals((mode ?? "").Trim(), "STRICT", StringComparison.OrdinalIgnoreCase);
+              var (src, logPath, msg) = ImportExcelValidated(path, strict);
               DA.SetData(0, msg);
-              DA.SetData(1, src ?? "");
+              DA.SetData(1, string.IsNullOrWhiteSpace(logPath) ? (src ?? "") : logPath);
               return;
             }
           default:
@@ -99,23 +107,18 @@ namespace ProgesiGrasshopperAssembly.Components
       var doc = RhinoDoc.ActiveDoc ?? throw new InvalidOperationException("RhinoDoc.ActiveDoc is null.");
       var table = doc.Strings ?? throw new InvalidOperationException("RhinoDoc.Strings is null.");
 
-      // prepara path
       string p = NormalizeXlsxPathForExport(inPath);
       if (File.Exists(p))
       {
         if (!overwrite) throw new IOException("Il file esiste già: " + p);
-        // prova a sbloccare
         try { using (var s = File.Open(p, FileMode.Open, FileAccess.ReadWrite, FileShare.None)) { } } catch { /* best effort */ }
       }
 
-      // leggi Variabili e Metadata dal StringTable (scan 1..__next__-1)
       var vars = ReadAllVariables(table);
       var mets = ReadAllMetadata(table);
 
-      // crea XLSX (ClosedXML)
       using (var wb = new XLWorkbook())
       {
-        // Sheet: ProgesiVariables
         var wv = wb.AddWorksheet("ProgesiVariables");
         int r = 1;
         wv.Cell(r, 1).Value = "Id";
@@ -127,7 +130,6 @@ namespace ProgesiGrasshopperAssembly.Components
         wv.Cell(r, 7).Value = "Depends";
         wv.Cell(r, 8).Value = "Assumption";
         r++;
-
         foreach (var v in vars)
         {
           wv.Cell(r, 1).Value = v.Id;
@@ -141,7 +143,6 @@ namespace ProgesiGrasshopperAssembly.Components
           r++;
         }
 
-        // Sheet: ProgesiMetadata
         var wm = wb.AddWorksheet("ProgesiMetadata");
         r = 1;
         wm.Cell(r, 1).Value = "Id";
@@ -151,7 +152,6 @@ namespace ProgesiGrasshopperAssembly.Components
         wm.Cell(r, 5).Value = "Refs";
         wm.Cell(r, 6).Value = "LM";
         r++;
-
         foreach (var m in mets)
         {
           wm.Cell(r, 1).Value = m.Id;
@@ -180,14 +180,8 @@ namespace ProgesiGrasshopperAssembly.Components
         var desktop = Environment.GetFolderPath(Environment.SpecialFolder.DesktopDirectory);
         p = Path.Combine(desktop, "Progesi_Export.xlsx");
       }
-      if (Directory.Exists(p))
-      {
-        p = Path.Combine(p, "Progesi_Export.xlsx");
-      }
-      if (Path.GetExtension(p).Length == 0)
-      {
-        p = p.TrimEnd('.', ' ') + ".xlsx";
-      }
+      if (Directory.Exists(p)) p = Path.Combine(p, "Progesi_Export.xlsx");
+      if (Path.GetExtension(p).Length == 0) p = p.TrimEnd('.', ' ') + ".xlsx";
       return p;
     }
 
@@ -353,137 +347,202 @@ namespace ProgesiGrasshopperAssembly.Components
     }
 
     // =========================================================================
-    // S1-5/B Import → Excel (xlsx → repo Rhino)
+    // S1-5/C Import → Excel con validazione & log
     // =========================================================================
-    private static (string path, string info) ImportExcel(string inPath)
+    private static (string srcPath, string logPath, string info) ImportExcelValidated(string inPath, bool strict)
     {
       string p = (inPath ?? "").Trim();
       if (string.IsNullOrWhiteSpace(p)) throw new ArgumentException("Path .xlsx non specificato.");
       if (!File.Exists(p)) throw new FileNotFoundException("File Excel non trovato.", p);
 
+      var log = new List<string>();
+      void LOG(string level, string msg) => log.Add($"[{DateTime.UtcNow:HH:mm:ss}] {level}: {msg}");
+
       object repo; string hub;
       ServiceHub.TryGetMetadataRepository(out repo, out hub);
       if (!(repo is ServiceHub.RhinoContext)) throw new InvalidOperationException("Repository Rhino non disponibile.");
+      LOG("INFO", $"Start ImportExcel (mode={(strict ? "Strict" : "Lenient")}) → {p}");
 
-      int metaProcessed = 0, varProcessed = 0;
+      int metaRows = 0, metaOk = 0, metaWarn = 0, metaErr = 0;
+      int varRows = 0, varOk = 0, varWarn = 0, varErr = 0;
       int maxMetaIdSeen = 0, maxVarIdSeen = 0;
 
       using (var wb = new XLWorkbook(p))
       {
-        // --- Import METADATA prima (serve per risolvere MId nelle variabili)
-        var metaSheet = FindSheet(wb, "ProgesiMetadata", "Metadata");
-        if (metaSheet != null)
+        // ----- METADATA -----
+        var wsMeta = FindSheet(wb, "ProgesiMetadata", "Metadata");
+        if (wsMeta == null)
         {
-          // header atteso:
-          // Id | Hash | By | Description | Refs | LM
-          var rows = metaSheet.RangeUsed()?.RowsUsed();
-          if (rows != null)
+          string m = "Sheet 'ProgesiMetadata' non trovato.";
+          if (strict) { LOG("ERROR", m); throw new InvalidOperationException(m); }
+          else { LOG("WARN", m); }
+        }
+        else
+        {
+          var hMeta = BuildHeaderMap(wsMeta, out int firstRow, out int lastRow);
+          var reqMeta = new[] { "BY", "DESCRIPTION" };
+          var missMeta = MissingHeaders(hMeta, reqMeta);
+          if (missMeta.Count > 0)
           {
-            bool first = true;
-            foreach (var row in rows)
+            string m = "Header mancanti in ProgesiMetadata: " + string.Join(",", missMeta);
+            if (strict) { LOG("ERROR", m); throw new InvalidOperationException(m); }
+            else { LOG("WARN", m); }
+          }
+
+          for (int r = firstRow + 1; r <= lastRow; r++)
+          {
+            metaRows++;
+            string by = ReadCell(wsMeta, r, hMeta, "BY");
+            string descr = ReadCell(wsMeta, r, hMeta, "DESCRIPTION");
+            string refs = ReadCell(wsMeta, r, hMeta, "REFS");
+            int id = SafeInt(ReadCell(wsMeta, r, hMeta, "ID"));
+
+            if (string.IsNullOrWhiteSpace(by) && string.IsNullOrWhiteSpace(descr))
+            { LOG("WARN", $"Meta riga {r}: riga vuota → skip"); metaWarn++; continue; }
+
+            var payload = new { id = id, by = by ?? "", info = descr ?? "", rf = refs ?? "", sn = "" };
+            object persisted; string upInfo;
+            bool ok = MetadataRepositoryCompatExtensions.TryUpsert(repo, payload, out persisted, out upInfo);
+            if (ok)
             {
-              if (first) { first = false; continue; } // skip header
-              int id = SafeInt(row.Cell(1).GetString());
-              string by = row.Cell(3).GetString() ?? "";
-              string descr = row.Cell(4).GetString() ?? "";
-              string refs = row.Cell(5).GetString() ?? "";
-
-              var payload = new
-              {
-                id = id,
-                by = by,
-                info = descr,
-                rf = refs,
-                sn = "" // ignorato in HF
-              };
-
-              object persisted; string upInfo;
-              bool ok = MetadataRepositoryCompatExtensions.TryUpsert(repo, payload, out persisted, out upInfo);
-              if (ok) metaProcessed++;
-
-              if (id > maxMetaIdSeen) maxMetaIdSeen = id;
-              // se il compat ha assegnato un nuovo id, prova a leggerlo
-              int pid = 0;
-              ReadIf(persisted, "Id", ref pid);
+              metaOk++;
+              int pid = 0; ReadIf(persisted, "Id", ref pid);
               if (pid > maxMetaIdSeen) maxMetaIdSeen = pid;
             }
+            else
+            { metaErr++; LOG("ERROR", $"Meta riga {r}: import fallito ({upInfo})"); }
           }
         }
 
-        // --- Import VARIABILI
-        var varSheet = FindSheet(wb, "ProgesiVariables", "Variables");
-        if (varSheet != null)
+        // ----- VARIABILI -----
+        var wsVar = FindSheet(wb, "ProgesiVariables", "Variables");
+        if (wsVar == null)
         {
-          // header atteso:
-          // Id | Hash | Name | Value | ValC | MetaId | Depends | Assumption
-          var rows = varSheet.RangeUsed()?.RowsUsed();
-          if (rows != null)
+          string m = "Sheet 'ProgesiVariables' non trovato.";
+          if (strict) { LOG("ERROR", m); throw new InvalidOperationException(m); }
+          else { LOG("WARN", m); }
+        }
+        else
+        {
+          var hVar = BuildHeaderMap(wsVar, out int firstRow, out int lastRow);
+          var reqVar = new[] { "NAME", "VALUE" };
+          var missVar = MissingHeaders(hVar, reqVar);
+          if (missVar.Count > 0)
           {
-            bool first = true;
-            foreach (var row in rows)
+            string m = "Header mancanti in ProgesiVariables: " + string.Join(",", missVar);
+            if (strict) { LOG("ERROR", m); throw new InvalidOperationException(m); }
+            else { LOG("WARN", m); }
+          }
+
+          for (int r = firstRow + 1; r <= lastRow; r++)
+          {
+            varRows++;
+            string name = ReadCell(wsVar, r, hVar, "NAME");
+            string value = ReadCell(wsVar, r, hVar, "VALUE");
+            string depS = ReadCell(wsVar, r, hVar, "DEPENDS");
+            string assS = ReadCell(wsVar, r, hVar, "ASSUMPTION");
+            int id = SafeInt(ReadCell(wsVar, r, hVar, "ID"));
+            int metaId = SafeInt(ReadCell(wsVar, r, hVar, "METAID"));
+
+            if (string.IsNullOrWhiteSpace(name) && string.IsNullOrWhiteSpace(value))
+            { LOG("WARN", $"Var riga {r}: riga vuota → skip"); varWarn++; continue; }
+
+            int[] depends = ParseDepends(depS);
+            bool ass = SafeBool(assS);
+
+            var payload = new
             {
-              if (first) { first = false; continue; }
-              int id = SafeInt(row.Cell(1).GetString());
-              string name = row.Cell(3).GetString() ?? "";
-              string value = row.Cell(4).GetString() ?? "";
-              int metaId = SafeInt(row.Cell(6).GetString());
-              string dependsS = row.Cell(7).GetString() ?? "";
-              int[] depends = ParseDepends(dependsS);
-              bool ass = SafeBool(row.Cell(8).GetString());
+              id = id,
+              name = name ?? "",
+              value = value ?? "",
+              unit = "",
+              by = "", // non persistito lato Rhino
+              isAssumption = ass,
+              mid = metaId > 0 ? metaId.ToString(CultureInfo.InvariantCulture) : "",
+              depends = depends
+            };
 
-              var payload = new
-              {
-                id = id,
-                name = name,
-                value = value,
-                unit = "",
-                by = "", // non persiste nel repo Rhino
-                isAssumption = ass,
-                mid = metaId > 0 ? metaId.ToString(CultureInfo.InvariantCulture) : "",
-                depends = depends
-              };
-
-              object persisted; string upInfo;
-              bool ok = MetadataRepositoryCompatExtensions.TryUpsertVariable(repo, payload, out persisted, out upInfo);
-              if (ok) varProcessed++;
-
-              if (id > maxVarIdSeen) maxVarIdSeen = id;
-              int pid = 0;
-              ReadIf(persisted, "Id", ref pid);
+            object persisted; string upInfo;
+            bool ok = MetadataRepositoryCompatExtensions.TryUpsertVariable(repo, payload, out persisted, out upInfo);
+            if (ok)
+            {
+              varOk++;
+              int pid = 0; ReadIf(persisted, "Id", ref pid);
               if (pid > maxVarIdSeen) maxVarIdSeen = pid;
             }
+            else
+            { varErr++; LOG("ERROR", $"Var riga {r}: import fallito ({upInfo})"); }
           }
         }
       }
 
-      // aggiorna i contatori __next__ coerenti (max+1)
+      // sincronizza i contatori __next__
       var doc = RhinoDoc.ActiveDoc ?? throw new InvalidOperationException("RhinoDoc.ActiveDoc is null.");
       var table = doc.Strings ?? throw new InvalidOperationException("RhinoDoc.Strings is null.");
-      if (maxMetaIdSeen > 0)
-        table.SetString("Progesi.Meta", "__next__", (maxMetaIdSeen + 1).ToString(CultureInfo.InvariantCulture));
-      if (maxVarIdSeen > 0)
-        table.SetString("Progesi.Var", "__next__", (maxVarIdSeen + 1).ToString(CultureInfo.InvariantCulture));
+      if (maxMetaIdSeen > 0) table.SetString("Progesi.Meta", "__next__", (maxMetaIdSeen + 1).ToString(CultureInfo.InvariantCulture));
+      if (maxVarIdSeen > 0) table.SetString("Progesi.Var", "__next__", (maxVarIdSeen + 1).ToString(CultureInfo.InvariantCulture));
+
+      // scrivi log
+      string logPath = p + ".import.log.txt";
+      try { File.WriteAllLines(logPath, log, Encoding.UTF8); } catch { logPath = ""; }
 
       string info = string.Format(CultureInfo.InvariantCulture,
-        "OK ImportExcel ← {0} (Meta:{1}, Vars:{2})", p, metaProcessed, varProcessed);
-      return (p, info);
+        "OK ImportExcel ← {0} | Meta {1}/{2} (warn:{3}, err:{4}) | Vars {5}/{6} (warn:{7}, err:{8}) | Log: {9}",
+        p, metaOk, metaRows, metaWarn, metaErr, varOk, varRows, varWarn, varErr, (string.IsNullOrWhiteSpace(logPath) ? "-" : logPath));
+
+      return (p, logPath, info);
     }
 
+    // ===== Helpers Import =====
     private static IXLWorksheet FindSheet(XLWorkbook wb, params string[] names)
     {
-      foreach (var n in names)
-      {
-        if (wb.TryGetWorksheet(n, out var ws)) return ws;
-      }
-      // fallback case-insensitive
+      foreach (var n in names) if (wb.TryGetWorksheet(n, out var ws)) return ws;
       foreach (var ws in wb.Worksheets)
-      {
         foreach (var n in names)
-        {
           if (string.Equals(ws.Name, n, StringComparison.OrdinalIgnoreCase)) return ws;
+      return null;
+    }
+
+    private static Dictionary<string, int> BuildHeaderMap(IXLWorksheet ws, out int firstRow, out int lastRow)
+    {
+      var used = ws.RangeUsed();
+      if (used == null) { firstRow = 1; lastRow = 0; return new Dictionary<string, int>(); }
+      firstRow = used.RangeAddress.FirstAddress.RowNumber;
+      lastRow = used.RangeAddress.LastAddress.RowNumber;
+
+      var map = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+      var header = ws.Row(firstRow);
+      foreach (var cell in header.CellsUsed())
+      {
+        var name = NormalizeHeader(cell.GetString());
+        if (!string.IsNullOrWhiteSpace(name))
+        {
+          if (!map.ContainsKey(name)) map.Add(name, cell.Address.ColumnNumber);
         }
       }
-      return null;
+      return map;
+    }
+
+    private static string NormalizeHeader(string s)
+    {
+      if (string.IsNullOrWhiteSpace(s)) return "";
+      var up = new string(s.Trim().ToUpperInvariant().ToCharArray()
+                .Where(ch => char.IsLetterOrDigit(ch)).ToArray());
+      return up;
+    }
+
+    private static List<string> MissingHeaders(Dictionary<string, int> map, IEnumerable<string> required)
+    {
+      var miss = new List<string>();
+      foreach (var r in required)
+        if (!map.ContainsKey(r)) miss.Add(r);
+      return miss;
+    }
+
+    private static string ReadCell(IXLWorksheet ws, int row, Dictionary<string, int> map, string key)
+    {
+      if (!map.TryGetValue(key, out int col)) return "";
+      return ws.Cell(row, col).GetString() ?? "";
     }
 
     private static int SafeInt(string s)
