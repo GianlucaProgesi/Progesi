@@ -1,0 +1,17 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net48</TargetFramework>
+    <RootNamespace>Progesi.Data.EF</RootNamespace>
+    <Nullable>disable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <!-- obbiga il progetto EF a copiare tutte le DLL dei pacchetti nel suo bin -->
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="EntityFramework" Version="6.4.4" />
+    <PackageReference Include="System.Data.SQLite.Core" Version="1.0.118.0" />
+    <PackageReference Include="System.Data.SQLite.EF6" Version="1.0.118.0" />
+    <PackageReference Include="System.Data.SQLite.Linq" Version="1.0.118.0" />
+  </ItemGroup>
+</Project>

@@ -18,12 +18,9 @@
   <ItemGroup>
     <PackageReference Include="RhinoCommon" Version="8.23.25251.13001" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
-    <!-- FIX: allinea la versione a quella risolta da NuGet per eliminare NU1603 -->
     <PackageReference Include="ClosedXML" Version="0.104.0" />
-    <!-- SQLite (runtime self-contained grazie al bundle) -->
-    <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.9" />
-    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="2.1.10" />
-    
+    <PackageReference Include="System.Data.SQLite.Core" Version="1.0.118.0" />
+    <Reference Include="System.Windows.Forms" />
   </ItemGroup>
 
   <PropertyGroup>
@@ -43,6 +40,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\Progesi.Data.EF\Progesi.Data.EF.csproj" />
     <ProjectReference Include="..\ProgesiDataExchange\ProgesiDataExchange.csproj" />
     <ProjectReference Include="..\ProgesiCore\ProgesiCore.csproj" />
     <ProjectReference Include="..\ProgesiRepositories.Rhino\ProgesiRepositories.Rhino.csproj" />
@@ -65,6 +63,23 @@
       <BuiltDll Include="$(OutDir)$(AssemblyName).dll" />
     </ItemGroup>
     <Copy SourceFiles="@(BuiltDll)" DestinationFiles="$(OutDir)$(AssemblyName).gha" SkipUnchangedFiles="true" />
+  </Target>
+
+  <!-- Copia tutte le dll del progetto EF e le native di SQLite nel folder della .gha -->
+  <Target Name="CopyEfDeps" AfterTargets="Build">
+    <!-- DLL gestite (EntityFramework, System.Data.SQLite.*, ... incluse la LINQ dll) -->
+    <ItemGroup>
+      <EfManaged Include="..\Progesi.Data.EF\bin\$(Configuration)\net48\*.dll" />
+    </ItemGroup>
+    <Copy SourceFiles="@(EfManaged)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+
+    <!-- Native interop (necessarie in sottocartella x64 / x86) -->
+    <ItemGroup>
+      <EfNative64 Include="..\Progesi.Data.EF\bin\$(Configuration)\net48\x64\SQLite.Interop.dll" />
+      <EfNative86 Include="..\Progesi.Data.EF\bin\$(Configuration)\net48\x86\SQLite.Interop.dll" />
+    </ItemGroup>
+    <Copy SourceFiles="@(EfNative64)" DestinationFiles="$(OutDir)\x64\SQLite.Interop.dll" SkipUnchangedFiles="true" Condition="Exists('%(EfNative64.Identity)')" />
+    <Copy SourceFiles="@(EfNative86)" DestinationFiles="$(OutDir)\x86\SQLite.Interop.dll" SkipUnchangedFiles="true" Condition="Exists('%(EfNative86.Identity)')" />
   </Target>
 
 </Project>
