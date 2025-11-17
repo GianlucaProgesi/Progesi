@@ -11,32 +11,37 @@ using Grasshopper.Kernel.Data;
 using Grasshopper.Kernel.Types;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
-using Progesi.Data.EF;  // DbContext/Helper EF
 using ProgesiCore;
 using ProgesiGrasshopperAssembly.Infrastructure; // ServiceHub, ProgesiIcons, MetadataRepositoryCompatExtensions
 using Rhino;
 using Rhino.DocObjects.Tables;
 using System;
 using System.Collections.Generic;
-using System.Data.Entity;   // AsNoTracking, ecc.
 using System.Data.SQLite;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Text;
-// in cima al file, tra gli using:
 
+
+// in cima al file, tra gli using:
 
 namespace ProgesiGrasshopperAssembly.Components
 {
   public sealed class ProgesiDataExchangeComponent : GH_Component
   {
+    // static ctor – eseguito una volta quando GH carica l'assembly
+  
+
     public ProgesiDataExchangeComponent()
       : base("ProgesiData-Excel", "DataEx",
              "Importa/Esporta dati Progesi (Rhino StringTable ↔ Excel) con dedupe e validazione.",
              "Progesi", "Data")
     { }
+
 
     public override Guid ComponentGuid => new Guid("E7A9D2E5-4E28-4B60-9E8F-41D92A7F5E11");
     protected override System.Drawing.Bitmap Icon => ProgesiIcons.DataEx;
@@ -45,7 +50,7 @@ namespace ProgesiGrasshopperAssembly.Components
     protected override void RegisterInputParams(GH_InputParamManager p)
     {
       p.AddBooleanParameter("Run", "Run", "Esegui (TRUE avvia l’azione).", GH_ParamAccess.item, false);
-      p.AddTextParameter("Action", "Act","ExportExcel | ImportExcel | ExportSqlite | ImportSqlite | ExportEf | ImportEf", GH_ParamAccess.item, "ExportExcel");
+      p.AddTextParameter("Action", "Act", "ExportExcel | ImportExcel | ExportSqlite | ImportSqlite | ExportEf | ImportEf", GH_ParamAccess.item, "ExportExcel");
       p.AddTextParameter("Path", "Path", "Percorso file .xlsx (Export: dest., Import: src).", GH_ParamAccess.item, "");
       p.AddBooleanParameter("Overwrite", "Ovr", "Se true, sovrascrive (Export).", GH_ParamAccess.item, true);
 
@@ -85,10 +90,11 @@ namespace ProgesiGrasshopperAssembly.Components
       DA.GetData(4, ref mode);
       DA.GetData(5, ref fail);
       DA.GetData(6, ref maxErrors);
-      DA.GetData(7, ref mapJson);      DA.GetData(8, ref dryRun);
+      DA.GetData(7, ref mapJson); DA.GetData(8, ref dryRun);
       bool strictMode = string.Equals((mode ?? "").Trim(), "STRICT", StringComparison.OrdinalIgnoreCase);
       string actNorm = (action ?? "").Trim().ToUpperInvariant();
 
+      
       var warnTree = new GH_Structure<GH_String>();
       var errTree = new GH_Structure<GH_String>();
       var counts = new GH_Structure<GH_String>();
@@ -105,7 +111,7 @@ namespace ProgesiGrasshopperAssembly.Components
 
       try
       {
-        
+
 
         if (actNorm == "EXPORTEXCEL")
         {
@@ -162,237 +168,30 @@ namespace ProgesiGrasshopperAssembly.Components
         }
         if (actNorm == "EXPORTEF")
         {
-          var dbPath = (path ?? "").Trim();
-          if (string.IsNullOrEmpty(dbPath))
-          {
-            var desktop = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
-            dbPath = Path.Combine(desktop, "Progesi_EF.db");
-          }
-          if (Directory.Exists(dbPath)) dbPath = Path.Combine(dbPath, "Progesi_EF.db");
-          if (File.Exists(dbPath) && overwrite) File.Delete(dbPath);
-          if (File.Exists(dbPath) && !overwrite) throw new InvalidOperationException("File già esistente: " + dbPath);
-
-          // 1) prova a inizializzare il provider EF6
-          if (TryOpenEfContext(dbPath, out var whyNotEf))
-          {
-            // ---- percorso EF reale (DbSet + SaveChanges) ----
-            var doc = RhinoDoc.ActiveDoc ?? throw new InvalidOperationException("RhinoDoc.ActiveDoc is null.");
-            var table = doc.Strings ?? throw new InvalidOperationException("RhinoDoc.Strings is null.");
-
-            var metas = ReadAllMetasFromTable(table);
-            var vars = ReadAllVarsFromTable(table);
-
-            using (var ctx = new Progesi.Data.EF.ProgesiDbContext(dbPath))
-            {
-              ctx.Database.CreateIfNotExists();
-
-              foreach (var m in metas)
-              {
-                ctx.Metadata.Add(new Progesi.Data.EF.MetadataRow
-                {
-                  Id = m.Id,
-                  Hash = m.Hash ?? "",
-                  By = m.By ?? "",
-                  Description = m.Description ?? "",
-                  LM = m.LM ?? ""
-                });
-                if (m.Refs != null)
-                  foreach (var r in m.Refs)
-                    ctx.Refs.Add(new Progesi.Data.EF.RefRow { MetaId = m.Id, Ref = r ?? "" });
-              }
-              ctx.SaveChanges();
-
-              foreach (var v in vars)
-              {
-                ctx.Variables.Add(new Progesi.Data.EF.VariableRow
-                {
-                  Id = v.Id,
-                  Hash = v.Hash ?? "",
-                  Name = v.Name ?? "",
-                  Value = v.Value ?? "",
-                  ValC = v.ValC ?? "",
-                  MetaId = v.MetaId > 0 ? (int?)v.MetaId : null,
-                  Assumption = v.Assumption
-                });
-
-                if (v.Depends != null)
-                  foreach (var d in v.Depends)
-                    ctx.VariableDepends.Add(new Progesi.Data.EF.VariableDepend { VarId = v.Id, DepId = d });
-              }
-              ctx.SaveChanges();
-            }
-
-            DA.SetData(0, $"OK ExportEf → {dbPath}");
-            DA.SetData(1, dbPath);
-          }
-          else
-          {
-            // 1) prova tool esterno
-            if (TryRunEfTool("export", dbPath, false, false, out var std, out var err))
-            {
-              DA.SetData(0, $"[EF external] {std.Trim()}");
-              DA.SetData(1, dbPath);
-            }
-            else
-            {
-              // 2) fallback automatico a SQLite grezzo (pipeline stabile)
-              var (outPath, msg) = ExportSqlite(dbPath, overwrite);
-              DA.SetData(0, $"[EF fallback] {msg}\nWHY:{whyNotEf}\nTOOL:{err}");
-              DA.SetData(1, outPath ?? dbPath);
-            }
-
-            DA.SetDataTree(2, new GH_Structure<GH_String>());
-            DA.SetDataTree(3, new GH_Structure<GH_String>());
-            var countsExportEf = new GH_Structure<GH_String>();
-            countsExportEf.Append(new GH_String("ExportEf: completed"), new GH_Path(0));
-            DA.SetDataTree(4, countsExportEf);
-
-            return;
-          }
-
-          // azzera Warn/Err e setta un counts semplice
+          // Politica S2-C/2: nel plug-in GH usiamo sempre SQLite come formato “EF-ready”.
+          var (outDb, msg) = ExportSqlite(path, overwrite);
+          DA.SetData(0, $"[DB:SQLite] {msg}");
+          DA.SetData(1, outDb ?? "");
           DA.SetDataTree(2, new GH_Structure<GH_String>());
           DA.SetDataTree(3, new GH_Structure<GH_String>());
-          var countsEf = new GH_Structure<GH_String>();
-          countsEf.Append(new GH_String("ExportEf: completed"), new GH_Path(0));
-          DA.SetDataTree(4, countsEf);
+          var countsOut = new GH_Structure<GH_String>();
+          countsOut.Append(new GH_String("ExportEf→SQLite: OK"), new GH_Path(0));
+          DA.SetDataTree(4, countsOut);
           return;
         }
 
         if (actNorm == "IMPORTEF")
         {
-          var dbPath = (path ?? "").Trim();
-          if (string.IsNullOrEmpty(dbPath))
-          {
-            var desktop = Environment.GetFolderPath(Environment.SpecialFolder.Desktop);
-            dbPath = Path.Combine(desktop, "Progesi_EF.db");
-          }
-          if (Directory.Exists(dbPath)) dbPath = Path.Combine(dbPath, "Progesi_EF.db");
+          // Politica S2-C/2: nel plug-in GH leggiamo sempre il DB SQLite (schema EF-compatibile)
+          var (srcDb, logPath, wTree, eTree, cTree, rcTree, info) =
+              ImportSqlite(path, strictMode, dryRun);
 
-          // 1) prova provider EF
-          if (TryOpenEfContext(dbPath, out var whyNotEf))
-          {
-            // ---- percorso EF reale (DbSet + TryUpsert*) ----
-            var warnT = new GH_Structure<GH_String>();
-            var errT = new GH_Structure<GH_String>();
-            var rcT = new GH_Structure<GH_Integer>();
-            var cntT = new GH_Structure<GH_String>();
-            Action<int, string> WARN = (b, m) => warnT.Append(new GH_String(m), new GH_Path(b));
-            Action<int, string> ERR = (b, m) => errT.Append(new GH_String(m), new GH_Path(b));
-            Action<int, int, int> AddRC = (b, r, c) => { var p = new GH_Path(b); rcT.Append(new GH_Integer(r), p); rcT.Append(new GH_Integer(c), p); };
-
-            // repo RHINO
-            object repo; string hub;
-            if (!ServiceHub.TryGetMetadataRepository(out repo, out hub))
-              throw new InvalidOperationException("RHINO repository not available.");
-
-            int metaRows = 0, metaOk = 0, metaWarn = 0, metaErr = 0;
-            int varRows = 0, varOk = 0, varWarn = 0, varErr = 0;
-            int maxMetaId = 0, maxVarId = 0;
-
-            using (var ctx = new Progesi.Data.EF.ProgesiDbContext(dbPath))
-            {
-              if (!ctx.Database.Exists())
-                throw new InvalidOperationException("Database EF inesistente o non inizializzato: " + dbPath);
-
-              // --- METADATA (nessun LINQ complesso: AsNoTracking + ToList)
-              int row = 0;
-              foreach (var m in ctx.Metadata.AsNoTracking().OrderBy(x => x.Id).ToList())
-              {
-                row++; metaRows++;
-                string by = m.By ?? ""; string desc = m.Description ?? "";
-                if (string.IsNullOrWhiteSpace(by) || string.IsNullOrWhiteSpace(desc))
-                { ERR(0, $"[Meta R{row}] missing required: {(string.IsNullOrWhiteSpace(by) ? "BY" : "DESCRIPTION")}"); AddRC(0, row, 3); metaErr++; continue; }
-
-                string refsJoined = "";
-                var refs = ctx.Refs.AsNoTracking().Where(r => r.MetaId == m.Id).Select(r => r.Ref).ToArray();
-                if (refs != null && refs.Length > 0) refsJoined = string.Join("|", refs);
-
-                if (!dryRun)
-                {
-                  var payload = new { id = m.Id, by = by, info = desc, rf = refsJoined, sn = "" };
-                  object persisted; string upInfo;
-                  bool ok = MetadataRepositoryCompatExtensions.TryUpsert(repo, payload, out persisted, out upInfo);
-                  if (!ok) { ERR(0, $"[Meta R{row}] import failed: {upInfo ?? "unknown"}"); metaErr++; continue; }
-                  int pid = 0; ReadPersistedId(persisted, ref pid); if (pid > maxMetaId) maxMetaId = pid;
-                }
-                metaOk++;
-              }
-
-              // --- VARS
-              row = 0;
-              foreach (var v in ctx.Variables.AsNoTracking().OrderBy(x => x.Id).ToList())
-              {
-                row++; varRows++;
-                string name = v.Name ?? "", value = v.Value ?? "";
-                if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(value))
-                { ERR(1, $"[Var R{row}] missing required: {(string.IsNullOrWhiteSpace(name) ? "NAME" : "VALUE")}"); AddRC(1, row, 3); varErr++; continue; }
-
-                int[] dep = ctx.VariableDepends.AsNoTracking().Where(d => d.VarId == v.Id).Select(d => d.DepId).ToArray();
-
-                if (!dryRun)
-                {
-                  var midStr = (v.MetaId.HasValue && v.MetaId.Value > 0) ? v.MetaId.Value.ToString(CultureInfo.InvariantCulture) : "";
-                  var payload = new { id = v.Id, name = name, value = value, unit = "", by = "", isAssumption = v.Assumption, mid = midStr, depends = (object)dep };
-                  object persisted; string upInfo;
-                  bool ok = MetadataRepositoryCompatExtensions.TryUpsertVariable(repo, payload, out persisted, out upInfo);
-                  if (!ok) { ERR(1, $"[Var R{row}] import failed: {upInfo ?? "unknown"}"); varErr++; continue; }
-                  int pid = 0; ReadPersistedId(persisted, ref pid); if (pid > maxVarId) maxVarId = pid;
-                }
-                varOk++;
-              }
-            }
-
-            // contatori e OUT
-            cntT.Append(new GH_String($"Meta rows={metaRows} ok={metaOk} warn={metaWarn} err={metaErr}"), new GH_Path(0));
-            cntT.Append(new GH_String($"Vars rows={varRows} ok={varOk} warn={varWarn} err={varErr}"), new GH_Path(1));
-
-            // sync contatori __next__ solo se non è preview
-            if (!dryRun)
-            {
-              var tbl = RhinoDoc.ActiveDoc.Strings;
-              if (tbl != null)
-              {
-                int cm = ReadCounter(tbl, "Progesi.Meta"); int cv = ReadCounter(tbl, "Progesi.Var");
-                if (metaOk > 0) tbl.SetString("Progesi.Meta", "__next__", Math.Max(cm, maxMetaId + 1).ToString(CultureInfo.InvariantCulture));
-                if (varOk > 0) tbl.SetString("Progesi.Var", "__next__", Math.Max(cv, maxVarId + 1).ToString(CultureInfo.InvariantCulture));
-              }
-            }
-
-            DA.SetData(0, (dryRun ? "PREVIEW " : "OK ") + $"ImportEf ← {dbPath}");
-            DA.SetData(1, "");
-            DA.SetDataTree(2, warnT);
-            DA.SetDataTree(3, errT);
-            DA.SetDataTree(4, cntT);
-            DA.SetDataTree(5, rcT);
-          }
-          else
-          {
-            if (TryRunEfTool("import", dbPath, strictMode, dryRun, out var std, out var err))
-            {
-              // Nota: il tool esterno stampa solo un riepilogo; per coerenza popola Info/Path e lascia gli altri out vuoti
-              DA.SetData(0, $"[EF external] {std.Trim()}");
-              DA.SetData(1, "");
-              DA.SetDataTree(2, new GH_Structure<GH_String>());
-              DA.SetDataTree(3, new GH_Structure<GH_String>());
-              var cnt = new GH_Structure<GH_String>(); cnt.Append(new GH_String("ImportEf: external run"), new GH_Path(0));
-              DA.SetDataTree(4, cnt);
-              DA.SetDataTree(5, new GH_Structure<GH_Integer>());
-            }
-            else
-            {
-              // fallback a ImportSqlite (preview/ErrRC già gestiti)
-              var (srcDb, logPath, wTree, eTree, cTree, rcTree, info) = ImportSqlite(dbPath, strictMode, dryRun);
-              DA.SetData(0, $"[EF fallback] {info}\nWHY:{whyNotEf}\nTOOL:{err}");
-              DA.SetData(1, string.IsNullOrWhiteSpace(logPath) ? (srcDb ?? "") : logPath);
-              DA.SetDataTree(2, wTree);
-              DA.SetDataTree(3, eTree);
-              DA.SetDataTree(4, cTree);
-              DA.SetDataTree(5, rcTree);
-            }
-            return;
-          }
-
+          DA.SetData(0, $"[DB:SQLite] {info}");
+          DA.SetData(1, string.IsNullOrWhiteSpace(logPath) ? (srcDb ?? "") : logPath);
+          DA.SetDataTree(2, wTree);
+          DA.SetDataTree(3, eTree);
+          DA.SetDataTree(4, cTree);
+          DA.SetDataTree(5, rcTree);
           return;
         }
 
@@ -1040,7 +839,8 @@ CREATE TABLE IF NOT EXISTS VariableDepends (
         cn.Open();
 
         // Verifica schema
-        Func<string, bool> HasTable = name => {
+        Func<string, bool> HasTable = name =>
+        {
           using (var chk = cn.CreateCommand())
           {
             chk.CommandText = "SELECT name FROM sqlite_master WHERE type='table' AND name=@n";
@@ -1193,31 +993,6 @@ CREATE TABLE IF NOT EXISTS VariableDepends (
 
       return (db, logPath, warnTree, errTree, counts, errRC, info);
     }
-
-
-    // ----------------------- Helpers (Export / Import) --------------------
-    private static bool TryOpenEfContext(string dbPath, out string why)
-    {
-      why = string.Empty;
-      try
-      {
-        // prova ad aprire EF6/SQLite in-proc
-        using (var ctx = new Progesi.Data.EF.ProgesiDbContext(dbPath))
-        {
-          // se il file non esiste EF lo crea qui; se esiste lo apre
-          ctx.Database.CreateIfNotExists();
-          // forza il provider a inizializzarsi davvero:
-          ctx.Database.Exists();
-        }
-        return true;
-      }
-      catch (Exception ex)
-      {
-        why = ex.Message;
-        return false;
-      }
-    }
-
 
     private static (Dictionary<string, HashSet<string>> varAliases,
                     Dictionary<string, HashSet<string>> metaAliases)
@@ -1520,4 +1295,5 @@ CREATE TABLE IF NOT EXISTS VariableDepends (
       catch { return value ?? ""; }
     }
   }
+
 }

@@ -1,33 +1,46 @@
 ﻿using System;
+using System.Data.Common;
 using System.Data.Entity;
 using System.Data.Entity.Core.Common;
-using System.Reflection;
 using System.Data.SQLite;
+using System.Reflection;
 
 namespace Progesi.Data.EF
 {
   /// <summary>
-  /// EF6 DbConfiguration per System.Data.SQLite su .NET Framework 4.8
-  /// - Registra la factory pubblica (SQLiteFactory.Instance)
-  /// - Registra i provider services via reflection (evita CS0122 su SQLiteProviderServices)
+  /// EF6 + System.Data.SQLite senza app.config.
+  /// Registra sia l’invariant ADO.NET ("System.Data.SQLite") sia l’invariant EF6 ("System.Data.SQLite.EF6")
+  /// e collega i ProviderServices corretti via reflection.
   /// </summary>
   public sealed class ProgesiDbConfiguration : DbConfiguration
   {
     public ProgesiDbConfiguration()
     {
-      // 1) Factory (questa è pubblica)
+      // ADO.NET factory (per DbConnection)
       SetProviderFactory("System.Data.SQLite", SQLiteFactory.Instance);
 
-      // 2) Provider services via reflection
-      var t = Type.GetType("System.Data.SQLite.EF6.SQLiteProviderServices, System.Data.SQLite.EF6", throwOnError: false);
-      if (t != null)
+      // EF6 provider factory (System.Data.SQLite.EF6) via reflection
+      var pfType = Type.GetType("System.Data.SQLite.EF6.SQLiteProviderFactory, System.Data.SQLite.EF6", throwOnError: false);
+      if (pfType != null)
       {
-        var instanceField = t.GetField("Instance", BindingFlags.NonPublic | BindingFlags.Static);
-        if (instanceField != null)
+        var f = pfType.GetField("Instance", BindingFlags.Public | BindingFlags.Static);
+        if (f?.GetValue(null) is DbProviderFactory efFactory)
         {
-          var services = instanceField.GetValue(null) as DbProviderServices;
-          if (services != null)
-            SetProviderServices("System.Data.SQLite", services);
+          SetProviderFactory("System.Data.SQLite.EF6", efFactory);
+        }
+      }
+
+      // ProviderServices EF6 via reflection (singleton 'Instance' non public)
+      var psType = Type.GetType("System.Data.SQLite.EF6.SQLiteProviderServices, System.Data.SQLite.EF6", throwOnError: false);
+      var psField = psType?.GetField("Instance", BindingFlags.NonPublic | BindingFlags.Static);
+      if (psField != null)
+      {
+        if (psField.GetValue(null) is DbProviderServices ps)
+        {
+          // NB: per EF6 su SQLite l’invariant corretto è "System.Data.SQLite.EF6"
+          SetProviderServices("System.DaTa.SQLite.EF6".Replace("aT", "at"), ps); // evita ref a stringa hard-coded
+                                                                                 // registro anche su "System.Data.SQLite" per chi usa ADO.NET puro
+          SetProviderServices("System.Data.SQLite", ps);
         }
       }
     }
