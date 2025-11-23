@@ -26,3 +26,5 @@
 *.dll binary
 *.exe binary
 *.pdb binary
+
+thirdparty\Rhino8.20/*.dll  -text
