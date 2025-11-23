@@ -18,14 +18,44 @@ if (-not (Test-Path $BinDir)) {
 }
 
 # Pulisci staging
-if (Test-Path $StageDir) {
-  Remove-Item $StageDir -Recurse -Force
-}
+if (Test-Path $StageDir) { Remove-Item $StageDir -Recurse -Force }
 New-Item -ItemType Directory -Path $StageDir | Out-Null
 
-# Copia i binari del plugin GH (escludi pdb/xml/log/exe)
-$exclude = @('*.pdb','*.xml','*.tmp','*.log','*.exe')
-Copy-Item -Path (Join-Path $BinDir '*') -Destination $StageDir -Recurse -Force -Exclude $exclude
+# Copia selettiva: solo file ammessi
+$include = @(
+  'Progesi*.gha',
+  'Progesi*.dll',
+  'System.Data.SQLite.dll',
+  'SQLite.Interop.dll',
+  'x64\SQLite.Interop.dll',
+  'x86\SQLite.Interop.dll',
+  'Microsoft.Data.Sqlite*.dll',
+  'System.*.dll',
+  'netstandard.dll',
+  'Newtonsoft.Json*.dll',
+  'ClosedXML*.dll',
+  'DocumentFormat.OpenXml*.dll'
+)
+
+Get-ChildItem -Path $BinDir -Recurse -File | ForEach-Object {
+  $name = $_.Name
+  if ($include | Where-Object { $name -like $_ }) {
+    $dest = Join-Path $StageDir ($_.FullName.Substring($BinDir.Length).TrimStart('\','/'))
+    $destDir = Split-Path $dest -Parent
+    if (-not (Test-Path $destDir)) { New-Item -ItemType Directory -Path $destDir | Out-Null }
+    Copy-Item $_.FullName $dest -Force
+  }
+}
+
+# Copia icone content (se presenti)
+$icons = Join-Path $RepoRoot 'src\ProgesiGrasshopperAssembly\Resources\Icons'
+$destIcons = Join-Path $StageDir 'Resources\Icons'
+if (Test-Path $icons) {
+  if (-not (Test-Path $destIcons)) { New-Item -ItemType Directory -Path $destIcons | Out-Null }
+  Copy-Item -Path (Join-Path $icons '*') -Destination $destIcons -Recurse -Force
+} else {
+  Write-Host "[INFO] Nessuna cartella icone trovata in $icons (skip)."
+}
 
 # Aggiungi documentazione se presente
 $Readme = Join-Path $RepoRoot 'README.md'
