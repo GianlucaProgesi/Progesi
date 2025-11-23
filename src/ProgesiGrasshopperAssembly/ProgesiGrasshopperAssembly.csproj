@@ -2,65 +2,60 @@
 
   <PropertyGroup>
     <TargetFramework>net48</TargetFramework>
-    <AssemblyName>ProgesiGrasshopperAssembly</AssemblyName>
-    <RootNamespace>ProgesiGrasshopperAssembly</RootNamespace>
-    <LangVersion>latest</LangVersion>
-    <Nullable>enable</Nullable>
-    <PlatformTarget>x64</PlatformTarget>
-    <Prefer32Bit>false</Prefer32Bit>
-    <AppendTargetFrameworkToOutputPath>true</AppendTargetFrameworkToOutputPath>
-    <OutDir>$(MSBuildProjectDirectory)\bin\$(Configuration)\net48\</OutDir>
-    <NoWarn>$(NoWarn);CS8603</NoWarn>
-    <!-- Demota i conflitti assembly a messaggi (niente warning a build) -->
+    <LangVersion>8.0</LangVersion>
+    <Nullable>disable</Nullable>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     <MSBuildWarningsAsMessages>$(MSBuildWarningsAsMessages);MSB3277</MSBuildWarningsAsMessages>
   </PropertyGroup>
 
+  <!-- Rhino/Grasshopper/GH_IO pin a SDK 8.20 nel repo -->
   <ItemGroup>
-    <PackageReference Include="RhinoCommon" Version="8.23.25251.13001" />
-    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
-    <PackageReference Include="ClosedXML" Version="0.104.0" />
-    <PackageReference Include="System.Data.SQLite.Core" Version="1.0.118.0" />
-    <Reference Include="System.Windows.Forms" />
-  </ItemGroup>
-
-  <PropertyGroup>
-    <RhinoInstallDir>$(ProgramFiles)\Rhino 8</RhinoInstallDir>
-  </PropertyGroup>
-
-  <ItemGroup>
-    <Reference Include="GH_IO">
-      <HintPath>$(RhinoInstallDir)\Plug-ins\Grasshopper\GH_IO.dll</HintPath>
+    <Reference Include="RhinoCommon">
+      <HintPath>..\..\thirdparty\Rhino8.20\RhinoCommon.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="Grasshopper">
-      <HintPath>$(RhinoInstallDir)\Plug-ins\Grasshopper\Grasshopper.dll</HintPath>
+      <HintPath>..\..\thirdparty\Rhino8.20\Grasshopper.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="GH_IO">
+      <HintPath>..\..\thirdparty\Rhino8.20\GH_IO.dll</HintPath>
       <Private>false</Private>
     </Reference>
     <Reference Include="System.Windows.Forms" />
   </ItemGroup>
 
+  <!-- Dipendenze reali del plugin (no EF) -->
   <ItemGroup>
-    <ProjectReference Include="..\ProgesiDataExchange\ProgesiDataExchange.csproj" />
+    <PackageReference Include="System.Data.SQLite.Core" Version="1.0.118.0" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+    <PackageReference Include="ClosedXML" Version="0.104.0" />
+  </ItemGroup>
+
+  <!-- Librerie Progesi usate dal plugin -->
+  <ItemGroup>
     <ProjectReference Include="..\ProgesiCore\ProgesiCore.csproj" />
+    <ProjectReference Include="..\ProgesiDataExchange\ProgesiDataExchange.csproj" />
     <ProjectReference Include="..\ProgesiRepositories.Rhino\ProgesiRepositories.Rhino.csproj" />
     <ProjectReference Include="..\ProgesiRepositories.InMemory\ProgesiRepositories.InMemory.csproj" />
+    <ProjectReference Include="..\ProgesiRepositories.Sqlite\ProgesiRepositories.Sqlite.csproj" />
+    <ProjectReference Remove="..\Progesi.Data.EF\Progesi.Data.EF.csproj" />
   </ItemGroup>
 
-  <!-- RefCheck rimosso -->
-  <ItemGroup>
-    <Compile Remove="Components\ProgesiRefCheckComponent.cs" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <EmbeddedResource Include="Resources\*.png">
-      <LogicalName>ProgesiGrasshopperAssembly.Resources.%(Filename)%(Extension)</LogicalName>
-    </EmbeddedResource>
-  </ItemGroup>
-
+  <!-- Icone: embedded o content. Se usi embedded via Resources.resx, lascia così com'è -->
+ <ItemGroup>
+  <EmbeddedResource Include="Resources\*.png">
+    <LogicalName>ProgesiGrasshopperAssembly.Resources.%(Filename)%(Extension)</LogicalName>
+  </EmbeddedResource>
+ </ItemGroup>
+  <!-- Rinomina dll in gha -->
   <Target Name="PostBuildRenameToGha" AfterTargets="Build">
     <ItemGroup>
       <BuiltDll Include="$(OutDir)$(AssemblyName).dll" />
     </ItemGroup>
-    <Copy SourceFiles="@(BuiltDll)" DestinationFiles="$(OutDir)$(AssemblyName).gha" SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(BuiltDll)"
+          DestinationFiles="$(OutDir)$(AssemblyName).gha"
+          SkipUnchangedFiles="true" />
   </Target>
+
 </Project>
