@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\ProgesiCore\ProgesiCore.csproj" />
+    <ProjectReference Include="..\..\src\ProgesiRepositories.InMemory\ProgesiRepositories.InMemory.csproj" />
   </ItemGroup>
 
   <ItemGroup>

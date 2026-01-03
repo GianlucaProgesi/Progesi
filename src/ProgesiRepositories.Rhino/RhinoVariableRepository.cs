@@ -57,12 +57,49 @@ namespace ProgesiRepositories.Rhino
     }
 #nullable enable
 
-    public async Task<IReadOnlyList<ProgesiVariable>> GetAllAsync(CancellationToken ct = default)
+    public Task<IReadOnlyList<ProgesiVariable>> GetAllAsync(CancellationToken ct = default)
     {
       var list = new List<ProgesiVariable>();
-      // Rhino StringTable non espone enumerazione: ritorno lista vuota (comportamento definito)
-      return await Task.FromResult(list);
+
+      // StringTable: enumeriamo tutte le entry nella sezione "Progesi.Var"
+      string[] names = _table.GetEntryNames("Progesi.Var") ?? Array.Empty<string>();
+
+      foreach (var entry in names)
+      {
+        // Filtriamo solo chiavi del tipo "var:<id>"
+        if (string.IsNullOrWhiteSpace(entry) || !entry.StartsWith("var:", StringComparison.OrdinalIgnoreCase))
+          continue;
+
+        var json = _table.GetValue("Progesi.Var", entry);
+        if (string.IsNullOrWhiteSpace(json))
+          continue;
+
+        Dto? dto;
+        try
+        {
+          dto = JsonConvert.DeserializeObject<Dto>(json);
+        }
+        catch
+        {
+          continue; // JSON corrotto: ignora
+        }
+
+        if (dto == null || dto.Id <= 0)
+          continue;
+
+        var value = ParseValue(dto.Value ?? string.Empty, dto.ValueType ?? "string");
+        var depends = dto.Depends ?? Array.Empty<int>();
+        var isAss = dto.IsAssumption ?? false;
+
+        list.Add(new ProgesiVariable(dto.Id, dto.Name ?? string.Empty, value, depends, dto.MetadataId, isAss));
+      }
+
+      // Ordinamento stabile
+      list.Sort((a, b) => a.Id.CompareTo(b.Id));
+
+      return Task.FromResult<IReadOnlyList<ProgesiVariable>>(list);
     }
+
 
     public Task<bool> DeleteAsync(int id, CancellationToken ct = default)
     {

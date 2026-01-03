@@ -1,23 +1,30 @@
 param(
-  [string]$Version = "v0.9.0-beta",
+  [string]$Version      = "v0.9.0-beta",
   [string]$SourceBranch = "s2-c2_pure-sqlite-gh",
   [switch]$RunTests
 )
 
 $ErrorActionPreference = 'Stop'
-
 function G { param([string[]]$A) & git @A; if ($LASTEXITCODE -ne 0) { throw ("git " + ($A -join ' ') + " -> " + $LASTEXITCODE) } }
 
 # 0) sync
 G @('fetch','--all','--prune') | Out-Null
+
+# 1) assicura working tree pulito (niente switch con file modificati)
+$porc = (git status --porcelain)
+if ($porc) {
+  Write-Warning "Hai modifiche locali non committate. Commit o stash prima della release."
+  git status
+  break
+}
+
+# 2) switch sul branch sorgente e crea/switch sul branch di release
 G @('checkout', $SourceBranch)
+$rel = "release/$Version"
+& git rev-parse --verify --quiet ("refs/heads/" + $rel) *> $null
+if ($LASTEXITCODE -eq 0) { G @('switch', $rel) } else { G @('switch','-c', $rel) }
 
-# 1) branch di release (se serve)
-$releaseBranch = "release/$Version"
-& git rev-parse --verify --quiet ("refs/heads/" + $releaseBranch) *> $null
-if ($LASTEXITCODE -eq 0) { G @('switch', $releaseBranch) } else { G @('switch','-c', $releaseBranch) }
-
-# 2) build/test opzionali
+# 3) build/test (opzionali)
 $sln = Get-ChildItem -Filter *.sln | Select-Object -First 1
 if ($RunTests) {
   & dotnet clean $sln.FullName
@@ -25,19 +32,29 @@ if ($RunTests) {
   & dotnet test  $sln.FullName -c Release --no-build
 }
 
-# 3) pack zip
+# 4) crea zip
 & "$PSScriptRoot\Make-Releases-Save-Progesi-S2-C2.ps1"
 $zip = Join-Path $PSScriptRoot 'progesi-gh.zip'
 if (-not (Test-Path $zip)) { throw "Zip non trovato: $zip" }
 
-# 4) commit e push ramo
-$porc = (git status --porcelain)
-if ($porc) { G @('add','-A'); G @('commit','-m', "Release $Version (beta)") }
-try { G @('push') } catch { G @('push','-u','origin', $releaseBranch) }
+# 5) commit branch release (se qualcosa e' cambiato)
+$porc2 = (git status --porcelain)
+if ($porc2) {
+  G @('add','-A')
+  G @('commit','-m', "Release $Version (beta)")
+}
 
-# 5) tag + push tag
-G @('tag','-a', $Version,'-m', "Progesi Versione Beta $Version")
-G @('push','origin',$Version)
+# 6) push branch release
+try { G @('push') } catch { G @('push','-u','origin',$rel) }
 
-Write-Host "[OK] Ramo $releaseBranch e tag $Version pubblicati."
-Write-Host "Carica lo zip $zip nella release $Version su GitHub (o usa gh release create)."
+# 7) tag (solo se non esiste gia')
+$tags = (& git tag) -split "`r?`n"
+if ($tags -contains $Version) {
+  Write-Host "[INFO] Tag $Version gia' esistente: salto creazione tag."
+} else {
+  G @('tag','-a', $Version, '-m', "Progesi Versione Beta $Version")
+  G @('push','origin', $Version)
+}
+
+Write-Host "`n[OK] Branch $rel e tag $Version pubblicati."
+Write-Host "Ora puoi aggiornare/creare la release GitHub e allegare lo zip: $zip"

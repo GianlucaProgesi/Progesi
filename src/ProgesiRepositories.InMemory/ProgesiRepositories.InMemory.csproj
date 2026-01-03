@@ -9,10 +9,9 @@
     <RepositoryUrl>https://github.com/GianlucaProgesi/Progesi</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
   </PropertyGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\ProgesiCore\ProgesiCore.csproj" />
     <None Include="README.md" Pack="true" PackagePath="/" />
-  </ItemGroup>
-  <ItemGroup>
   </ItemGroup>
 </Project>

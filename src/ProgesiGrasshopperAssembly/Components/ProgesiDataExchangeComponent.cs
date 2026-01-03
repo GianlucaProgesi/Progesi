@@ -11,8 +11,10 @@ using Grasshopper.Kernel.Data;
 using Grasshopper.Kernel.Types;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Progesi.Core.Variables;
 using ProgesiCore;
 using ProgesiGrasshopperAssembly.Infrastructure; // ServiceHub, ProgesiIcons, MetadataRepositoryCompatExtensions
+using ProgesiRepositories.Rhino;
 using Rhino;
 using Rhino.DocObjects.Tables;
 using System;
@@ -27,7 +29,6 @@ using System.Runtime.InteropServices;
 using System.Text;
 
 
-// in cima al file, tra gli using:
 
 namespace ProgesiGrasshopperAssembly.Components
 {
@@ -75,7 +76,6 @@ namespace ProgesiGrasshopperAssembly.Components
       p.AddIntegerParameter("ErrRC", "ErrRC", "Coordinate errori (branch 0=Meta, 1=Vars; subpath {branch;i} = [row,col]).", GH_ParamAccess.tree);
 
     }
-
     protected override void SolveInstance(IGH_DataAccess DA)
     {
       bool run = false, overwrite = true, fail = false;
@@ -152,7 +152,6 @@ namespace ProgesiGrasshopperAssembly.Components
         }
         if (actNorm == "IMPORTEXCEL")
         {
-          bool strict = string.Equals((mode ?? "").Trim(), "STRICT", StringComparison.OrdinalIgnoreCase);
           // prima: bool strict = string.Equals(...);
           var (src, logPath, wTree, eTree, cTree, errRcTree, info) =
               ImportExcelValidated(path, strictMode, fail, Math.Max(0, maxErrors), mapJson, dryRun);
@@ -245,7 +244,6 @@ namespace ProgesiGrasshopperAssembly.Components
     }
 
     // ------------------------------ EXPORT --------------------------------
-
     private static (string path, string info) ExportExcel(string inPath, bool overwrite)
     {
       var doc = RhinoDoc.ActiveDoc ?? throw new InvalidOperationException("RhinoDoc.ActiveDoc is null.");
@@ -260,6 +258,8 @@ namespace ProgesiGrasshopperAssembly.Components
 
       var vars = ReadAllVarsFromTable(table);
       var metas = ReadAllMetasFromTable(table);
+      var clusters = ReadAllClustersFromTable(table);
+
 
       using (var wb = new XLWorkbook())
       {
@@ -308,11 +308,12 @@ namespace ProgesiGrasshopperAssembly.Components
           r2++;
         }
         wsM.Columns().AdjustToContents();
-
+        WriteClustersSheet(wb, clusters);
         wb.SaveAs(p);
       }
 
-      string info = $"OK ExportExcel → {p} (Vars:{vars.Length}, Meta:{metas.Length})";
+      string info = $"OK ExportExcel → {p} (Vars:{vars.Length}, Meta:{metas.Length}, Clusters:{clusters.Length})";
+
       return (p, info);
     }
     private static string NormalizeExportPath(string inPath)
@@ -327,6 +328,29 @@ namespace ProgesiGrasshopperAssembly.Components
       if (Directory.Exists(p)) p = Path.Combine(p, "Progesi_Export.xlsx");
       if (Path.GetExtension(p).Length == 0) p = p.TrimEnd(' ', '.') + ".xlsx";
       return p;
+    }
+        private static void WriteClustersSheet(XLWorkbook wb, ClusterRow[] clusters)
+    {
+      var ws = wb.Worksheets.Add("ProgesiClusters");
+
+      ws.Cell(1, 1).Value = "Id";
+      ws.Cell(1, 2).Value = "Hash";
+      ws.Cell(1, 3).Value = "Name";
+      ws.Cell(1, 4).Value = "Description";
+      ws.Cell(1, 5).Value = "VariableIds"; // CSV: "1,2,3"
+
+      int r = 2;
+      foreach (var c in clusters)
+      {
+        ws.Cell(r, 1).Value = c.Id;
+        ws.Cell(r, 2).Value = c.Hash;
+        ws.Cell(r, 3).Value = c.Name;
+        ws.Cell(r, 4).Value = c.Description;
+        ws.Cell(r, 5).Value = string.Join(",", c.VariableIds ?? Array.Empty<int>());
+        r++;
+      }
+
+      ws.Columns().AdjustToContents();
     }
 
     // ------------------------------ IMPORT --------------------------------
@@ -534,6 +558,36 @@ namespace ProgesiGrasshopperAssembly.Components
           }
         }
       } // using wb
+        // ===== CLUSTERS (Excel -> Rhino StringTable) =====
+      int clusterRows = 0, clusterOk = 0, clusterWarn = 0, clusterErr = 0;
+
+      try
+      {
+        // Import clusters solo se NON dryRun
+        if (!dryRun)
+        {
+          var docC = RhinoDoc.ActiveDoc ?? throw new InvalidOperationException("RhinoDoc.ActiveDoc is null.");
+          var tableC = docC.Strings ?? throw new InvalidOperationException("RhinoDoc.Strings is null.");
+
+          string res = ImportClustersFromExcel(p, tableC, msg => LOG("WARN", msg), strict);
+          LOG("INFO", res);
+
+          clusterRows = ExtractInt(res, "rows=");
+          clusterOk = ExtractInt(res, "imported=");
+          clusterWarn = ExtractInt(res, "skipped=");
+
+        }
+        else
+        {
+          WARN(0, "[Clusters] DryRun: import cluster skipped.");
+          clusterWarn++;
+        }
+      }
+      catch (Exception ex)
+      {
+        ERR(0, "[Clusters] Import failed: " + ex.Message);
+        clusterErr++;
+      }
 
       // Aggiorna contatori solo se NON è DryRun
       if (!dryRun)
@@ -553,10 +607,11 @@ namespace ProgesiGrasshopperAssembly.Components
       // counts
       counts.Append(new GH_String($"Meta rows={metaRows} ok={metaOk} warn={metaWarn} err={metaErr}"), new GH_Path(0));
       counts.Append(new GH_String($"Vars rows={varRows} ok={varOk} warn={varWarn} err={varErr}"), new GH_Path(1));
+      counts.Append(new GH_String($"Clusters rows={clusterRows} ok={clusterOk} warn={clusterWarn} err={clusterErr}"), new GH_Path(2));
 
       string prefix = dryRun ? "PREVIEW " : "OK ";
       string info = $"{prefix}ImportExcel ← {p} | Meta {metaOk}/{metaRows} (warn:{metaWarn}, err:{metaErr}) | " +
-                    $"Vars {varOk}/{varRows} (warn:{varWarn}, err:{varErr}) | Log: {(string.IsNullOrWhiteSpace(logPath) ? "-" : logPath)}";
+                    $"Vars {varOk}/{varRows} (warn:{varWarn}, err:{varErr}) | Clusters {clusterOk}/{clusterRows} warn={clusterWarn} err={clusterErr}   | Log: {(string.IsNullOrWhiteSpace(logPath) ? "-" : logPath)}";
 
       return (p, logPath, warnTree, errTree, counts, errRC, info);
     }
@@ -1113,7 +1168,165 @@ CREATE TABLE IF NOT EXISTS VariableDepends (
     private static string ReadCell(IXLWorksheet ws, int row, Dictionary<string, int> map, string key)
     {
       if (!map.TryGetValue(key, out int col)) return "";
-      return ws.Cell(row, col).GetString() ?? "";
+      var cell = ws.Cell(row, col);
+
+      var s = cell.GetString();
+      if (!string.IsNullOrWhiteSpace(s))
+        return s;
+
+      s = cell.GetFormattedString();
+      if (!string.IsNullOrWhiteSpace(s))
+        return s;
+
+      try { return cell.Value.ToString(); }
+      catch { return ""; }
+    }
+
+
+    private static int ReadIntCell(IXLWorksheet ws, int row, Dictionary<string, int> map, string key, int defaultValue = 0)
+    {
+      var s = ReadCell(ws, row, map, key);
+      if (int.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v))
+        return v;
+      return defaultValue;
+    }
+
+    private static int[] ReadIntArrayCsvCell(IXLWorksheet ws, int row, Dictionary<string, int> map, string key)
+    {
+      var s = ReadCell(ws, row, map, key);
+      if (string.IsNullOrWhiteSpace(s))
+        return Array.Empty<int>();
+
+      var parts = s.Split(new[] { ',', ';', '|', ' ' }, StringSplitOptions.RemoveEmptyEntries)
+                   .Select(p => p.Trim())
+                   .Where(p => p.Length > 0);
+
+      var ids = new List<int>();
+      foreach (var p in parts)
+      {
+        if (int.TryParse(p, NumberStyles.Integer, CultureInfo.InvariantCulture, out var id) && id > 0)
+          ids.Add(id);
+      }
+
+      return ids.Distinct().OrderBy(x => x).ToArray();
+    }
+    private static string ImportClustersFromExcel(string xlsxPath, StringTable table, Action<string> log, bool strict)
+    {
+      if (string.IsNullOrWhiteSpace(xlsxPath) || !File.Exists(xlsxPath))
+        return "ImportClusters: file non trovato.";
+
+      using var wb = new XLWorkbook(xlsxPath);
+
+      var ws = TryGetWorksheet(wb, "ProgesiClusters", "Clusters");
+      if (ws == null)
+        return "ImportClusters: foglio 'ProgesiClusters' non trovato.";
+
+      int r0 = 1, rN = 0;
+      var map = BuildHeaderMap(ws, out r0, out rN);
+
+      // rN da RangeUsed può essere “buggato” quando aggiungi righe in Excel.
+      // Usiamo LastRowUsed come riferimento primario.
+      int lastRow = ws.LastRowUsed()?.RowNumber() ?? rN;
+
+      if (lastRow < r0 + 1)
+        return "ImportClusters: foglio vuoto.";
+
+      int imported = 0, skipped = 0, rows = 0;
+    
+
+      for (int r = r0 + 1; r <= lastRow; r++)
+      {
+        rows++;
+
+        int id = ToInt(ReadCellAny(ws, r, map, "ID", "CLUSTERID", "CID"));
+        if (id <= 0)
+        {
+          skipped++;
+          continue;
+        }
+        string name = ReadCellAny(ws, r, map, "NAME", "CLUSTERNAME");
+        if (string.IsNullOrWhiteSpace(name))
+          name = $"Cluster-{id}";
+
+        string desc = ReadCellAny(ws, r, map, "DESCRIPTION", "DESC", "INFO");
+
+        var rawVarIds = ReadCellAny(ws, r, map,
+  "VARIABLEIDS",
+  "VARIDS",
+  "IDS",
+  "VARS");
+
+        int[] varIds = ProgesiCore.ClusterImportParser.ParseVariableIds(rawVarIds);
+
+        if (varIds.Length == 0)
+        {
+          if (strict)
+          {
+            skipped++;
+            log($"[Clusters R{r}] ERROR: empty VariableIds raw='{rawVarIds}' (Id={id})");
+            continue;
+          }
+          else
+          {
+            log($"[Clusters R{r}] WARNING: empty VariableIds raw='{rawVarIds}' (Id={id}) → imported with empty list");
+            // import lenient
+          }
+        }
+
+
+        string hash = ReadCellAny(ws, r, map, "HASH", "CHASH");
+
+        var dto = new ClusterDto
+        {
+          Id = id,
+          Name = name,
+          Description = desc,
+          VariableIds = varIds, // può essere vuoto
+          Hashtag = string.IsNullOrWhiteSpace(hash) ? null : hash
+        };
+
+        string json = JsonConvert.SerializeObject(dto);
+
+        table.SetString(
+          "Progesi.Cluster",
+          "cluster:" + id.ToString(CultureInfo.InvariantCulture),
+          json);
+
+        // Manteniamo __next__ coerente
+        int next = ReadCounter(table, "Progesi.Cluster");
+        if (id + 1 > next)
+          table.SetString("Progesi.Cluster", "__next__", (id + 1).ToString(CultureInfo.InvariantCulture));
+
+        imported++;
+      }
+      return $"OK ImportClusters: rows={rows}, imported={imported}, skipped={skipped}";
+    }
+
+    private static string ReadCellAny(
+    IXLWorksheet ws,
+    int row,
+    Dictionary<string, int> map,
+    params string[] keys)
+      {
+        foreach (var k in keys)
+        {
+          var s = ReadCell(ws, row, map, k);
+          if (!string.IsNullOrWhiteSpace(s))
+            return s;
+        }
+        return string.Empty;
+      }
+
+    private static int ExtractInt(string s, string marker)
+    {
+      if (string.IsNullOrWhiteSpace(s) || string.IsNullOrWhiteSpace(marker)) return 0;
+      int i = s.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+      if (i < 0) return 0;
+      i += marker.Length;
+      int j = i;
+      while (j < s.Length && char.IsDigit(s[j])) j++;
+      var chunk = s.Substring(i, j - i);
+      int v; return int.TryParse(chunk, out v) ? v : 0;
     }
 
     private static bool IsBlank(string s) => string.IsNullOrWhiteSpace(s);
@@ -1161,7 +1374,6 @@ CREATE TABLE IF NOT EXISTS VariableDepends (
     }
 
     // ----------------------- Lettura StringTable (export) --------------------
-
     private sealed class VarDto
     {
       public int Id { get; set; }
@@ -1182,6 +1394,26 @@ CREATE TABLE IF NOT EXISTS VariableDepends (
       public string[] References { get; set; }
       public object[] Snips { get; set; }
     }
+ #nullable enable
+
+    private sealed class ClusterDto
+    {
+      public int Id { get; set; }
+      public string? Name { get; set; }
+      public string? Description { get; set; }
+      public int[]? VariableIds { get; set; }
+      public string? Hashtag { get; set; }
+    }
+
+    private sealed class ClusterRow
+    {
+      public int Id { get; set; }
+      public string Hash { get; set; } = "";
+      public string Name { get; set; } = "";
+      public string Description { get; set; } = "";
+      public int[] VariableIds { get; set; } = Array.Empty<int>();
+    }
+#nullable disable
 
     private sealed class VarRow
     {
@@ -1205,16 +1437,86 @@ CREATE TABLE IF NOT EXISTS VariableDepends (
       public string LM;
     }
 
+    private static int[] EnumerateVarIdsFromTable(StringTable table)
+    {
+      // Legge tutti i nomi entry nella sezione Progesi.Var
+      var names = table.GetEntryNames("Progesi.Var") ?? Array.Empty<string>();
+      var ids = new List<int>();
+
+      foreach (var n in names)
+      {
+        if (string.IsNullOrWhiteSpace(n)) continue;
+
+        // Entry attese: "var:<id>"
+        if (!n.StartsWith("var:", StringComparison.OrdinalIgnoreCase))
+          continue;
+
+        var tail = n.Substring(4).Trim();
+        if (int.TryParse(tail, NumberStyles.Integer, CultureInfo.InvariantCulture, out var id) && id > 0)
+          ids.Add(id);
+      }
+
+      ids.Sort();
+      return ids.Distinct().ToArray();
+    }
+
+    private static int[] EnumerateMetaIdsFromTable(StringTable table)
+    {
+      var names = table.GetEntryNames("Progesi.Meta") ?? Array.Empty<string>();
+      var ids = new List<int>();
+
+      foreach (var n in names)
+      {
+        if (string.IsNullOrWhiteSpace(n)) continue;
+        if (!n.StartsWith("meta:", StringComparison.OrdinalIgnoreCase)) continue;
+
+        var tail = n.Substring(5).Trim();
+        int id;
+        if (int.TryParse(tail, NumberStyles.Integer, CultureInfo.InvariantCulture, out id) && id > 0)
+          ids.Add(id);
+      }
+
+      ids.Sort();
+      return ids.Distinct().ToArray();
+    }
+
+    private static int[] EnumerateClusterIdsFromTable(StringTable table)
+    {
+      var names = table.GetEntryNames("Progesi.Cluster") ?? Array.Empty<string>();
+      var ids = new List<int>();
+
+      foreach (var n in names)
+      {
+        if (string.IsNullOrWhiteSpace(n)) continue;
+        if (!n.StartsWith("cluster:", StringComparison.OrdinalIgnoreCase)) continue;
+
+        var tail = n.Substring(8).Trim();
+        int id;
+        if (int.TryParse(tail, NumberStyles.Integer, CultureInfo.InvariantCulture, out id) && id > 0)
+          ids.Add(id);
+      }
+
+      ids.Sort();
+      return ids.Distinct().ToArray();
+    }
+
+
     private static VarRow[] ReadAllVarsFromTable(StringTable table)
     {
-      int next = ReadCounter(table, "Progesi.Var");
       var list = new List<VarRow>();
-      for (int id = 1; id < next; id++)
+
+      // FIX: non usiamo __next__ perché può essere non aggiornato → enumeriamo le entry reali
+      var ids = EnumerateVarIdsFromTable(table);
+
+      foreach (var id in ids)
       {
         string json = table.GetValue("Progesi.Var", "var:" + id.ToString(CultureInfo.InvariantCulture));
         if (string.IsNullOrWhiteSpace(json)) continue;
 
-        VarDto dto; try { dto = JsonConvert.DeserializeObject<VarDto>(json); } catch { continue; }
+        VarDto dto;
+        try { dto = JsonConvert.DeserializeObject<VarDto>(json); }
+        catch { continue; }
+
         if (dto == null) continue;
 
         object typed = ParseValue(dto.Value, dto.ValueType ?? "string");
@@ -1237,14 +1539,16 @@ CREATE TABLE IF NOT EXISTS VariableDepends (
           Assumption = ass
         });
       }
+
+      // Ordine stabile
+      list.Sort((a, b) => a.Id.CompareTo(b.Id));
       return list.ToArray();
     }
-
     private static MetaRow[] ReadAllMetasFromTable(StringTable table)
     {
-      int next = ReadCounter(table, "Progesi.Meta");
       var list = new List<MetaRow>();
-      for (int id = 1; id < next; id++)
+
+      foreach (var id in EnumerateMetaIdsFromTable(table))
       {
         string json = table.GetValue("Progesi.Meta", "meta:" + id.ToString(CultureInfo.InvariantCulture));
         if (string.IsNullOrWhiteSpace(json)) continue;
@@ -1269,7 +1573,44 @@ CREATE TABLE IF NOT EXISTS VariableDepends (
         });
       }
 
+      return list.ToArray();
+    }
+    private static ClusterRow[] ReadAllClustersFromTable(StringTable table)
+    {
+      var list = new List<ClusterRow>();
 
+      foreach (var id in EnumerateClusterIdsFromTable(table))
+      {
+        string json = table.GetValue("Progesi.Cluster", "cluster:" + id.ToString(CultureInfo.InvariantCulture));
+        if (string.IsNullOrWhiteSpace(json)) continue;
+
+        ClusterDto dto;
+        try { dto = JsonConvert.DeserializeObject<ClusterDto>(json); }
+        catch { continue; }
+
+        if (dto == null) continue;
+
+        var varIds = dto.VariableIds ?? Array.Empty<int>();
+
+        // Hash coerente con dominio (Id|Name|Ids)
+        var cluster = ProgesiVariableCluster.Rehydrate(
+          id,
+          dto.Name ?? "",
+          varIds,
+          dto.Description,
+          dto.Hashtag);
+
+        list.Add(new ClusterRow
+        {
+          Id = id,
+          Hash = cluster.Hashtag ?? "",
+          Name = dto.Name ?? "",
+          Description = dto.Description ?? "",
+          VariableIds = varIds
+        });
+      }
+
+      list.Sort((a, b) => a.Id.CompareTo(b.Id));
       return list.ToArray();
     }
 

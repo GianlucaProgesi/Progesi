@@ -3,6 +3,7 @@ using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
 using Newtonsoft.Json;
+using Progesi.Core.Variables;
 
 namespace ProgesiCore
 {
@@ -79,6 +80,27 @@ namespace ProgesiCore
       string json = JsonConvert.SerializeObject(payload, JsonSettings) ?? string.Empty;
       return Sha256Hex(json);
     }
+
+    // ===== Compute per VariableCluster =====
+    public static string Compute(ProgesiVariableCluster c)
+    {
+      if (c == null) throw new ArgumentNullException(nameof(c));
+
+      int[] ids = (c.ProgesiVariableIds ?? Array.Empty<int>())
+        .OrderBy(x => x)
+        .ToArray();
+
+      var payload = new
+      {
+        c.Name,
+        VariableIds = ids,
+        c.Description
+      };
+
+      string json = JsonConvert.SerializeObject(payload, JsonSettings) ?? string.Empty;
+      return Sha256Hex(json);
+    }
+
 
     // ===== Compute per Metadata =====
     public static string Compute(ProgesiMetadata m)
