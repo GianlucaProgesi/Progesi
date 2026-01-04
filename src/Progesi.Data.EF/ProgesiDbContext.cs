@@ -1,8 +1,10 @@
-﻿using System.Collections.Generic;
+﻿using Progesi.Data.EF.Entities;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Data.Entity;
 using System.Data.SQLite;
+using System.Reflection.Emit;
 
 namespace Progesi.Data.EF
 {
@@ -18,6 +20,8 @@ namespace Progesi.Data.EF
     public DbSet<RefRow> Refs { get; set; }
     public DbSet<VariableRow> Variables { get; set; }
     public DbSet<VariableDepend> VariableDepends { get; set; }
+    public DbSet<ClusterEntity> Clusters { get; set; }
+    public DbSet<ClusterVariableEntity> ClusterVariables { get; set; }
 
     protected override void OnModelCreating(DbModelBuilder mb)
     {
@@ -56,6 +60,30 @@ namespace Progesi.Data.EF
         .HasRequired(d => d.Variable)
         .WithMany(v => v.Depends)
         .HasForeignKey(d => d.VarId)
+        .WillCascadeOnDelete(true);
+      // --- Clusters ---
+      mb.Entity<ClusterEntity>()
+        .ToTable("Clusters")
+        .HasKey(x => x.Id);
+
+      mb.Entity<ClusterEntity>()
+        .Property(x => x.Hash)
+        .IsRequired();
+
+      mb.Entity<ClusterEntity>()
+        .Property(x => x.Name)
+        .IsRequired();
+
+      // --- ClusterVariables (join) ---
+      mb.Entity<ClusterVariableEntity>()
+        .ToTable("ClusterVariables")
+        .HasKey(x => new { x.ClusterId, x.VarId });
+
+      // ClusterVariable -> Cluster (required)
+      mb.Entity<ClusterVariableEntity>()
+        .HasRequired(x => x.Cluster)
+        .WithMany(c => c.ClusterVariables)
+        .HasForeignKey(x => x.ClusterId)
         .WillCascadeOnDelete(true);
 
       base.OnModelCreating(mb);

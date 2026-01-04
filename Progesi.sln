@@ -33,6 +33,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{827E0CD3-B72
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Progesi.EF.Tool", "src\Progesi.EF.Tool\Progesi.EF.Tool.csproj", "{91AB0E1A-4CD4-4241-89B6-AE08AC1CBD9B}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Progesi.Data.EF.Tests", "tests\Progesi.Data.EF.Tests\Progesi.Data.EF.Tests.csproj", "{2F235F13-2BA6-2057-63BF-3DBF4F9048DA}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -199,6 +201,18 @@ Global
 		{91AB0E1A-4CD4-4241-89B6-AE08AC1CBD9B}.Release|x64.Build.0 = Release|Any CPU
 		{91AB0E1A-4CD4-4241-89B6-AE08AC1CBD9B}.Release|x86.ActiveCfg = Release|Any CPU
 		{91AB0E1A-4CD4-4241-89B6-AE08AC1CBD9B}.Release|x86.Build.0 = Release|Any CPU
+		{2F235F13-2BA6-2057-63BF-3DBF4F9048DA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2F235F13-2BA6-2057-63BF-3DBF4F9048DA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2F235F13-2BA6-2057-63BF-3DBF4F9048DA}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{2F235F13-2BA6-2057-63BF-3DBF4F9048DA}.Debug|x64.Build.0 = Debug|Any CPU
+		{2F235F13-2BA6-2057-63BF-3DBF4F9048DA}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{2F235F13-2BA6-2057-63BF-3DBF4F9048DA}.Debug|x86.Build.0 = Debug|Any CPU
+		{2F235F13-2BA6-2057-63BF-3DBF4F9048DA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2F235F13-2BA6-2057-63BF-3DBF4F9048DA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2F235F13-2BA6-2057-63BF-3DBF4F9048DA}.Release|x64.ActiveCfg = Release|Any CPU
+		{2F235F13-2BA6-2057-63BF-3DBF4F9048DA}.Release|x64.Build.0 = Release|Any CPU
+		{2F235F13-2BA6-2057-63BF-3DBF4F9048DA}.Release|x86.ActiveCfg = Release|Any CPU
+		{2F235F13-2BA6-2057-63BF-3DBF4F9048DA}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
