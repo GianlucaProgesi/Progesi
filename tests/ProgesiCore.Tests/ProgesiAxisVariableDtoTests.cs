@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Xunit;
@@ -11,11 +11,23 @@ namespace ProgesiCore.Tests
   {
     private static ProgesiAxisVariable MakeAxis()
     {
-      var axis = new ProgesiAxisVariable(7, "AX-DTO", 12.5, 99);
-      axis.Add("A", 0.0, 1);
-      axis.Add("A", 1.25, 2);
-      axis.Add("B", 1.25, 10);
-      axis.Add("B", 6.0, 11);
+      var axis = new ProgesiAxisVariable(
+        id: 7,
+        axisName: "AX-DTO",
+        name: "Thickness",
+        valueTypeKey: "System.Double",
+        axisLength: 12.5,
+        ruleId: 99);
+
+      var s1 = new ProgesiAxisVariable.ProgesiVariableSignature(1, "Thickness", "System.Double");
+      var s2 = new ProgesiAxisVariable.ProgesiVariableSignature(2, "Thickness", "System.Double");
+      var s3 = new ProgesiAxisVariable.ProgesiVariableSignature(10, "Thickness", "System.Double");
+      var s4 = new ProgesiAxisVariable.ProgesiVariableSignature(11, "Thickness", "System.Double");
+
+      axis.Add(s1, 0.0);
+      axis.Add(s2, 0.10);
+      axis.Add(s3, 0.10);
+      axis.Add(s4, 0.80);
       return axis;
     }
 
@@ -35,39 +47,42 @@ namespace ProgesiCore.Tests
     public void FromDomain_ProducesFlatEntries_CoveringEnumerateAll()
     {
       var axis = MakeAxis();
-      var triples = axis.EnumerateAll()
-                        .Select(t => $"{t.variableName}|{t.position:F6}|{t.variableId}")
-                        .OrderBy(s => s)
-                        .ToArray();
+
+      var pairs = axis.EnumerateAll()
+                      .Select(t => $"{t.positionNormalized:F6}|{t.variableId}")
+                      .OrderBy(s => s)
+                      .ToArray();
 
       var dto = ProgesiAxisVariableDto.FromDomain(axis);
       var flat = dto.EnumerateFlat()
-                    .Select(t => $"{t.VariableName}|{t.Position:F6}|{t.VariableId}")
+                    .Select(t => $"{t.Position:F6}|{t.VariableId}")
                     .OrderBy(s => s)
                     .ToArray();
 
-      Assert.Equal(triples, flat);
+      Assert.Equal(pairs, flat);
     }
 
     [Fact]
-    public void ToDomain_ValidatesContext_AndEntries()
+    public void ToDomain_ValidatesHeaders_AndEntries()
     {
       var dto = new ProgesiAxisVariableDto
       {
         AxisId = 1,
         AxisName = "AX",
         AxisLength = 5.0,
+        Name = "V",
+        ValueTypeKey = "System.Double",
         RuleId = 1,
         Entries = new List<ProgesiAxisVariableDto.Entry>()
       };
 
       // ok
-      dto.Entries.Add(new ProgesiAxisVariableDto.Entry { VariableName = "V", Position = 0.0, VariableId = 1 });
+      dto.Entries.Add(new ProgesiAxisVariableDto.Entry { Position = 0.0, VariableId = 1 });
       var ok = ProgesiAxisVariableDto.ToDomain(dto);
-      Assert.Contains(1, ok.GetAt("V", 0.0));
+      Assert.Contains(1, ok.GetAt(0.0));
 
-      // posizione fuori range → eccezione
-      dto.Entries.Add(new ProgesiAxisVariableDto.Entry { VariableName = "V", Position = 10.0, VariableId = 2 });
+      // posizione fuori range (normalized) → eccezione
+      dto.Entries.Add(new ProgesiAxisVariableDto.Entry { Position = 10.0, VariableId = 2 });
       Assert.Throws<ArgumentOutOfRangeException>(() => ProgesiAxisVariableDto.ToDomain(dto));
     }
 
@@ -79,35 +94,43 @@ namespace ProgesiCore.Tests
         AxisId = 2,
         AxisName = "AX",
         AxisLength = null,
+        Name = "V",
+        ValueTypeKey = "System.Double",
         RuleId = null,
         Entries = new List<ProgesiAxisVariableDto.Entry>()
       };
 
       double tol = ProgesiAxisVariable.DefaultTolerance;
-      dto.Entries.Add(new ProgesiAxisVariableDto.Entry { VariableName = "V", Position = 1.0, VariableId = 1 });
-      dto.Entries.Add(new ProgesiAxisVariableDto.Entry { VariableName = "V", Position = 1.0 + tol * 0.4, VariableId = 2 });
+      dto.Entries.Add(new ProgesiAxisVariableDto.Entry { Position = 0.5, VariableId = 1 });
+      dto.Entries.Add(new ProgesiAxisVariableDto.Entry { Position = 0.5 + tol * 0.4, VariableId = 2 });
 
       var axis = ProgesiAxisVariableDto.ToDomain(dto, tol);
-      var at = axis.GetAt("V", 1.0).OrderBy(x => x).ToArray();
+      var at = axis.GetAt(0.5).OrderBy(x => x).ToArray();
       Assert.Equal(new[] { 1, 2 }, at);
     }
 
     [Fact]
     public void ToDomain_RejectsInvalidHeaders()
     {
-      var good = new ProgesiAxisVariableDto { AxisId = 1, AxisName = "AX" };
+      var good = new ProgesiAxisVariableDto { AxisId = 1, AxisName = "AX", Name = "V", ValueTypeKey = "System.Double" };
       Assert.NotNull(ProgesiAxisVariableDto.ToDomain(good));
 
-      var bad1 = new ProgesiAxisVariableDto { AxisId = -1, AxisName = "AX" };
+      var bad1 = new ProgesiAxisVariableDto { AxisId = -1, AxisName = "AX", Name = "V", ValueTypeKey = "System.Double" };
       Assert.Throws<ArgumentException>(() => ProgesiAxisVariableDto.ToDomain(bad1));
 
-      var bad2 = new ProgesiAxisVariableDto { AxisId = 1, AxisName = null! };
+      var bad2 = new ProgesiAxisVariableDto { AxisId = 1, AxisName = null!, Name = "V", ValueTypeKey = "System.Double" };
       Assert.Throws<ArgumentNullException>(() => ProgesiAxisVariableDto.ToDomain(bad2));
 
-      var bad3 = new ProgesiAxisVariableDto { AxisId = 1, AxisName = "AX", AxisLength = 0.0 };
+      var badName = new ProgesiAxisVariableDto { AxisId = 1, AxisName = "AX", Name = null!, ValueTypeKey = "System.Double" };
+      Assert.Throws<ArgumentNullException>(() => ProgesiAxisVariableDto.ToDomain(badName));
+
+      var badType = new ProgesiAxisVariableDto { AxisId = 1, AxisName = "AX", Name = "V", ValueTypeKey = "  " };
+      Assert.Throws<ArgumentException>(() => ProgesiAxisVariableDto.ToDomain(badType));
+
+      var bad3 = new ProgesiAxisVariableDto { AxisId = 1, AxisName = "AX", Name = "V", ValueTypeKey = "System.Double", AxisLength = 0.0 };
       Assert.Throws<ArgumentException>(() => ProgesiAxisVariableDto.ToDomain(bad3));
 
-      var bad4 = new ProgesiAxisVariableDto { AxisId = 1, AxisName = "AX", RuleId = -5 };
+      var bad4 = new ProgesiAxisVariableDto { AxisId = 1, AxisName = "AX", Name = "V", ValueTypeKey = "System.Double", RuleId = -5 };
       Assert.Throws<ArgumentException>(() => ProgesiAxisVariableDto.ToDomain(bad4));
     }
 
@@ -118,18 +141,16 @@ namespace ProgesiCore.Tests
       {
         AxisId = 1,
         AxisName = "AX",
+        Name = "V",
+        ValueTypeKey = "System.Double",
         Entries = new List<ProgesiAxisVariableDto.Entry>()
       };
 
-      dto.Entries.Add(new ProgesiAxisVariableDto.Entry { VariableName = null!, Position = 0.0, VariableId = 1 });
-      Assert.Throws<ArgumentNullException>(() => ProgesiAxisVariableDto.ToDomain(dto));
-
-      dto.Entries.Clear();
-      dto.Entries.Add(new ProgesiAxisVariableDto.Entry { VariableName = "V", Position = double.NaN, VariableId = 1 });
+      dto.Entries.Add(new ProgesiAxisVariableDto.Entry { Position = double.NaN, VariableId = 1 });
       Assert.Throws<ArgumentOutOfRangeException>(() => ProgesiAxisVariableDto.ToDomain(dto));
 
       dto.Entries.Clear();
-      dto.Entries.Add(new ProgesiAxisVariableDto.Entry { VariableName = "V", Position = 0.0, VariableId = -1 });
+      dto.Entries.Add(new ProgesiAxisVariableDto.Entry { Position = 0.0, VariableId = -1 });
       Assert.Throws<ArgumentException>(() => ProgesiAxisVariableDto.ToDomain(dto));
     }
 
@@ -141,19 +162,20 @@ namespace ProgesiCore.Tests
         AxisId = 5,
         AxisName = "AX",
         AxisLength = 10.0,
+        Name = "V",
+        ValueTypeKey = "System.Double",
         Entries = new List<ProgesiAxisVariableDto.Entry>()
       };
 
       // Inseriamo in ordine “strano”
-      dto.Entries.Add(new ProgesiAxisVariableDto.Entry { VariableName = "B", Position = 2.0, VariableId = 9 });
-      dto.Entries.Add(new ProgesiAxisVariableDto.Entry { VariableName = "A", Position = 1.0, VariableId = 1 });
-      dto.Entries.Add(new ProgesiAxisVariableDto.Entry { VariableName = "A", Position = 1.0, VariableId = 2 });
+      dto.Entries.Add(new ProgesiAxisVariableDto.Entry { Position = 0.2, VariableId = 9 });
+      dto.Entries.Add(new ProgesiAxisVariableDto.Entry { Position = 0.1, VariableId = 1 });
+      dto.Entries.Add(new ProgesiAxisVariableDto.Entry { Position = 0.1, VariableId = 2 });
 
       var axis = ProgesiAxisVariableDto.ToDomain(dto);
       var dto2 = ProgesiAxisVariableDto.FromDomain(axis);
 
-      // Confronto come multinsieme (ordinato)
-      Func<ProgesiAxisVariableDto.Entry, string> key = e => $"{e.VariableName}|{e.Position:F6}|{e.VariableId}";
+      Func<ProgesiAxisVariableDto.Entry, string> key = e => $"{e.Position:F6}|{e.VariableId}";
       var a = dto.Entries.Select(key).OrderBy(x => x).ToArray();
       var b = dto2.Entries.Select(key).OrderBy(x => x).ToArray();
       Assert.Equal(a, b);

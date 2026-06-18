@@ -53,9 +53,7 @@
     <ItemGroup>
       <BuiltDll Include="$(OutDir)$(AssemblyName).dll" />
     </ItemGroup>
-    <Copy SourceFiles="@(BuiltDll)"
-          DestinationFiles="$(OutDir)$(AssemblyName).gha"
-          SkipUnchangedFiles="true" />
+    <Copy SourceFiles="@(BuiltDll)" DestinationFiles="$(OutDir)$(AssemblyName).gha" SkipUnchangedFiles="true" />
   </Target>
 
 </Project>

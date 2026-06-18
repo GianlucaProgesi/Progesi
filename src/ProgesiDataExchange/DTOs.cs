@@ -26,15 +26,16 @@ namespace Progesi.DataExchange
     public string LastModifiedUtc { get; set; } = "";
   }
 
-  public sealed class ProgesiAxisVariableDto
+    public sealed class ProgesiAxisVariableDto
   {
     public string Id { get; set; } = Guid.NewGuid().ToString("D");
     public string Hash { get; set; } = "";
     public string Name { get; set; } = "";
+    public string ValueTypeKey { get; set; } = "System.Double"; // e.g. "System.Double"
     public string Unit { get; set; } = "";
     public string AxisRef { get; set; } = "";
-    public string Stations { get; set; } = ""; // "0;0.5;1"
-    public string Values { get; set; } = "";   // "10;12;14"
+    public string Stations { get; set; } = "";       // "0;0.5;1"  (sempre normalizzate)
+    public string VariableHashes { get; set; } = ""; // "h1;h2;h3" (1:1 con Stations)
     public string By { get; set; } = "";
     public string Ref { get; set; } = "";
     public string LastModifiedUtc { get; set; } = "";
@@ -50,6 +51,27 @@ namespace Progesi.DataExchange
         else return false;
       }
       return true;
+    }
+
+    public static bool TryParseTokens(string s, out List<string> tokens)
+    {
+      tokens = new List<string>();
+      if (string.IsNullOrWhiteSpace(s)) return true;
+      var parts = s.Split(new[] { ';' }, StringSplitOptions.RemoveEmptyEntries);
+      foreach (var p in parts)
+      {
+        var t = p.Trim();
+        if (t.Length == 0) continue;
+        tokens.Add(t);
+      }
+      return true;
+    }
+
+    public bool HasPairedStationsAndHashes()
+    {
+      if (!TryParseSeries(Stations, out var ss)) return false;
+      if (!TryParseTokens(VariableHashes, out var hs)) return false;
+      return ss.Count == hs.Count;
     }
   }
 }

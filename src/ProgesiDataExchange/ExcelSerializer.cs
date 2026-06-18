@@ -32,7 +32,7 @@ namespace Progesi.DataExchange
       WriteSheet(wb.Worksheets.Add("ProgesiMetadata"), mets,
         new[] { "Id", "Hash", "Info", "By", "Ref", "LastModifiedUtc" });
       WriteSheet(wb.Worksheets.Add("ProgesiAxisVariable"), axis,
-        new[] { "Id", "Hash", "Name", "Unit", "AxisRef", "Stations", "Values", "By", "Ref", "LastModifiedUtc" });
+        new[] { "Id", "Hash", "Name", "ValueTypeKey", "Unit", "AxisRef", "Stations", "VariableHashes", "By", "Ref", "LastModifiedUtc" });
       wb.SaveAs(xlsxPath);
     }
 
@@ -132,7 +132,9 @@ namespace Progesi.DataExchange
         case "Unit": t.Unit = v; break;
         case "AxisRef": t.AxisRef = v; break;
         case "Stations": t.Stations = v; break;
-        case "Values": t.Values = v; break;
+        case "ValueTypeKey": t.ValueTypeKey = v; break;
+        case "VariableHashes": t.VariableHashes = v; break;
+        case "Values": if (string.IsNullOrWhiteSpace(t.VariableHashes)) t.VariableHashes = v; break;
         case "By": t.By = v; break;
         case "Ref": t.Ref = v; break;
         case "LastModifiedUtc": t.LastModifiedUtc = v; break;

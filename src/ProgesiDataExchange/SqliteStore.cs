@@ -31,9 +31,15 @@ namespace Progesi.DataExchange
 
     void Exec(string sql) { using var cmd = _cn.CreateCommand(); cmd.CommandText = sql; cmd.ExecuteNonQuery(); }
 
+    void ExecIgnore(string sql)
+    {
+      try { Exec(sql); }
+      catch { /* ignore schema drift */ }
+    }
     void EnsureSchema()
     {
-      // ATTENZIONE: "Values" è riservata → sempre tra doppi apici
+      // ATTENZIONE: vecchie versioni usavano "Values" (riservata). Ora: ValueTypeKey + VariableHashes.
+
       Exec(@"
 CREATE TABLE IF NOT EXISTS variables (
   Id TEXT PRIMARY KEY, Hash TEXT, Name TEXT, Value TEXT, Unit TEXT, By TEXT, Ref TEXT, LastModifiedUtc TEXT
@@ -42,12 +48,17 @@ CREATE TABLE IF NOT EXISTS metadata (
   Id TEXT PRIMARY KEY, Hash TEXT, Info TEXT, By TEXT, Ref TEXT, LastModifiedUtc TEXT
 );
 CREATE TABLE IF NOT EXISTS axisvariables (
-  Id TEXT PRIMARY KEY, Hash TEXT, Name TEXT, Unit TEXT, AxisRef TEXT, Stations TEXT, ""Values"" TEXT, By TEXT, Ref TEXT, LastModifiedUtc TEXT
+  Id TEXT PRIMARY KEY, Hash TEXT, Name TEXT, ValueTypeKey TEXT, Unit TEXT, AxisRef TEXT, Stations TEXT, VariableHashes TEXT, By TEXT, Ref TEXT, LastModifiedUtc TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_variables_hash ON variables(Hash);
 CREATE INDEX IF NOT EXISTS idx_metadata_hash ON metadata(Hash);
 CREATE INDEX IF NOT EXISTS idx_axis_hash ON axisvariables(Hash);
 ");
+
+      // Back-compat / migrazione leggera: aggiungi colonne se il DB esiste già con lo schema vecchio
+      ExecIgnore(@"ALTER TABLE axisvariables ADD COLUMN ValueTypeKey TEXT;");
+      ExecIgnore(@"ALTER TABLE axisvariables ADD COLUMN VariableHashes TEXT;");
+
       Exec(@"
 CREATE TRIGGER IF NOT EXISTS trg_v_lastmod_set AFTER INSERT ON variables
 FOR EACH ROW WHEN NEW.LastModifiedUtc IS NULL
@@ -113,7 +124,7 @@ FOR EACH ROW BEGIN UPDATE axisvariables SET LastModifiedUtc=strftime('%Y-%m-%dT%
     {
       var list = new List<ProgesiAxisVariableDto>();
       using var c = _cn.CreateCommand();
-      c.CommandText = @"SELECT Id,Hash,Name,Unit,AxisRef,Stations,""Values"",By,Ref,LastModifiedUtc FROM axisvariables";
+      c.CommandText = @"SELECT Id,Hash,Name,ValueTypeKey,Unit,AxisRef,Stations,VariableHashes,By,Ref,LastModifiedUtc FROM axisvariables";
       using var r = c.ExecuteReader();
       while (r.Read()) list.Add(new ProgesiAxisVariableDto
       {
@@ -123,7 +134,8 @@ FOR EACH ROW BEGIN UPDATE axisvariables SET LastModifiedUtc=strftime('%Y-%m-%dT%
         Unit = S(r["Unit"]),
         AxisRef = S(r["AxisRef"]),
         Stations = S(r["Stations"]),
-        Values = S(r["Values"]),
+        ValueTypeKey = S(r["ValueTypeKey"]),
+        VariableHashes = S(r["VariableHashes"]),
         By = S(r["By"]),
         Ref = S(r["Ref"]),
         LastModifiedUtc = S(r["LastModifiedUtc"])
@@ -208,15 +220,16 @@ FOR EACH ROW BEGIN UPDATE axisvariables SET LastModifiedUtc=strftime('%Y-%m-%dT%
         using (var c = _cn.CreateCommand())
         {
           c.CommandText = @"INSERT OR REPLACE INTO axisvariables
-            (Id,Hash,Name,Unit,AxisRef,Stations,""Values"",By,Ref,LastModifiedUtc)
-            VALUES (@Id,@Hash,@Name,@Unit,@AxisRef,@Stations,@Values,@By,@Ref,@Last)";
+            (Id,Hash,Name,ValueTypeKey,Unit,AxisRef,Stations,VariableHashes,By,Ref,LastModifiedUtc)
+            VALUES (@Id,@Hash,@Name,@ValueTypeKey,@Unit,@AxisRef,@Stations,@VariableHashes,@By,@Ref,@Last)";
           c.Parameters.Add(new SqliteParameter("@Id", it.Id ?? Guid.NewGuid().ToString("D")));
           c.Parameters.Add(new SqliteParameter("@Hash", it.Hash ?? ""));
           c.Parameters.Add(new SqliteParameter("@Name", it.Name ?? ""));
+          c.Parameters.Add(new SqliteParameter("@ValueTypeKey", it.ValueTypeKey ?? ""));
           c.Parameters.Add(new SqliteParameter("@Unit", it.Unit ?? ""));
           c.Parameters.Add(new SqliteParameter("@AxisRef", it.AxisRef ?? ""));
           c.Parameters.Add(new SqliteParameter("@Stations", it.Stations ?? ""));
-          c.Parameters.Add(new SqliteParameter("@Values", it.Values ?? ""));
+          c.Parameters.Add(new SqliteParameter("@VariableHashes", it.VariableHashes ?? ""));
           c.Parameters.Add(new SqliteParameter("@By", it.By ?? ""));
           c.Parameters.Add(new SqliteParameter("@Ref", it.Ref ?? ""));
           c.Parameters.Add(new SqliteParameter("@Last", string.IsNullOrWhiteSpace(it.LastModifiedUtc) ? DateTime.UtcNow.ToString("s") + "Z" : it.LastModifiedUtc));

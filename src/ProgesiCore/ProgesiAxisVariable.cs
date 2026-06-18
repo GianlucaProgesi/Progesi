@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Ardalis.GuardClauses;
@@ -6,174 +6,196 @@ using Ardalis.GuardClauses;
 namespace ProgesiCore
 {
   /// <summary>
-  /// Contenitore ad asse per collezioni di ProgesiVariable raggruppate per "Name".
-  /// Tiene solo gli Id delle variabili per restare leggero e disaccoppiato.
-  /// Ogni "Name" ha un dizionario posizionale (chiave = posizione lungo asse) con uno o più Id associati.
+  /// Contenitore ad asse per UNA singola serie di ProgesiVariable (stesso Name e stesso ValueTypeKey).
+  ///
+  /// - Tiene solo gli Id delle variabili (non il valore) per restare leggero e disaccoppiato dai repository.
+  /// - Le posizioni sono canoniche e sempre NORMALIZZATE nel dominio [0, 1] (curve re-parameterized).
+  /// - Supporta più Id per la stessa stazione (es. multiple variabili alternative / versioni).
   /// </summary>
   public sealed class ProgesiAxisVariable : ValueObject
   {
     public const double DefaultTolerance = 1e-6;
 
     public int Id { get; private set; }
+
+    /// <summary>Nome asse (etichetta, non geometria). La geometria vive nel layer GH.</summary>
     public string AxisName { get; private set; } = string.Empty;
+
+    /// <summary>
+    /// Lunghezza reale dell'asse (opzionale). Serve solo per convertire real &lt;-&gt; normalized.
+    /// </summary>
     public double? AxisLength { get; private set; }
+
+    /// <summary>Nome della ProgesiVariable mappata (UNICO per l'intero oggetto).</summary>
+    public string Name { get; private set; } = string.Empty;
+
+    /// <summary>
+    /// Chiave di tipo della ProgesiVariable.Value (es. "System.Double").
+    /// È una stringa deliberatamente, per evitare riferimenti diretti a Type/assembly in core.
+    /// </summary>
+    public string ValueTypeKey { get; private set; } = string.Empty;
+
+    /// <summary>
+    /// Placeholder per futuri modelli di legge/segmenti (oggi resta per compatibilità roadmap).
+    /// </summary>
     public int? RuleId { get; private set; }
 
-    // C#8: niente target-typed new()
-    private readonly Dictionary<string, SortedDictionary<PositionKey, HashSet<int>>> _byName
-        = new Dictionary<string, SortedDictionary<PositionKey, HashSet<int>>>(StringComparer.Ordinal);
+    // Single-series map: PositionKey -> set of variable ids
+    private readonly SortedDictionary<PositionKey, HashSet<int>> _map
+      = new SortedDictionary<PositionKey, HashSet<int>>();
 
-    public ProgesiAxisVariable(int id, string axisName, double? axisLength = null, int? ruleId = null)
+    public ProgesiAxisVariable(
+      int id,
+      string axisName,
+      string name,
+      string valueTypeKey,
+      double? axisLength = null,
+      int? ruleId = null)
     {
       Guard.Against.Negative(id, nameof(id));
       Guard.Against.NullOrWhiteSpace(axisName, nameof(axisName));
+      Guard.Against.NullOrWhiteSpace(name, nameof(name));
+      Guard.Against.NullOrWhiteSpace(valueTypeKey, nameof(valueTypeKey));
       if (axisLength.HasValue) Guard.Against.NegativeOrZero(axisLength.Value, nameof(axisLength));
+      if (ruleId.HasValue) Guard.Against.Negative(ruleId.Value, nameof(ruleId));
 
       Id = id;
       AxisName = axisName.Trim();
+      Name = name.Trim();
+      ValueTypeKey = valueTypeKey.Trim();
       AxisLength = axisLength;
       RuleId = ruleId;
     }
 
-    public IReadOnlyCollection<string> VariableNames => _byName.Keys;
-
-    public IReadOnlyDictionary<double, int[]> GetMap(string variableName)
+    /// <summary>
+    /// Signature minimale della ProgesiVariable per validazione in core.
+    /// </summary>
+    public readonly struct ProgesiVariableSignature
     {
-      Guard.Against.NullOrWhiteSpace(variableName, nameof(variableName));
-      if (!_byName.TryGetValue(variableName, out var map))
-        return new Dictionary<double, int[]>();
+      public int Id { get; }
+      public string Name { get; }
+      public string ValueTypeKey { get; }
 
+      public ProgesiVariableSignature(int id, string name, string valueTypeKey)
+      {
+        Guard.Against.Negative(id, nameof(id));
+        Guard.Against.NullOrWhiteSpace(name, nameof(name));
+        Guard.Against.NullOrWhiteSpace(valueTypeKey, nameof(valueTypeKey));
+
+        Id = id;
+        Name = name.Trim();
+        ValueTypeKey = valueTypeKey.Trim();
+      }
+    }
+
+    public IReadOnlyDictionary<double, int[]> GetMap(double tol = DefaultTolerance)
+    {
+      // tol is only used for consistency with callers; keys already bucketed.
       var result = new Dictionary<double, int[]>();
-      foreach (var kv in map)
+      foreach (var kv in _map)
       {
         result[kv.Key.Value] = kv.Value.OrderBy(x => x).ToArray();
       }
       return result;
     }
 
-    public IReadOnlyCollection<int> GetAt(string variableName, double position, double tol = DefaultTolerance)
+    public IReadOnlyCollection<int> GetAt(double positionNormalized, double tol = DefaultTolerance)
     {
-      Guard.Against.NullOrWhiteSpace(variableName, nameof(variableName));
-      var key = new PositionKey(position, tol);
-      if (!_byName.TryGetValue(variableName, out var map)) return Array.Empty<int>();
-      return map.TryGetValue(key, out var set) ? set.OrderBy(x => x).ToArray() : Array.Empty<int>();
+      ValidateNormalizedPosition(positionNormalized);
+      var key = new PositionKey(positionNormalized, tol);
+      return _map.TryGetValue(key, out var set) ? set.OrderBy(x => x).ToArray() : Array.Empty<int>();
     }
 
-    public IEnumerable<(string variableName, double position, int variableId)> EnumerateAll()
+    public IEnumerable<(double positionNormalized, int variableId)> EnumerateAll()
     {
-      foreach (var outer in _byName.OrderBy(k => k.Key, StringComparer.Ordinal))
+      foreach (var inner in _map)
       {
-        string name = outer.Key;
-        var map = outer.Value;
-
-        foreach (var inner in map)
-        {
-          var posKey = inner.Key;
-          var ids = inner.Value;
-          foreach (int id in ids.OrderBy(x => x))
-            yield return (name, posKey.Value, id);
-        }
+        var posKey = inner.Key;
+        var ids = inner.Value;
+        foreach (int id in ids.OrderBy(x => x))
+          yield return (posKey.Value, id);
       }
     }
 
-    public void Add(string variableName, double position, int variableId, double tol = DefaultTolerance)
+    /// <summary>
+    /// Aggiunge una variabile alla stazione (posizione normalizzata). Valida Name e ValueTypeKey.
+    /// </summary>
+    public void Add(ProgesiVariableSignature signature, double positionNormalized, double tol = DefaultTolerance)
     {
-      Guard.Against.NullOrWhiteSpace(variableName, nameof(variableName));
+      if (!StringComparer.Ordinal.Equals(signature.Name, Name))
+        throw new InvalidOperationException($"Signature.Name '{signature.Name}' does not match axis series Name '{Name}'.");
+
+      if (!StringComparer.Ordinal.Equals(signature.ValueTypeKey, ValueTypeKey))
+        throw new InvalidOperationException($"Signature.ValueTypeKey '{signature.ValueTypeKey}' does not match axis series ValueTypeKey '{ValueTypeKey}'.");
+
+      AddUnsafe(positionNormalized, signature.Id, tol);
+    }
+
+    /// <summary>
+    /// Aggiunge un id senza poter verificare Name/ValueTypeKey. Usare solo in contesti controllati (DTO/repo).
+    /// </summary>
+    internal void AddUnsafe(double positionNormalized, int variableId, double tol = DefaultTolerance)
+    {
       Guard.Against.Negative(variableId, nameof(variableId));
-      ValidatePosition(position);
+      ValidateNormalizedPosition(positionNormalized);
 
-      var key = new PositionKey(position, tol);
-      SortedDictionary<PositionKey, HashSet<int>> map;
-      if (!_byName.TryGetValue(variableName, out map))
-      {
-        map = new SortedDictionary<PositionKey, HashSet<int>>();
-        _byName[variableName] = map;
-      }
-
-      if (!map.TryGetValue(key, out var set))
+      var key = new PositionKey(positionNormalized, tol);
+      if (!_map.TryGetValue(key, out var set))
       {
         set = new HashSet<int>();
-        map[key] = set;
+        _map[key] = set;
       }
 
       set.Add(variableId);
     }
 
-    public bool Move(string variableName, double fromPosition, double toPosition, int variableId, double tol = DefaultTolerance)
+    public bool Move(double fromPositionNormalized, double toPositionNormalized, int variableId, double tol = DefaultTolerance)
     {
-      Guard.Against.NullOrWhiteSpace(variableName, nameof(variableName));
       Guard.Against.Negative(variableId, nameof(variableId));
-      ValidatePosition(fromPosition);
-      ValidatePosition(toPosition);
+      ValidateNormalizedPosition(fromPositionNormalized);
+      ValidateNormalizedPosition(toPositionNormalized);
 
-      if (!_byName.TryGetValue(variableName, out var map)) return false;
-
-      var fromKey = new PositionKey(fromPosition, tol);
-      if (!map.TryGetValue(fromKey, out var set) || !set.Remove(variableId))
+      var fromKey = new PositionKey(fromPositionNormalized, tol);
+      if (!_map.TryGetValue(fromKey, out var set) || !set.Remove(variableId))
         return false;
 
-      if (set.Count == 0) map.Remove(fromKey);
+      if (set.Count == 0) _map.Remove(fromKey);
 
-      var toKey = new PositionKey(toPosition, tol);
-      if (!map.TryGetValue(toKey, out var toSet))
+      var toKey = new PositionKey(toPositionNormalized, tol);
+      if (!_map.TryGetValue(toKey, out var toSet))
       {
         toSet = new HashSet<int>();
-        map[toKey] = toSet;
+        _map[toKey] = toSet;
       }
 
       toSet.Add(variableId);
       return true;
     }
 
-    public bool RemoveAt(string variableName, double position, int variableId, double tol = DefaultTolerance)
+    public bool RemoveAt(double positionNormalized, int variableId, double tol = DefaultTolerance)
     {
-      Guard.Against.NullOrWhiteSpace(variableName, nameof(variableName));
       Guard.Against.Negative(variableId, nameof(variableId));
-      ValidatePosition(position);
+      ValidateNormalizedPosition(positionNormalized);
 
-      if (!_byName.TryGetValue(variableName, out var map)) return false;
-
-      var key = new PositionKey(position, tol);
-      if (!map.TryGetValue(key, out var set)) return false;
+      var key = new PositionKey(positionNormalized, tol);
+      if (!_map.TryGetValue(key, out var set)) return false;
 
       bool removed = set.Remove(variableId);
-      if (removed && set.Count == 0) map.Remove(key);
+      if (removed && set.Count == 0) _map.Remove(key);
       return removed;
     }
 
-    public bool RemoveAll(string variableName)
+    public void ReplaceMap(IEnumerable<(double positionNormalized, IEnumerable<int> ids)> entries, double tol = DefaultTolerance)
     {
-      Guard.Against.NullOrWhiteSpace(variableName, nameof(variableName));
-      return _byName.Remove(variableName);
-    }
-
-    public bool RenameGroup(string fromVariableName, string toVariableName)
-    {
-      Guard.Against.NullOrWhiteSpace(fromVariableName, nameof(fromVariableName));
-      Guard.Against.NullOrWhiteSpace(toVariableName, nameof(toVariableName));
-      if (StringComparer.Ordinal.Equals(fromVariableName, toVariableName)) return false;
-
-      if (!_byName.TryGetValue(fromVariableName, out var map)) return false;
-      if (_byName.ContainsKey(toVariableName))
-        throw new InvalidOperationException("Group '" + toVariableName + "' already exists.");
-
-      _byName.Remove(fromVariableName);
-      _byName[toVariableName] = map;
-      return true;
-    }
-
-    public void ReplaceMap(string variableName, IEnumerable<(double position, IEnumerable<int> ids)> entries, double tol = DefaultTolerance)
-    {
-      Guard.Against.NullOrWhiteSpace(variableName, nameof(variableName));
       Guard.Against.Null(entries, nameof(entries));
 
       var newMap = new SortedDictionary<PositionKey, HashSet<int>>();
       foreach (var entry in entries)
       {
-        double pos = entry.position;
+        double pos = entry.positionNormalized;
         IEnumerable<int> ids = entry.ids;
 
-        ValidatePosition(pos);
+        ValidateNormalizedPosition(pos);
         Guard.Against.Null(ids, nameof(entries));
 
         var key = new PositionKey(pos, tol);
@@ -190,7 +212,9 @@ namespace ProgesiCore
         }
       }
 
-      _byName[variableName] = newMap;
+      _map.Clear();
+      foreach (var kv in newMap)
+        _map.Add(kv.Key, kv.Value);
     }
 
     public void SetRule(int? ruleId)
@@ -205,17 +229,33 @@ namespace ProgesiCore
       AxisLength = axisLength;
     }
 
-    private void ValidatePosition(double position)
+    /// <summary>Converte una stazione reale (lunghezza lungo curva) in normalizzata [0,1].</summary>
+    public double ToNormalizedFromReal(double realStation)
     {
-      if (double.IsNaN(position) || double.IsInfinity(position))
-        throw new ArgumentOutOfRangeException(nameof(position), "Position must be a finite number.");
+      if (!AxisLength.HasValue)
+        throw new InvalidOperationException("AxisLength is required to convert from real to normalized.");
+      if (double.IsNaN(realStation) || double.IsInfinity(realStation))
+        throw new ArgumentOutOfRangeException(nameof(realStation), "Station must be a finite number.");
+      return realStation / AxisLength.Value;
+    }
 
-      if (AxisLength.HasValue)
-      {
-        if (position < -DefaultTolerance || position > AxisLength.Value + DefaultTolerance)
-          throw new ArgumentOutOfRangeException(nameof(position),
-              "Position " + position + " is outside [0, " + AxisLength.Value + "] (± tol).");
-      }
+    /// <summary>Converte una stazione normalizzata [0,1] in reale (lunghezza lungo curva).</summary>
+    public double ToRealFromNormalized(double normalizedStation)
+    {
+      if (!AxisLength.HasValue)
+        throw new InvalidOperationException("AxisLength is required to convert from normalized to real.");
+      ValidateNormalizedPosition(normalizedStation);
+      return normalizedStation * AxisLength.Value;
+    }
+
+    private static void ValidateNormalizedPosition(double positionNormalized)
+    {
+      if (double.IsNaN(positionNormalized) || double.IsInfinity(positionNormalized))
+        throw new ArgumentOutOfRangeException(nameof(positionNormalized), "Position must be a finite number.");
+
+      if (positionNormalized < -DefaultTolerance || positionNormalized > 1.0 + DefaultTolerance)
+        throw new ArgumentOutOfRangeException(nameof(positionNormalized),
+          "Position " + positionNormalized + " is outside [0, 1] (± tol). Positions are stored as normalized stations.");
     }
 
     protected override IEnumerable<object> GetEqualityComponents()
@@ -223,22 +263,15 @@ namespace ProgesiCore
       yield return Id;
       yield return AxisName;
       yield return AxisLength.HasValue ? AxisLength.Value : double.NaN;
+      yield return Name;
+      yield return ValueTypeKey;
       yield return RuleId.HasValue ? RuleId.Value : int.MinValue;
 
-      var orderedKeys = new List<string>(_byName.Keys);
-      orderedKeys.Sort(StringComparer.Ordinal);
-
-      foreach (var name in orderedKeys)
+      foreach (var kv in _map)
       {
-        yield return name;
-        var map = _byName[name];
-
-        foreach (var kv in map)
-        {
-          yield return kv.Key.Value;
-          foreach (int vid in kv.Value.OrderBy(x => x))
-            yield return vid;
-        }
+        yield return kv.Key.Value;
+        foreach (int vid in kv.Value.OrderBy(x => x))
+          yield return vid;
       }
     }
 

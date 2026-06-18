@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
@@ -12,31 +12,28 @@ namespace ProgesiCore.Tests
 {
   public class ProgesiAxisVariableRepositoryTests
   {
-    // -------------------------
-    // Lettura: simulo SELECT con DataTable -> IDataReader
-    // -------------------------
     [Fact]
     public void Load_Mapping_FromDataReader_Works()
     {
-      // Simulo header
+      // Simulo header (SelectAxisHeaderById)
       var header = new DataTable();
       header.Columns.Add("AxisId", typeof(int));
       header.Columns.Add("AxisName", typeof(string));
       header.Columns.Add("AxisLength", typeof(double));
+      header.Columns.Add("Name", typeof(string));
+      header.Columns.Add("ValueTypeKey", typeof(string));
       header.Columns.Add("RuleId", typeof(int));
-      header.Rows.Add(5, "AX", 10.0, 7);
+      header.Rows.Add(5, "AX", 10.0, "Thickness", "System.Double", 7);
 
-      // Simulo entries
+      // Simulo entries (SelectAxisEntriesById)
       var entries = new DataTable();
       entries.Columns.Add("AxisId", typeof(int));
-      entries.Columns.Add("VariableName", typeof(string));
       entries.Columns.Add("Position", typeof(double));
       entries.Columns.Add("VariableId", typeof(int));
-      entries.Rows.Add(5, "A", 0.0, 1);
-      entries.Rows.Add(5, "A", 1.5, 2);
-      entries.Rows.Add(5, "B", 2.0, 3);
+      entries.Rows.Add(5, 0.0, 1);
+      entries.Rows.Add(5, 0.1, 2);
+      entries.Rows.Add(5, 0.2, 3);
 
-      // Uso i mapper del repository "a mano"
       var dto = new ProgesiAxisVariableDto();
 
       using (IDataReader r = header.CreateDataReader())
@@ -45,7 +42,9 @@ namespace ProgesiCore.Tests
         dto.AxisId = r.GetInt32(0);
         dto.AxisName = r.GetString(1);
         dto.AxisLength = r.IsDBNull(2) ? (double?)null : r.GetDouble(2);
-        dto.RuleId = r.IsDBNull(3) ? (int?)null : r.GetInt32(3);
+        dto.Name = r.GetString(3);
+        dto.ValueTypeKey = r.GetString(4);
+        dto.RuleId = r.IsDBNull(5) ? (int?)null : r.GetInt32(5);
       }
 
       using (IDataReader r = entries.CreateDataReader())
@@ -54,9 +53,8 @@ namespace ProgesiCore.Tests
         {
           dto.Entries.Add(new ProgesiAxisVariableDto.Entry
           {
-            VariableName = r.GetString(1),
-            Position = r.GetDouble(2),
-            VariableId = r.GetInt32(3)
+            Position = r.GetDouble(1),
+            VariableId = r.GetInt32(2)
           });
         }
       }
@@ -65,48 +63,50 @@ namespace ProgesiCore.Tests
       Assert.Equal(5, axis.Id);
       Assert.Equal("AX", axis.AxisName);
       Assert.Equal(10.0, axis.AxisLength);
+      Assert.Equal("Thickness", axis.Name);
+      Assert.Equal("System.Double", axis.ValueTypeKey);
       Assert.Equal(7, axis.RuleId);
 
       var all = axis.EnumerateAll().ToList();
       Assert.Equal(3, all.Count);
     }
 
-    // -------------------------
-    // Scrittura: finti DbConnection/DbCommand per catturare SQL e parametri
-    // -------------------------
     [Fact]
     public void Save_BuildsExpectedSql_AndParameters()
     {
-      var axis = new ProgesiAxisVariable(9, "AX-Save", 12.5, 77);
-      axis.Add("A", 0.0, 1);
-      axis.Add("A", 1.0, 2);
-      axis.Add("B", 2.0, 3);
+      var axis = new ProgesiAxisVariable(9, "AX-Save", "Thickness", "System.Double", axisLength: 12.5, ruleId: 77);
+
+      var s1 = new ProgesiAxisVariable.ProgesiVariableSignature(1, "Thickness", "System.Double");
+      var s2 = new ProgesiAxisVariable.ProgesiVariableSignature(2, "Thickness", "System.Double");
+      var s3 = new ProgesiAxisVariable.ProgesiVariableSignature(3, "Thickness", "System.Double");
+
+      axis.Add(s1, 0.0);
+      axis.Add(s2, 0.1);
+      axis.Add(s3, 0.2);
 
       var conn = new FakeDbConnection();
       conn.Open();
 
       var repo = new ProgesiAxisVariableRepository(conn);
-      repo.Save(axis); // esegue sui finti comandi
+      repo.Save(axis);
 
-      // Verifica che siano passati gli statement fondamentali
       Assert.Contains(conn.Commands, c => c.CommandText == ProgesiAxisVariableSql.Upsert_DeleteAxisEntries);
       Assert.Contains(conn.Commands, c => c.CommandText == ProgesiAxisVariableSql.Upsert_DeleteAxis);
       Assert.Contains(conn.Commands, c => c.CommandText == ProgesiAxisVariableSql.InsertAxis);
       Assert.True(conn.Commands.Count(x => x.CommandText == ProgesiAxisVariableSql.InsertAxisEntry) >= 3);
 
-      // Verifica parametri dell'insert header (usiamo la lista forte Params dei fake)
       var headerCmd = conn.Commands.First(c => c.CommandText == ProgesiAxisVariableSql.InsertAxis);
       var headerParams = headerCmd.Params;
       Assert.Contains(headerParams, p => p.ParameterName == "@AxisId" && (int)p.Value == 9);
       Assert.Contains(headerParams, p => p.ParameterName == "@AxisName" && (string)p.Value == "AX-Save");
       Assert.Contains(headerParams, p => p.ParameterName == "@AxisLength" && (double)p.Value == 12.5);
+      Assert.Contains(headerParams, p => p.ParameterName == "@Name" && (string)p.Value == "Thickness");
+      Assert.Contains(headerParams, p => p.ParameterName == "@ValueTypeKey" && (string)p.Value == "System.Double");
       Assert.Contains(headerParams, p => p.ParameterName == "@RuleId" && (int)p.Value == 77);
 
-      // Verifica uno degli insert entry
       var anyEntry = conn.Commands.First(c => c.CommandText == ProgesiAxisVariableSql.InsertAxisEntry);
       var entryParams = anyEntry.Params;
       Assert.Contains(entryParams, p => p.ParameterName == "@AxisId" && (int)p.Value == 9);
-      Assert.Contains(entryParams, p => p.ParameterName == "@VariableName");
       Assert.Contains(entryParams, p => p.ParameterName == "@Position");
       Assert.Contains(entryParams, p => p.ParameterName == "@VariableId");
     }
@@ -165,13 +165,10 @@ namespace ProgesiCore.Tests
 
       public override void Cancel() { }
       public override int ExecuteNonQuery() => 1;
-      public override object ExecuteScalar() => 0; // evita warning nullable
+      public override object ExecuteScalar() => 0;
       public override void Prepare() { }
       protected override DbParameter CreateDbParameter() => new FakeDbParameter();
       protected override DbDataReader ExecuteDbDataReader(CommandBehavior behavior) => throw new NotImplementedException();
-
-      // Espongo Params anche come proprietà comoda per i test
-      public List<FakeDbParameter> ParametersList => Params;
     }
 
     private sealed class FakeDbParameter : DbParameter
@@ -200,7 +197,7 @@ namespace ProgesiCore.Tests
       public override bool Contains(object value) => _list.Contains((FakeDbParameter)value);
       public override bool Contains(string value) => _list.Any(p => p.ParameterName == value);
       public override void CopyTo(Array array, int index) => _list.ToArray().CopyTo(array, index);
-      public override System.Collections.IEnumerator GetEnumerator() => _list.GetEnumerator(); // NON generico
+      public override System.Collections.IEnumerator GetEnumerator() => _list.GetEnumerator();
       public override int IndexOf(object value) => _list.IndexOf((FakeDbParameter)value);
       public override int IndexOf(string parameterName) => _list.FindIndex(p => p.ParameterName == parameterName);
       public override void Insert(int index, object value) => _list.Insert(index, (FakeDbParameter)value);
@@ -218,7 +215,6 @@ namespace ProgesiCore.Tests
       {
         var i = IndexOf(parameterName);
         if (i >= 0) _list[i] = (FakeDbParameter)value;
-        else Add(value);
       }
     }
   }
