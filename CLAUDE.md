@@ -64,6 +64,7 @@ Read-only inspection and documentation are allowed. The freeze lifts only after 
 - Claude prepares Cursor task briefs **only when instructed**.
 - Cursor implementation requires: an approved Task Board row, a branch, allowed files, forbidden files, tests, manual validation if Grasshopper is affected, and a rollback plan.
 - Claude reviews Cursor output (diff + test results) before any merge or documentation update.
+- Cursor smoke test passed, but Cursor still requires an explicit task brief and human approval before any implementation.
 
 ## 7. Build/test commands
 - Run build/test **only when explicitly instructed**.

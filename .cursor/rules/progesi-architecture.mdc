@@ -39,3 +39,48 @@ These rules are authoritative for Cursor in this repository. If a request confli
 - Editing ProgesiDomainServices duplicate-model code.
 - Deleting or moving legacy code.
 - Modifying solution files, project files, build/deploy scripts, or package files.
+
+## Implementation prerequisites (smoke-test hardening)
+Cursor may implement **only** when a filled task brief (or equivalent approved scope, per `docs/task-brief-template.md`) is provided, including all of:
+- approved Task Board row
+- **human approval status = Approved**
+- branch
+- allowed files
+- forbidden files
+- acceptance criteria
+- tests
+- rollback plan
+- manual Grasshopper validation requirement if the change is GH-facing
+
+If any prerequisite is missing, Cursor stays read-only and stops.
+
+## Frozen AxisVar files (do not modify, move, or delete)
+- `src/ProgesiCore/ProgesiAxisVariable.cs`
+- `src/ProgesiCore/ProgesiAxisVariableDto.cs`
+- `src/ProgesiCore/Persistence/ProgesiAxisVariableRepository.cs`
+- `src/ProgesiCore/Persistence/ProgesiAxisVariableSql.cs`
+- `src/ProgesiGrasshopperAssembly/Components/AxisVarDefineComponent.cs`
+- `src/ProgesiGrasshopperAssembly/Components/AxisVarSeriesComponent.cs`
+- `src/ProgesiGrasshopperAssembly/Infrastructure/AxisVar/AxisContext.cs`
+- `src/ProgesiGrasshopperAssembly/Infrastructure/AxisVar/AxisVarMapping.cs`
+- `src/ProgesiGrasshopperAssembly/Infrastructure/AxisVar/RhinoAxisStationing.cs`
+- relevant AxisVar test files (e.g. `tests/ProgesiCore.Tests/ProgesiAxisVariable*.cs`, `tests/ProgesiRepositories.Sqlite.Tests/ProgesiAxisVariableRepositoryIntegrationTests.cs`)
+
+Axis DTOs in `src/ProgesiDataExchange/DTOs.cs` are also frozen. Inspect only; never edit.
+
+## Branch policy
+- `docs/claude-handover-rules` is **documentation/rules only**.
+- Implementation branches must be named in the approved task brief.
+- Cursor must **not** implement on a docs/rules branch.
+
+## Reporting checklist
+After any approved work, Cursor must report:
+- files changed
+- commands run
+- tests run
+- final `git status`
+- deviations from the allowed scope
+- any blocked or unclear instruction
+
+## Manual Grasshopper validation
+For GH-facing changes, Cursor must check whether the Grasshopper Manual Test Matrix already has relevant rows, or whether a new manual validation task is required, before the change can be considered complete.

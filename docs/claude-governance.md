@@ -61,6 +61,9 @@ Automated .NET tests are necessary but **not sufficient** for Grasshopper confid
 ## Loop policy
 Loops must not be used for implementation during handover. The only allowed handover loop is: read context → report understanding → ask for approval → perform one approved Notion write → run `git status --short` if repository interaction occurred → stop. Future implementation loops may be considered only after rules, agents, branch policy, and tests are approved.
 
+## Cursor handoff policy
+Cursor smoke test passed; future Cursor work must use an approved task brief and remain read-only by default (no implementation without an approved brief and human approval = Approved).
+
 ## Agent policy
 No autonomous Claude agents are enabled. Agents are defined in `.claude/agents/*.md` as planned capabilities only. Implementation agents remain disabled. Agents must not work through the full Task Board autonomously. See `AGENTS.md` for the maturity-level model.
 

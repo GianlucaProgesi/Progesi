@@ -33,6 +33,7 @@ Notion (decision & context)
 ## Implementation prerequisites
 Cursor may implement only when **all** of the following exist:
 - an **approved Task Board row**
+- **human approval status = Approved** (explicit, not merely implied by the workflow)
 - a **branch**
 - **allowed files**
 - **forbidden files**
@@ -41,6 +42,11 @@ Cursor may implement only when **all** of the following exist:
 - a **rollback plan**
 
 If any prerequisite is missing, implementation does not proceed.
+
+## Cursor smoke-test hardening
+- Cursor verified the governance files are readable.
+- Minor hardening was added after the smoke test.
+- Cursor remains read-only unless all prerequisites above are met (including human approval status = Approved).
 
 ## Claude's review responsibility
 After Cursor implements, Claude reviews the diff and test results against the brief and the architecture rules before any merge or Notion update. Anything outside the approved scope is rejected and reported.

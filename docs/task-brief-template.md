@@ -55,7 +55,17 @@ Copy this template per task. A brief is only actionable after **Human approval s
 <how to revert safely if the change fails review or tests>
 
 ## Human approval status
-<Not requested | Requested | Approved | Rejected> — with date and approver
+- Not requested
+- Requested
+- Approved
+- Rejected
+
+Record the selected value with date and approver. Implementation may proceed only when this is **Approved**.
+
+## Current branch policy
+- Working branch: <name>
+- Is this branch allowed for implementation? <yes / no>
+- If not (e.g. a documentation/rules branch such as `docs/claude-handover-rules`), **stop** — do not implement here.
 
 ## Claude review checklist
 - [ ] Only allowed files changed
@@ -68,3 +78,12 @@ Copy this template per task. A brief is only actionable after **Human approval s
 
 ## Cursor instructions
 <precise, scoped prompt for Cursor; must reference allowed/forbidden files and forbid architecture invention and out-of-scope edits>
+
+## Final reporting checklist
+After the task, report:
+- [ ] Files changed
+- [ ] Commands run
+- [ ] Tests run and results
+- [ ] Final `git status`
+- [ ] Deviations from the allowed scope (if any)
+- [ ] Any blocked or unclear instruction
