@@ -1,0 +1,41 @@
+---
+description: Progesi Toolkit architecture and workflow rules
+alwaysApply: true
+---
+
+# Progesi Toolkit — Cursor Architecture & Workflow Rules
+
+These rules are authoritative for Cursor in this repository. If a request conflicts with them, stop and ask for human approval.
+
+## Standing facts (always true)
+- AxisVar is **frozen** — no modification, deletion, DTO consolidation, persistence move, or Grasshopper wiring.
+- ProgesiVariableCluster is a **missing capability / suspected regression** — it is not in the current repository and is **not implemented**.
+- DataExchange is **not** Core — it is the interchange boundary.
+- Current test baseline is **64/64 passing at commit `376d81e`**.
+- **No code cleanup is authorised yet.**
+
+## Core independence
+- ProgesiCore must not depend on Rhino, Grasshopper, Excel libraries, Entity Framework, UI frameworks, SQLite-specific NuGet packages, or ASP.NET.
+- Persistence implementation must not be added to Core.
+- Existing AxisVar persistence inside Core is quarantined; do not extend it.
+- Dependency direction is one-way: outer layers → adapters/DataExchange → repository interfaces → Core. Never the reverse.
+
+## DataExchange
+- DataExchange is the interchange boundary, not a domain layer. Do not move Excel/SQLite/Rhino/database-specific logic into Core.
+
+## Workflow rules
+- **Cursor is read-only unless explicitly approved** for a specific task.
+- No source refactor unless explicitly scoped in an approved task brief.
+- No broad cleanup of any kind.
+- No public API renames (classes, namespaces, files, projects) without approval.
+- Tests are required for any code change; do not reduce the baseline.
+- Manual Grasshopper validation is required for any Grasshopper-facing change.
+- Do not modify files outside the task scope (allowed-files list).
+- Do not invent architecture — implement only what the approved brief specifies.
+- Always report which files were changed.
+
+## Forbidden without explicit approval
+- Editing AxisVar files or `ProgesiCore/Persistence` files.
+- Editing ProgesiDomainServices duplicate-model code.
+- Deleting or moving legacy code.
+- Modifying solution files, project files, build/deploy scripts, or package files.
