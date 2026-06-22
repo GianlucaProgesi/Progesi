@@ -38,7 +38,15 @@ Detailed definitions live in `.claude/agents/*.md`.
 | `cursor-task-brief-writer` | Prepare Cursor prompts/task briefs | Level 1 |
 | `git-governance-agent` | Read-only Git state / branch strategy | Level 1 |
 | `progesi-strategy-planner` | Planning & task sequencing | Level 1 |
+| `progesi-workstream-orchestrator` | Coordination/orchestration: route work to specialist agents, prepare controlled prompts, sequence tasks | Level 1 |
 | `implementation-agent-disabled` | Placeholder — **disabled** | Disabled |
+
+## progesi-workstream-orchestrator
+- **Coordination/orchestration agent**, not an implementation agent. It must not edit source code, tests, solution files, or project files.
+- It **cannot autonomously work through the Task Board** — no autonomous Task Board execution and no marking implementation tasks Done.
+- It **prepares controlled prompts and routes work to specialist agents** (`progesi-architecture-reviewer`, `notion-project-curator`, `cursor-task-brief-writer`, `git-governance-agent`, `regression-guard`, `grasshopper-manual-test-designer`, `documentation-writer`, and `implementation-agent-disabled` for blocked-implementation reminders only).
+- It **must stop for human input gates** — ADR acceptance, source-code change requests, Cursor implementation (requires a filled task brief and human approval), GitHub deletion, AxisVar involvement, and ProgesiVariableCluster recovery all halt the agent pending human decision.
+- Full definition: `.claude/agents/progesi-workstream-orchestrator.md`.
 
 ## Hard limits
 - No agent may modify source code, tests, solution files, or project files without an explicitly approved task.
