@@ -402,6 +402,8 @@ namespace ProgesiGrasshopperAssembly.Infrastructure
         var table = doc.Strings;
 
         var id = ReadInt(payload, "id");
+        var explicitId = id;                            // Id fornito esplicitamente dall'utente (>0)
+        var act = ReadString(payload, "act");           // Create | Update (Delete è gestito altrove)
         var name = ReadString(payload, "name");
         var value = ReadString(payload, "value");
         var unit = ReadString(payload, "unit");
@@ -440,6 +442,64 @@ namespace ProgesiGrasshopperAssembly.Infrastructure
         else if (string.Equals(value, "true", StringComparison.OrdinalIgnoreCase)) typedValue = true;
         else if (string.Equals(value, "false", StringComparison.OrdinalIgnoreCase)) typedValue = false;
 
+        var varRepo = new RhinoVariableRepository(doc);
+        var metaRepo = new RhinoMetadataRepository(doc);
+
+        // === Reference validation & overwrite safety (prima di qualsiasi mutazione dello store) ===
+
+        // 1) Dipendenze: ogni Id referenziato deve esistere (forward reference NON consentita).
+        var missingDeps = new List<int>();
+        foreach (var dep in depends ?? Array.Empty<int>())
+        {
+          var dv = varRepo.GetByIdAsync(dep).GetAwaiter().GetResult();
+          if (dv == null) missingDeps.Add(dep);
+        }
+        if (missingDeps.Count > 0)
+        {
+          info = "Dipendenze inesistenti (forward reference non consentita): Id " + string.Join(", ", missingDeps) + ".";
+          return false;
+        }
+
+        // 2) Metadata: se fornito un MId, deve risolvere a un record esistente.
+        if (!string.IsNullOrWhiteSpace(midStr))
+        {
+          if (!metaId.HasValue)
+          {
+            info = "Metadata non risolvibile: '" + midStr.Trim() + "'.";
+            return false;
+          }
+          var mm = metaRepo.GetAsync(metaId.Value).GetAwaiter().GetResult();
+          if (mm == null)
+          {
+            info = "Metadata inesistente: Id " + metaId.Value + ".";
+            return false;
+          }
+        }
+
+        // 3) Overwrite safety per Id esplicito: Create singolo rifiuta un Id esistente;
+        //    Create batch/tree riassegna senza mutare il record esistente; Update richiede un Id esistente.
+        bool actIsUpdate = string.Equals(act, "Update", StringComparison.OrdinalIgnoreCase);
+        int idReassignedFrom = 0;
+        if (explicitId > 0)
+        {
+          var existing = varRepo.GetByIdAsync(explicitId).GetAwaiter().GetResult();
+          if (!actIsUpdate && existing != null)
+          {
+            if (!ReadBool(payload, "allowIdReassign"))
+            {
+              info = "Create rifiutato: Id " + explicitId + " già esistente. Usa Action=Update per modificare.";
+              return false;
+            }
+            idReassignedFrom = explicitId;
+            id = 0;
+          }
+          if (actIsUpdate && existing == null)
+          {
+            info = "Update rifiutato: Id " + explicitId + " inesistente.";
+            return false;
+          }
+        }
+
         // dedupe sul content-hash DI DOMINIO
         var depN = (depends ?? Array.Empty<int>()).Distinct().OrderBy(x => x).ToArray();
         var tmp = new ProgesiVariable(0, name ?? string.Empty, typedValue, depN, metaId, isAss);
@@ -450,10 +510,8 @@ namespace ProgesiGrasshopperAssembly.Infrastructure
 
         if (id <= 0) id = NextId(table, "Progesi.Var", "__next__");
 
-        var repo = new RhinoVariableRepository(doc);
-
         // dis-indicizza vecchio content-hash se update
-        var current = repo.GetByIdAsync(id).GetAwaiter().GetResult();
+        var current = varRepo.GetByIdAsync(id).GetAwaiter().GetResult();
         if (current != null)
         {
           var oldContent = ProgesiHash.Compute(current);
@@ -465,7 +523,7 @@ namespace ProgesiGrasshopperAssembly.Infrastructure
                                               metadataId: metaId,
                                               isAssumption: isAss);
 
-        repo.SaveAsync(variableNew).GetAwaiter().GetResult();
+        varRepo.SaveAsync(variableNew).GetAwaiter().GetResult();
 
         var newContent = ProgesiHash.Compute(variableNew);
         IndexHash(table, "Progesi.VarHash", newContent, id);
@@ -481,6 +539,9 @@ namespace ProgesiGrasshopperAssembly.Infrastructure
         var assN = isAss ? "1" : "0";
         var nameN = ToNorm(name);
         var summary = $"ID:{id} | NAME:{nameN} | VALC:{valc} | BY:{(string.IsNullOrEmpty(byN) ? "-" : byN)} | MID:{(metaId.HasValue ? metaId.Value.ToString() : "-")} | DEP:[{depStr}] | ASS:{assN}";
+
+        if (idReassignedFrom > 0)
+          info = "Id " + idReassignedFrom + " già in uso; assegnato Id " + id + ".";
 
         persisted = new
         {

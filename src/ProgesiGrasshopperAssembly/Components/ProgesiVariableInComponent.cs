@@ -47,6 +47,16 @@ namespace ProgesiGrasshopperAssembly.Components
       p.AddTextParameter("Info", "Info", "Esito/diagnostica.", GH_ParamAccess.item);
     }
 
+    // IDs già accettati per scrittura nella soluzione corrente (tutti i branch del tree).
+    // Serve a respingere branch in conflitto che ripetono lo stesso Id esplicito senza overwrite silenzioso.
+    private readonly HashSet<int> _seenWriteIds = new HashSet<int>();
+
+    protected override void BeforeSolveInstance()
+    {
+      _seenWriteIds.Clear();
+      base.BeforeSolveInstance();
+    }
+
     protected override void SolveInstance(IGH_DataAccess DA)
     {
       bool run = false; string act = "Create"; int id = 0; string name = ""; string val = ""; string unit = ""; string by = "";
@@ -66,8 +76,15 @@ namespace ProgesiGrasshopperAssembly.Components
       bool isUpdate = act.Equals("Update", StringComparison.OrdinalIgnoreCase);
       bool isDelete = act.Equals("Delete", StringComparison.OrdinalIgnoreCase);
 
-      if (!(isCreate || isUpdate || isDelete)) { Emit(DA, val, outId, outHash, "Input non valido: Act", name); return; }
-      if ((isUpdate || isDelete) && id <= 0) { Emit(DA, val, outId, outHash, "Input non valido: Id (>0)", name); return; }
+      if (!(isCreate || isUpdate || isDelete)) { Fail(DA, val, outId, outHash, "Input non valido: Act", name); return; }
+      if ((isUpdate || isDelete) && id <= 0) { Fail(DA, val, outId, outHash, "Input non valido: Id (>0)", name); return; }
+
+      // Tree overwrite safety: lo stesso Id esplicito non può comparire in più branch della stessa soluzione.
+      if ((isCreate || isUpdate) && id > 0 && !_seenWriteIds.Add(id))
+      {
+        Fail(DA, val, outId, outHash, $"Conflitto tree: Id {id} ripetuto in più branch. Nessun overwrite silenzioso.", name);
+        return;
+      }
 
       // Unit come fattore numerico opzionale: Value × Unit se ENTRAMBI numerici
       var inv = CultureInfo.InvariantCulture;
@@ -88,12 +105,15 @@ namespace ProgesiGrasshopperAssembly.Components
         {
           string info; bool ok = MetadataRepositoryCompatExtensions.TryDeleteVariable(repo, id, out info);
           outId = id > 0 ? id : 0; outHash = ""; outInfo = string.IsNullOrWhiteSpace(info) ? (ok ? "OK" : "Operazione non riuscita") : info;
-          Emit(DA, val, outId, outHash, outInfo, name); return;
+          if (!ok) { Fail(DA, val, outId, outHash, outInfo, name); } else { Emit(DA, val, outId, outHash, outInfo, name); }
+          return;
         }
 
         var payload = new VarPayload
         {
           id = id,
+          act = act ?? "Create",
+          allowIdReassign = isCreate && IsTreeOrBatchInput(),
           name = name ?? "",
           value = val ?? "",
           unit = unit ?? "",
@@ -115,14 +135,28 @@ namespace ProgesiGrasshopperAssembly.Components
         var prefix = string.IsNullOrWhiteSpace(upInfo) ? (upOk ? "OK" : "Operazione non riuscita") : upInfo;
         outInfo = string.IsNullOrWhiteSpace(summary) ? prefix : $"{prefix} | {summary}";
 
+        if (!upOk) { Fail(DA, val, outId, outHash, outInfo, name); return; }
         Emit(DA, val, outId, outHash, outInfo, name);
       }
-      catch (Exception ex) { Emit(DA, val, outId, outHash, "Errore: " + ex.Message, name); }
+      catch (Exception ex) { Fail(DA, val, outId, outHash, "Errore: " + ex.Message, name); }
+    }
+
+    // Più path nella stessa soluzione → batch/tree (Test-17: Create con Id esistente → riassegnazione, non overwrite).
+    private bool IsTreeOrBatchInput()
+    {
+      foreach (var param in Params.Input)
+      {
+        if (param?.VolatileData != null && param.VolatileData.PathCount > 1)
+          return true;
+      }
+      return false;
     }
 
     private sealed class VarPayload
     {
       public int id { get; set; }
+      public string act { get; set; }
+      public bool allowIdReassign { get; set; }
       public string name { get; set; }
       public string value { get; set; }
       public string unit { get; set; }
@@ -148,6 +182,13 @@ namespace ProgesiGrasshopperAssembly.Components
       if (pi == null) return;
       var v = pi.GetValue(obj, null);
       target = v == null ? "" : v.ToString();
+    }
+
+    // Esito bloccante: errore rosso sul componente + Info testuale, senza overwrite silenzioso.
+    private void Fail(IGH_DataAccess DA, string val, int id, string hash, string info, string name)
+    {
+      AddRuntimeMessage(GH_RuntimeMessageLevel.Error, string.IsNullOrWhiteSpace(info) ? "Operazione non riuscita" : info);
+      Emit(DA, val, id, hash, info, name);
     }
 
     private void Emit(IGH_DataAccess DA, string val, int id, string hash, string info, string name)
