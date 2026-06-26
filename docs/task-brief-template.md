@@ -87,3 +87,10 @@ After the task, report:
 - [ ] Final `git status`
 - [ ] Deviations from the allowed scope (if any)
 - [ ] Any blocked or unclear instruction
+
+## Controlled-run governance
+- [ ] Implementation prompt guard acknowledged: "If this prompt is running in Claude Code / 00. Controlled Writes, stop immediately. Implementation may run only in 05. Cursor Bridge after Cursor Allowed = true."
+- [ ] Notion Curator packet required after completion (route to 00. Controlled Writes)
+- Prompt/run artefact classification: <ephemeral prompt | controlled run report | reusable prompt/template | evidence record | test run record | human decision | ADR material | GitHub/PR record | manual validation evidence | strategic planning note | archive candidate>
+- Tab where this task must run: <00. Controlled Writes | 05. Cursor Bridge | 07. Build Test Deploy | 08. Grasshopper Validation | planning tab>
+- May this task be run by: <Claude | Cursor | neither> (Cursor only with Cursor Allowed = true and an approved brief)

@@ -37,3 +37,8 @@ Placeholder for a future limited implementation agent. **Currently disabled.**
 
 ## Current status
 **Disabled.** Maximum maturity: none until Level 4 is explicitly enabled by human approval (not planned in the current phase).
+
+## Implementation prompt guard (still disabled)
+- This agent remains disabled.
+- It must not be activated by this documentation change (`docs/implementation-prompt-guard`).
+- Implementation authority belongs only to explicitly approved Cursor Bridge tasks (Cursor Allowed = true, approved brief, branch, allowed/forbidden files, tests, rollback plan, human approval) or to a separately approved future implementation agent. This documentation change creates no implementation authority.

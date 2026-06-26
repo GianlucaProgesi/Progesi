@@ -50,3 +50,16 @@ If any prerequisite is missing, implementation does not proceed.
 
 ## Claude's review responsibility
 After Cursor implements, Claude reviews the diff and test results against the brief and the architecture rules before any merge or Notion update. Anything outside the approved scope is rejected and reported.
+
+## Implementation prompt guard
+If this prompt is running in Claude Code / 00. Controlled Writes, stop immediately. Implementation may run only in 05. Cursor Bridge after Cursor Allowed = true.
+
+- 00. Controlled Writes must never execute implementation prompts.
+- 05. Cursor Bridge must be a plain terminal by default.
+- Cursor Agent implementation requires Cursor Allowed = true, an approved task brief, a branch, allowed files, forbidden files, tests, a rollback plan, and human approval.
+
+## Notion Curator reporting (Cursor)
+- Cursor must include a Notion Curator packet in its final report.
+- Cursor must not update Notion directly unless separately authorised.
+- Cursor must not mark tasks Done.
+- Cursor implementation reports must be routed back to 00. Controlled Writes for Notion recording.

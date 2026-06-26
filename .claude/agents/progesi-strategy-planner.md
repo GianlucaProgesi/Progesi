@@ -43,3 +43,12 @@ Propose roadmap, milestones, task decomposition, and architecture sequencing.
 
 ## Current status
 Planned, not created. Maximum maturity: Level 1 (planning only; no execution).
+
+## Agent completion rule
+This agent must end with exactly one of:
+1. No Notion update required — explain why.
+2. Notion Curator packet prepared — route to 00. Controlled Writes.
+3. Human input required — specify the exact Human Input row/question.
+4. Unsafe to proceed — explain the stop condition.
+
+It must not silently finish after changing repository, GitHub, build/test/deploy, or validation state.
