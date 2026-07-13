@@ -69,3 +69,18 @@ No autonomous Claude agents are enabled. Agents are defined in `.claude/agents/*
 
 ## Escalation / stop rules
 Stop and report when: the allowed action is unclear, Notion documentation conflicts, an unexpected file would change, scope would broaden, or an action would touch frozen/quarantined areas. When in doubt, do less and ask.
+
+## Agent completion rule
+Every specialist agent must end with exactly one of:
+1. No Notion update required — explain why.
+2. Notion Curator packet prepared — route to 00. Controlled Writes.
+3. Human input required — specify the exact Human Input row/question.
+4. Unsafe to proceed — explain the stop condition.
+
+An agent must not silently finish after changing repository, GitHub, build/test/deploy, or validation state.
+
+## Notion Curator notification packet
+At the end of a task that changes state, produce a compact packet containing: task name; agent / tab used; date; what changed; repository branch / commit (if applicable); files changed (if applicable); PR number (if applicable); build/test result (if applicable); manual validation result (if applicable); human decision needed (if any); Notion pages that may need update; Task Board rows that may need update; evidence pages to create/update; rows that should remain open; rows that may be Done; follow-up tasks; stop / escalation notes.
+
+## Prompt and run archival policy (summary)
+Classify each controlled run output as one of: ephemeral prompt, controlled run report, reusable prompt/template, evidence record, test run record, human decision, ADR material, GitHub/PR record, manual validation evidence, strategic planning note, or archive candidate. Temporary prompts must not remain active source-of-truth content. Full policy: Notion page "Prompt and Run Archival Policy — Notion Curator Notification Loop".

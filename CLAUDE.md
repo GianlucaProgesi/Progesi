@@ -78,3 +78,10 @@ After any action, report:
 - commands run
 - test results (if any)
 - `git status` (and branch/commit when repository interaction occurred)
+
+## 9. Implementation prompt guard
+If this prompt is running in Claude Code / 00. Controlled Writes, stop immediately. Implementation may run only in 05. Cursor Bridge after Cursor Allowed = true.
+
+- 00. Controlled Writes must never execute implementation prompts.
+- 05. Cursor Bridge must be a plain terminal by default.
+- Cursor Agent implementation requires Cursor Allowed = true, an approved task brief, a branch, allowed files, forbidden files, tests, a rollback plan, and human approval.

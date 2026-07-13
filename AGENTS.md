@@ -54,3 +54,50 @@ Detailed definitions live in `.claude/agents/*.md`.
 - No agent may move frozen tasks out of `Blocked / Frozen`.
 - No agent may perform GitHub cleanup, code cleanup, or AxisVar work.
 - No agent may run Rhino or Grasshopper.
+
+## Implementation prompt guard
+If this prompt is running in Claude Code / 00. Controlled Writes, stop immediately. Implementation may run only in 05. Cursor Bridge after Cursor Allowed = true.
+
+- 00. Controlled Writes must never execute implementation prompts.
+- 05. Cursor Bridge must be a plain terminal by default.
+- Cursor Agent implementation requires Cursor Allowed = true, an approved task brief, a branch, allowed files, forbidden files, tests, a rollback plan, and human approval.
+
+## Agent completion rule
+Every specialist agent must end with exactly one of:
+1. No Notion update required — explain why.
+2. Notion Curator packet prepared — route to 00. Controlled Writes.
+3. Human input required — specify the exact Human Input row/question.
+4. Unsafe to proceed — explain the stop condition.
+
+An agent must not silently finish after changing repository, GitHub, build/test/deploy, or validation state.
+
+## Notion Curator notification packet
+At the end of a task that changes state, produce a compact packet containing:
+- Task name
+- Agent / tab used
+- Date
+- What changed
+- Repository branch / commit, if applicable
+- Files changed, if applicable
+- PR number, if applicable
+- Build/test result, if applicable
+- Manual validation result, if applicable
+- Human decision needed, if any
+- Notion pages that may need update
+- Task Board rows that may need update
+- Evidence pages to create/update
+- Rows that should remain open
+- Rows that may be Done
+- Follow-up tasks
+- Stop / escalation notes
+
+## Orchestrator routing rule
+The Orchestrator must not simply ask the human to copy/paste long reports. It should:
+- identify the next responsible agent
+- prepare the smallest controlled prompt
+- include the current Notion links / task IDs
+- include the expected Notion Curator packet
+- stop only when human approval, manual observation, or an architectural decision is required
+
+## Prompt and run archival policy (summary)
+Classify each controlled run output as one of: ephemeral prompt, controlled run report, reusable prompt/template, evidence record, test run record, human decision, ADR material, GitHub/PR record, manual validation evidence, strategic planning note, or archive candidate. Temporary prompts must not remain active source-of-truth content. Full policy: Notion page "Prompt and Run Archival Policy — Notion Curator Notification Loop".
