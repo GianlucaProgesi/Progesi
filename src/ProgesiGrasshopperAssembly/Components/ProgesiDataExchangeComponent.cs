@@ -260,7 +260,7 @@ namespace ProgesiGrasshopperAssembly.Components
 
       var vars = ReadAllVarsFromTable(table);
       var metas = ReadAllMetasFromTable(table);
-
+      var clusters = ReadAllClustersFromTable(table);
       using (var wb = new XLWorkbook())
       {
         // Variables
@@ -309,10 +309,31 @@ namespace ProgesiGrasshopperAssembly.Components
         }
         wsM.Columns().AdjustToContents();
 
+        // Clusters
+        var wsC = wb.Worksheets.Add("ProgesiClusters");
+        wsC.Cell(1, 1).Value = "Id";
+        wsC.Cell(1, 2).Value = "Hash";
+        wsC.Cell(1, 3).Value = "Name";
+        wsC.Cell(1, 4).Value = "Description";
+        wsC.Cell(1, 5).Value = "VariableIds";
+        int r3 = 2;
+        foreach (var c in clusters)
+        {
+          wsC.Cell(r3, 1).Value = c.Id;
+          wsC.Cell(r3, 2).Value = c.Hash ?? "";
+          wsC.Cell(r3, 3).Value = c.Name ?? "";
+          wsC.Cell(r3, 4).Value = c.Description ?? "";
+          wsC.Cell(r3, 5).Value = (c.VariableIds != null && c.VariableIds.Length > 0)
+            ? string.Join(",", c.VariableIds)
+            : "";
+          r3++;
+        }
+        wsC.Columns().AdjustToContents();
+
         wb.SaveAs(p);
       }
 
-      string info = $"OK ExportExcel → {p} (Vars:{vars.Length}, Meta:{metas.Length})";
+      string info = $"OK ExportExcel → {p} (Vars:{vars.Length}, Meta:{metas.Length}, Clusters:{clusters.Length})";
       return (p, info);
     }
     private static string NormalizeExportPath(string inPath)
@@ -617,6 +638,7 @@ namespace ProgesiGrasshopperAssembly.Components
       var metas = ReadAllMetasFromTable(table);   // MetaRow[]
       var vars = ReadAllVarsFromTable(table);    // VarRow[]
       var metaIdsPresent = new HashSet<int>(metas.Select(m => m.Id));
+      var clusters = ReadAllClustersFromTable(table);
 
       // 2) Prepara percorso destinazione
       string p = (inPath ?? string.Empty).Trim();
@@ -691,6 +713,20 @@ CREATE TABLE IF NOT EXISTS VariableDepends (
   DepId        INTEGER NOT NULL,
   PRIMARY KEY (VarId, DepId),
   FOREIGN KEY (VarId) REFERENCES Variables(Id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS Clusters (
+  Id          INTEGER PRIMARY KEY,
+  Hash        TEXT NOT NULL,
+  Name        TEXT NOT NULL,
+  Description TEXT
+);
+
+CREATE TABLE IF NOT EXISTS ClusterVariables (
+  ClusterId   INTEGER NOT NULL,
+  VarId       INTEGER NOT NULL,
+  PRIMARY KEY (ClusterId, VarId),
+  FOREIGN KEY (ClusterId) REFERENCES Clusters(Id) ON DELETE CASCADE,
+  FOREIGN KEY (VarId)     REFERENCES Variables(Id) ON DELETE CASCADE
 );";
           cmd.ExecuteNonQuery();
 
@@ -777,6 +813,55 @@ CREATE TABLE IF NOT EXISTS VariableDepends (
             }
           }
 
+          // 3.5) Clusters + reset join
+          cmd.Parameters.Clear();
+
+          // reset per export deterministico
+          cmd.CommandText = "DELETE FROM ClusterVariables;";
+          cmd.ExecuteNonQuery();
+
+          cmd.CommandText = "DELETE FROM Clusters;";
+          cmd.ExecuteNonQuery();
+
+          // insert clusters
+          cmd.CommandText = "INSERT OR REPLACE INTO Clusters (Id,Hash,Name,Description) VALUES (@id,@hash,@name,@desc)";
+          var cId = new SQLiteParameter("@id");
+          var cHash = new SQLiteParameter("@hash");
+          var cName = new SQLiteParameter("@name");
+          var cDesc = new SQLiteParameter("@desc");
+          cmd.Parameters.AddRange(new[] { cId, cHash, cName, cDesc });
+
+          foreach (var c in clusters)
+          {
+            cId.Value = c.Id;
+            cHash.Value = c.Hash ?? string.Empty;
+            cName.Value = c.Name ?? string.Empty;
+            cDesc.Value = c.Description ?? string.Empty;
+            cmd.ExecuteNonQuery();
+          }
+
+          // 3.6) ClusterVariables (join)
+          cmd.Parameters.Clear();
+          cmd.CommandText = "INSERT OR REPLACE INTO ClusterVariables (ClusterId,VarId) VALUES (@cid,@vid)";
+          var jCid = new SQLiteParameter("@cid");
+          var jVid = new SQLiteParameter("@vid");
+          cmd.Parameters.AddRange(new[] { jCid, jVid });
+
+          // usiamo solo VarId esistenti (coerente con depends)
+          foreach (var c in clusters)
+          {
+            if (c.VariableIds == null || c.VariableIds.Length == 0) continue;
+
+            foreach (var vid in c.VariableIds)
+            {
+              if (!varIds.Contains(vid)) continue; // varIds è HashSet<int> già creato sopra
+
+              jCid.Value = c.Id;
+              jVid.Value = vid;
+              cmd.ExecuteNonQuery();
+            }
+          }
+
           tx.Commit();
         }
       }
@@ -784,9 +869,8 @@ CREATE TABLE IF NOT EXISTS VariableDepends (
       // 4) Riepilogo
       var info = string.Format(                                  // <-- fix Count/Length e firma di Format
           CultureInfo.InvariantCulture,
-          "OK ExportSqlite → {0} (Meta:{1}, Vars:{2})",
-          p, metas.Length, vars.Length);
-
+          "OK ExportSqlite → {0} (Meta:{1}, Vars:{2}, Clusters:{3})",
+          p, metas.Length, vars.Length, clusters.Length);
       return (p, info);
     }
 
@@ -833,6 +917,7 @@ CREATE TABLE IF NOT EXISTS VariableDepends (
 
       int metaRows = 0, metaOk = 0, metaWarn = 0, metaErr = 0;
       int varRows = 0, varOk = 0, varWarn = 0, varErr = 0;
+      int clusterRows = 0, clusterOk = 0, clusterWarn = 0, clusterErr = 0;
 
       using (var cn = new Microsoft.Data.Sqlite.SqliteConnection($"Data Source={db};Mode=ReadOnly"))
       {
@@ -915,6 +1000,7 @@ CREATE TABLE IF NOT EXISTS VariableDepends (
           }
         }
 
+        bool hasClusters = HasTable("Clusters") && HasTable("ClusterVariables");
         // ===== VARIABLES =====
         using (var cmd = cn.CreateCommand())
         {
@@ -978,6 +1064,74 @@ CREATE TABLE IF NOT EXISTS VariableDepends (
             }
           }
         }
+        if (hasClusters && !dryRun)
+        {
+          // Scriviamo direttamente nella StringTable Rhino come fa DataEx per Excel
+          var doc = RhinoDoc.ActiveDoc ?? throw new InvalidOperationException("RhinoDoc.ActiveDoc is null.");
+          var table = doc.Strings ?? throw new InvalidOperationException("RhinoDoc.Strings is null.");
+
+          using (var cmdC = cn.CreateCommand())
+          {
+            cmdC.CommandText = "SELECT Id, Name, Description, Hash FROM Clusters ORDER BY Id";
+            using (var rdC = cmdC.ExecuteReader())
+            {
+              while (rdC.Read())
+              {
+                clusterRows++;
+
+                int cid = rdC.IsDBNull(0) ? 0 : rdC.GetInt32(0);
+                string cnm = rdC.IsDBNull(1) ? "" : rdC.GetString(1);
+                string cds = rdC.IsDBNull(2) ? "" : rdC.GetString(2);
+                string ch = rdC.IsDBNull(3) ? "" : rdC.GetString(3);
+
+                // varIds join
+                var varIdsList = new List<int>();
+                using (var cmdJ = cn.CreateCommand())
+                {
+                  cmdJ.CommandText = "SELECT VarId FROM ClusterVariables WHERE ClusterId=@id ORDER BY VarId";
+                  cmdJ.Parameters.AddWithValue("@id", cid);
+                  using (var rdJ = cmdJ.ExecuteReader())
+                  {
+                    while (rdJ.Read())
+                    {
+                      int vid = rdJ.IsDBNull(0) ? 0 : rdJ.GetInt32(0);
+                      if (vid > 0) varIdsList.Add(vid);
+                    }
+                  }
+                }
+
+                var varIdsArr = varIdsList.Distinct().OrderBy(x => x).ToArray();
+
+                // ricalcolo hash coerente dal dominio (salviamo comunque ch in dto per traccia)
+                var cluster = ProgesiVariableCluster.Rehydrate(cid, cnm ?? "", varIdsArr, cds, string.IsNullOrWhiteSpace(ch) ? null : ch);
+
+                var dto = new ClusterDto
+                {
+                  Id = cid,
+                  Name = cnm ?? "",
+                  Description = cds ?? "",
+                  VariableIds = varIdsArr,
+                  Hashtag = cluster.Hashtag
+                };
+
+                string json = JsonConvert.SerializeObject(dto);
+
+                table.SetString("Progesi.Cluster", "cluster:" + cid.ToString(CultureInfo.InvariantCulture), json);
+
+                // bump __next__
+                int next = ReadCounter(table, "Progesi.Cluster");
+                if (cid + 1 > next)
+                  table.SetString("Progesi.Cluster", "__next__", (cid + 1).ToString(CultureInfo.InvariantCulture));
+
+                clusterOk++;
+              }
+            }
+          }
+
+          LOG("INFO", $"[Clusters] Imported {clusterOk}/{clusterRows} from SQLite.");
+          counts.Append(new GH_String($"Clusters rows={clusterRows} ok={clusterOk} warn={clusterWarn} err={clusterErr}"), new GH_Path(2));
+        }
+
       }
 
       // counts + log
@@ -988,9 +1142,11 @@ CREATE TABLE IF NOT EXISTS VariableDepends (
       try { File.WriteAllLines(logPath, logLines, Encoding.UTF8); } catch { logPath = ""; }
 
       string prefix = dryRun ? "PREVIEW " : "OK ";
-      string info = $"{prefix}ImportSqlite ← {db} | Meta {metaOk}/{metaRows} (warn:{metaWarn}, err:{metaErr}) | " +
-                    $"Vars {varOk}/{varRows} (warn:{varWarn}, err:{varErr}) | Log: {(string.IsNullOrWhiteSpace(logPath) ? "-" : logPath)}";
-
+      string info = $"{prefix}ImportSqlite ← {db} | " +
+              $"Meta {metaOk}/{metaRows} (warn:{metaWarn}, err:{metaErr}) | " +
+              $"Vars {varOk}/{varRows} (warn:{varWarn}, err:{varErr}) | " +
+              $"Clusters {clusterOk}/{clusterRows} (warn:{clusterWarn}, err:{clusterErr}) | " +
+              $"Log: {(string.IsNullOrWhiteSpace(logPath) ? "-" : logPath)}";
       return (db, logPath, warnTree, errTree, counts, errRC, info);
     }
 
@@ -1049,6 +1205,18 @@ CREATE TABLE IF NOT EXISTS VariableDepends (
           }
         }
       }
+    }
+    private static string ResolveSqlitePath(string inputPath)
+    {
+      // Se è una directory, metti dentro un default filename
+      if (Directory.Exists(inputPath))
+        return Path.Combine(inputPath, "progesi.db");
+
+      // Se non ha estensione, aggiungi .db
+      if (string.IsNullOrWhiteSpace(Path.GetExtension(inputPath)))
+        return inputPath + ".db";
+
+      return inputPath;
     }
 
     private static string NormalizeKey(string s)
@@ -1113,7 +1281,16 @@ CREATE TABLE IF NOT EXISTS VariableDepends (
     private static string ReadCell(IXLWorksheet ws, int row, Dictionary<string, int> map, string key)
     {
       if (!map.TryGetValue(key, out int col)) return "";
-      return ws.Cell(row, col).GetString() ?? "";
+      var cell = ws.Cell(row, col);
+
+      var s = cell.GetString();
+      if (!string.IsNullOrWhiteSpace(s)) return s;
+
+      s = cell.GetFormattedString();
+      if (!string.IsNullOrWhiteSpace(s)) return s;
+
+      try { return cell.Value.ToString(); }
+      catch { return ""; }
     }
 
     private static bool IsBlank(string s) => string.IsNullOrWhiteSpace(s);
@@ -1204,12 +1381,71 @@ CREATE TABLE IF NOT EXISTS VariableDepends (
       public string[] Refs;
       public string LM;
     }
+#nullable enable
+    private sealed class ClusterDto
+    {
+      public int Id { get; set; }
+      public string? Name { get; set; }
+      public string? Description { get; set; }
+      public int[]? VariableIds { get; set; }
+      public string? Hashtag { get; set; }
+    }
+
+    private sealed class ClusterRow
+    {
+      public int Id;
+      public string Hash = "";
+      public string Name = "";
+      public string Description = "";
+      public int[] VariableIds = Array.Empty<int>();
+    }
+#nullable disable
+
+    private static ClusterRow[] ReadAllClustersFromTable(StringTable table)
+    {
+      var list = new List<ClusterRow>();
+
+      foreach (var id in EnumerateIds(table, "Progesi.Cluster", "cluster:"))
+      {
+        string json = table.GetValue("Progesi.Cluster", "cluster:" + id.ToString(CultureInfo.InvariantCulture));
+        if (string.IsNullOrWhiteSpace(json)) continue;
+
+        ClusterDto dto;
+        try { dto = JsonConvert.DeserializeObject<ClusterDto>(json); }
+        catch { continue; }
+
+        if (dto == null) continue;
+
+        var varIds = dto.VariableIds ?? Array.Empty<int>();
+
+        string name = dto.Name ?? "";
+        string desc = dto.Description ?? "";
+
+        var cluster = ProgesiVariableCluster.Rehydrate(
+          id,
+          name,
+          varIds,
+          desc,
+          dto.Hashtag);
+
+        list.Add(new ClusterRow
+        {
+          Id = id,
+          Hash = cluster.Hashtag ?? "",
+          Name = name,
+          Description = desc,
+          VariableIds = varIds
+        });
+      }
+
+      list.Sort((a, b) => a.Id.CompareTo(b.Id));
+      return list.ToArray();
+    }
 
     private static VarRow[] ReadAllVarsFromTable(StringTable table)
     {
-      int next = ReadCounter(table, "Progesi.Var");
       var list = new List<VarRow>();
-      for (int id = 1; id < next; id++)
+      foreach (var id in EnumerateIds(table, "Progesi.Var", "var:"))
       {
         string json = table.GetValue("Progesi.Var", "var:" + id.ToString(CultureInfo.InvariantCulture));
         if (string.IsNullOrWhiteSpace(json)) continue;
@@ -1242,9 +1478,8 @@ CREATE TABLE IF NOT EXISTS VariableDepends (
 
     private static MetaRow[] ReadAllMetasFromTable(StringTable table)
     {
-      int next = ReadCounter(table, "Progesi.Meta");
       var list = new List<MetaRow>();
-      for (int id = 1; id < next; id++)
+      foreach (var id in EnumerateIds(table, "Progesi.Meta", "meta:"))
       {
         string json = table.GetValue("Progesi.Meta", "meta:" + id.ToString(CultureInfo.InvariantCulture));
         if (string.IsNullOrWhiteSpace(json)) continue;
@@ -1271,6 +1506,25 @@ CREATE TABLE IF NOT EXISTS VariableDepends (
 
 
       return list.ToArray();
+    }
+
+    private static int[] EnumerateIds(StringTable table, string section, string prefix)
+    {
+      var names = table.GetEntryNames(section) ?? Array.Empty<string>();
+      var ids = new List<int>();
+
+      foreach (var n in names)
+      {
+        if (string.IsNullOrWhiteSpace(n)) continue;
+        if (!n.StartsWith(prefix, StringComparison.OrdinalIgnoreCase)) continue;
+
+        var tail = n.Substring(prefix.Length).Trim();
+        if (int.TryParse(tail, NumberStyles.Integer, CultureInfo.InvariantCulture, out var id) && id > 0)
+          ids.Add(id);
+      }
+
+      ids.Sort();
+      return ids.Distinct().ToArray();
     }
 
     private static object ParseValue(string value, string valueType)
