@@ -101,3 +101,17 @@ The Orchestrator must not simply ask the human to copy/paste long reports. It sh
 
 ## Prompt and run archival policy (summary)
 Classify each controlled run output as one of: ephemeral prompt, controlled run report, reusable prompt/template, evidence record, test run record, human decision, ADR material, GitHub/PR record, manual validation evidence, strategic planning note, or archive candidate. Temporary prompts must not remain active source-of-truth content. Full policy: Notion page "Prompt and Run Archival Policy — Notion Curator Notification Loop".
+
+## ProgesiVariableCluster Phase 1 exception
+
+The general ProgesiVariableCluster recovery freeze remains in force except for the approved Phase 1 file-scoped recovery on branch feat/cluster-recovery-portscope.
+
+Agents may route Phase 1 only if:
+- Cursor Allowed = true
+- the Phase 1 Task Board row is Ready for Cursor
+- the persisted Cursor Task Brief v1.0 is used
+- execution is in 05. Cursor Bridge
+- AxisVar files remain forbidden
+- Phase 2/3 remain blocked
+
+The Orchestrator may prepare/reroute Phase 1 prompts but must not execute implementation.

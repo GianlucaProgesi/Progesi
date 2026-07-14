@@ -85,3 +85,24 @@ If this prompt is running in Claude Code / 00. Controlled Writes, stop immediate
 - 00. Controlled Writes must never execute implementation prompts.
 - 05. Cursor Bridge must be a plain terminal by default.
 - Cursor Agent implementation requires Cursor Allowed = true, an approved task brief, a branch, allowed files, forbidden files, tests, a rollback plan, and human approval.
+
+## ProgesiVariableCluster Phase 1 recovery exception
+
+ProgesiVariableCluster remains a missing capability / suspected regression and must not be treated as generally implemented.
+
+Exception:
+A human-approved, file-scoped Phase 1 recovery is authorised only on branch feat/cluster-recovery-portscope, only under the persisted "Cursor Task Brief v1.0 — ProgesiVariableCluster Recovery Phase 1 (file-scoped port)", and only after Cursor Allowed = true and the approved Task Board row is Ready for Cursor.
+
+This exception does not authorise:
+- AxisVar work
+- wholesale branch merge
+- Phase 2 SQLite recovery
+- Phase 3 EF/DataExchange recovery
+- source cleanup
+- ADR acceptance
+- branch/tag cleanup
+- treating Cluster as fully implemented before build/test/manual validation and human review
+
+AxisVar remains frozen.
+
+Phase 2 and Phase 3 remain blocked until separately approved.
