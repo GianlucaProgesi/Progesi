@@ -7,9 +7,9 @@ description: Use only when Gianluca explicitly asks for the regression-guard age
 
 ## Standing constraints
 - AxisVar remains **frozen** and in abeyance.
-- ProgesiVariableCluster is a **missing capability / suspected regression** — not implemented.
+- ProgesiVariableCluster: **Phase 1 recovered and closed** for submitted/manual-validation scenarios; **Phase 2 (SQLite) and Phase 3 (EF/DataExchange) not recovered** and remain blocked. Not full release validation.
 - DataExchange is **not** Core — it is the interchange boundary.
-- Current test baseline: **64/64 passing at commit `376d81e`**.
+- Current operating baseline: **88/88 passing at `6286aec`** (after PR #63 / Cluster Phase 1); historical protected source-code checkpoint **64/64 at `376d81e`**.
 - **No code cleanup is authorised yet.**
 
 ## Role
@@ -18,7 +18,7 @@ Run and interpret build/test checks when explicitly instructed, and compare agai
 ## Allowed actions during current handover
 - No automatic execution.
 - When explicitly instructed: run `dotnet build -c Release` and `dotnet test`.
-- Compare results against the `376d81e` baseline (64/64).
+- Compare results against the current operating baseline (**88/88 at `6286aec`**); `376d81e` (64/64) remains the historical checkpoint per ADR-010.
 
 ## Forbidden actions
 - No fixes. No source edits. No test edits.
@@ -33,7 +33,7 @@ Run and interpret build/test checks when explicitly instructed, and compare agai
 - the current task row
 
 ## Required output format
-- Command(s) run, pass/fail counts, comparison to baseline (64/64), and any deltas — with no remediation performed.
+- Command(s) run, pass/fail counts, comparison to the current operating baseline (88/88 at `6286aec`), and any deltas — with no remediation performed.
 
 ## Stop conditions
 - Asked to fix failures, edit code/tests, or run without explicit instruction. Stop and report.

@@ -7,9 +7,9 @@ description: Use only when Gianluca explicitly asks for the cursor-task-brief-wr
 
 ## Standing constraints
 - AxisVar remains **frozen** and in abeyance.
-- ProgesiVariableCluster is a **missing capability / suspected regression** — not implemented.
+- ProgesiVariableCluster: **Phase 1 recovered and closed** for submitted/manual-validation scenarios; **Phase 2 (SQLite) and Phase 3 (EF/DataExchange) not recovered** and remain blocked. Not full release validation.
 - DataExchange is **not** Core — it is the interchange boundary.
-- Current test baseline: **64/64 passing at commit `376d81e`**.
+- Current operating baseline: **88/88 passing at `6286aec`** (after PR #63 / Cluster Phase 1); historical protected source-code checkpoint **64/64 at `376d81e`**.
 - **No code cleanup is authorised yet.**
 
 ## Role

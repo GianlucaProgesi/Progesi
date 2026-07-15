@@ -26,7 +26,7 @@ Current standing rules:
 - Core must remain independent of Rhino, Grasshopper, Excel, EF, UI, SQLite-specific packages and ASP.NET.
 - DataExchange is not Core.
 - AxisVar is frozen.
-- ProgesiVariableCluster is missing / suspected regression.
+- ProgesiVariableCluster Phase 1 is recovered and closed for submitted/manual-validation scenarios; Phase 2 (SQLite) and Phase 3 (EF/DataExchange) remain blocked.
 - Cursor is read-only unless explicitly approved.
 - Source cleanup requires ADRs, human approval, branch, tests and rollback plan.
 - Manual Grasshopper validation is required before GH-facing release confidence.
