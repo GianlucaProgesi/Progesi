@@ -5,9 +5,9 @@ Agents are assistants, **not autonomous project owners**. Nothing here enables a
 
 ## Standing constraints (apply to all agents)
 - AxisVar remains **frozen** and in abeyance — no modification, deletion, DTO consolidation, persistence move, or Grasshopper wiring.
-- ProgesiVariableCluster is a **missing capability / suspected regression** — not present in the current repository and not implemented.
+- ProgesiVariableCluster: **Phase 1 recovered and closed** for the submitted/manual-validation scenarios; **Phase 2 (SQLite) and Phase 3 (EF/DataExchange) are not recovered** and remain blocked. Not full release validation. See the Phase 1 exception below and the dated reconciliation section at the end of this file.
 - DataExchange is **not** a Core domain object — it is the interchange boundary.
-- Current test baseline: **64/64 passing at commit `376d81e`**.
+- Current operating baseline: **88/88 passing at `6286aec`** (after PR #63 / Cluster Phase 1); the historical protected source-code checkpoint remains **64/64 at `376d81e`**.
 - **No code cleanup is authorised yet.**
 
 ## Principles
@@ -115,3 +115,21 @@ Agents may route Phase 1 only if:
 - Phase 2/3 remain blocked
 
 The Orchestrator may prepare/reroute Phase 1 prompts but must not execute implementation.
+
+## Current operating baseline and status — reconciliation (2026-07-15)
+
+This section reconciles the standing constraints above with the current post-Cluster-Phase-1 / post-ADR-acceptance state. Where earlier text names `376d81e` / 64/64 as the *current* baseline, treat that wording as **historical**. This section does **not** weaken any standing constraint, the AxisVar freeze, the implementation prompt guard, the Phase 1 exception, or any agent maturity/limit. It grants no new authorisation and enables no autonomy.
+
+1. **Baselines.** Current operating baseline: **88/88 tests passing at `6286aec`** (after PR #63 / Cluster Phase 1). Historical protected source-code checkpoint: **64/64 at `376d81e`** on `feat/axis-variable-core`.
+
+2. **ProgesiVariableCluster.** Phase 1 is **recovered and closed** for the submitted/manual-validation scenarios (GH-CLUSTER-001..004 recorded Passed). **Phase 2 (SQLite) and Phase 3 (EF / DataExchange) are not recovered and remain blocked** until separately approved. Not a full release-validation sign-off. The Phase 1 exception above remains in force; the Orchestrator still must not execute implementation.
+
+3. **ADR acceptance posture.** The three consolidation ADRs are **Accepted as interim / direction-setting** only (no implementation authority): DataExchange (interim A+E interchange boundary; target Option D); EF/SQLite (EF long-term target; SQLite interim canonical; EF retirement deferred); ProgesiDomainServices / ADR-009 (Option C direction accepted, consolidation planned not implemented). Agents may reference these directions but must still route any implementation through an approved brief, branch, tests, and human approval in 05. Cursor Bridge.
+
+4. **AxisVar.** Remains **frozen and in abeyance**. No agent may touch AxisVar.
+
+5. **Agents and Notion Curator.** All agents remain **controlled and human-gated** at their documented maturity levels; no autonomous Task Board execution; `implementation-agent-disabled` stays disabled; the Notion Curator operates only within its approved controlled-write scope.
+
+6. **`main` and any beta/release line.** Future-only — no merge to `main` and no release tagging is authorised here.
+
+7. **No new authorisation.** This section records state only; it authorises no implementation, cleanup, ADR-driven code change, branch/tag cleanup, or scope broadening.

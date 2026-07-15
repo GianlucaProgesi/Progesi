@@ -4,9 +4,9 @@ Detailed governance for Claude Code on the Progesi Toolkit, derived from the Not
 
 ## Standing constraints (apply to all work)
 - AxisVar remains **frozen** and in abeyance — no modification, deletion, DTO consolidation, persistence move, or Grasshopper wiring.
-- ProgesiVariableCluster is a **missing capability / suspected regression** — not present in the current repository and not implemented.
+- ProgesiVariableCluster: **Phase 1 recovered and closed** for the submitted/manual-validation scenarios; **Phase 2 (SQLite) and Phase 3 (EF/DataExchange) are not recovered** and remain blocked. Not full release validation. See the Phase 1 recovery exception in `CLAUDE.md`.
 - DataExchange is **not** a Core domain object — it is the interchange boundary.
-- Current test baseline: **64/64 passing at commit `376d81e`**.
+- Current operating baseline: **88/88 passing at `6286aec`** (after PR #63 / Cluster Phase 1); the historical protected source-code checkpoint remains **64/64 at `376d81e`**.
 - **No code cleanup is authorised yet.**
 
 ## Tool roles

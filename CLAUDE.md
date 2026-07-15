@@ -5,9 +5,9 @@ If anything here conflicts with Notion, **stop and report** before acting.
 
 ## Standing constraints (apply to all work)
 - AxisVar remains **frozen** and in abeyance — no modification, deletion, DTO consolidation, persistence move, or Grasshopper wiring.
-- ProgesiVariableCluster is a **missing capability / suspected regression** — it is not present in the current repository and must not be treated as implemented.
+- ProgesiVariableCluster: **Phase 1 recovered and closed** for the submitted/manual-validation scenarios (Core model/service, InMemory repository, narrow Rhino support repository, ClusterDef/ClusterOut components, `ProgesiClusters` Excel export, and Cluster tests). **Phase 2 (SQLite) and Phase 3 (EF/DataExchange) are not recovered** and remain blocked. This is not full release validation. See the Phase 1 recovery exception below and the dated reconciliation section at the end of this file.
 - DataExchange is **not** a Core domain object — it is the interchange boundary.
-- Current test baseline: **64/64 passing at commit `376d81e`** (protected checkpoint on `feat/axis-variable-core`).
+- Current operating baseline: **88/88 passing at `6286aec`** (after PR #63 / Cluster Phase 1). The historical protected source-code checkpoint remains **64/64 at `376d81e`** on `feat/axis-variable-core`.
 - **No code cleanup is authorised yet.**
 
 ## 1. Current mode
@@ -68,7 +68,7 @@ Read-only inspection and documentation are allowed. The freeze lifts only after 
 
 ## 7. Build/test commands
 - Run build/test **only when explicitly instructed**.
-- Canonical baseline: `dotnet build -c Release` then `dotnet test` → **64 tests passing** at commit `376d81e`.
+- Canonical commands: `dotnet build -c Release` then `dotnet test`. Current operating baseline: **88/88 passing at `6286aec`** (after PR #63 / Cluster Phase 1). Historical protected source-code checkpoint: **64/64 at `376d81e`**.
 - Never run Rhino or Grasshopper from here.
 
 ## 8. Reporting requirements
@@ -106,3 +106,25 @@ This exception does not authorise:
 AxisVar remains frozen.
 
 Phase 2 and Phase 3 remain blocked until separately approved.
+
+## Current operating baseline and status — reconciliation (2026-07-15)
+
+This section reconciles the standing constraints and mode notes above with the current post-Cluster-Phase-1 / post-ADR-acceptance state. Where earlier text names `376d81e` / 64/64 as the *current* baseline, or describes the mode as "no-code handover", treat that wording as **historical**; the current operating state is recorded here. This section does **not** weaken any standing constraint, the AxisVar freeze, the implementation prompt guard (§9), or the ProgesiVariableCluster Phase 1 recovery exception above. It grants no new authorisation.
+
+1. **Baselines.** Current operating baseline: **88/88 tests passing at `6286aec`** (state after the PR #63 / Cluster Phase 1 merge). Historical protected source-code checkpoint: **64/64 at `376d81e`** on `feat/axis-variable-core` — retained as the pre-Cluster reference, not the current count. §1 "Current mode" predates ADR acceptance and Cluster Phase 1 and is superseded by this section for current-state purposes.
+
+2. **ProgesiVariableCluster.** Phase 1 is **recovered and closed** for the submitted and manually validated scenarios (Core model/service, InMemory repository, narrow Rhino support repository, ClusterDef/ClusterOut Grasshopper components, `ProgesiClusters` Excel export, Cluster tests; GH-CLUSTER-001..004 recorded Passed). **Phase 2 (SQLite persistence) and Phase 3 (EF / DataExchange) are not recovered and remain blocked** until separately approved. This is not a full release-validation sign-off. The Phase 1 recovery exception above remains in force exactly as written.
+
+3. **ADR acceptance posture.** The three consolidation ADRs are now **Accepted as interim / direction-setting** — acceptance sets direction only and authorises no implementation:
+   - **DataExchange ADR** — interim: keep DataExchange as the interchange boundary (Options A + E); long-term target is Option D.
+   - **EF / SQLite ADR** — EF is the **long-term target**; the SQLite repository remains the **interim canonical** persistence; EF retirement is deferred and there is no near-term SQLite retirement.
+   - **ProgesiDomainServices ADR (ADR-009)** — Option C direction accepted; consolidation is planned, not yet implemented.
+   Any implementation flowing from these ADRs still requires an approved Task Board row, a branch, a task brief, tests, and human approval, and must run in 05. Cursor Bridge — never in 00. Controlled Writes.
+
+4. **AxisVar.** Remains **frozen and in abeyance** exactly as in §5. Nothing here lifts that freeze.
+
+5. **Agents and Notion Curator.** All agents remain **controlled and human-gated** at their documented maturity levels (see `AGENTS.md`); no autonomous Task Board execution; implementation agents remain disabled; the Notion Curator operates only within its approved controlled-write scope.
+
+6. **`main` and any beta/release line.** Untouched by this work and **future-only** — no merge to `main` and no release tagging is authorised by this reconciliation.
+
+7. **No new authorisation.** This section records state; it authorises no code cleanup, no ADR-driven implementation, no branch/tag cleanup, and no scope broadening.
