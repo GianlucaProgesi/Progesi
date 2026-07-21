@@ -34,6 +34,7 @@
 
   <!-- Librerie Progesi usate dal plugin -->
   <ItemGroup>
+    <ProjectReference Include="..\Progesi.GhExcelReadContract\Progesi.GhExcelReadContract.csproj" />
     <ProjectReference Include="..\ProgesiCore\ProgesiCore.csproj" />
     <ProjectReference Include="..\ProgesiDataExchange\ProgesiDataExchange.csproj" />
     <ProjectReference Include="..\ProgesiRepositories.Rhino\ProgesiRepositories.Rhino.csproj" />
