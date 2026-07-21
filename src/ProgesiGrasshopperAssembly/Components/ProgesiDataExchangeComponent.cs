@@ -12,6 +12,7 @@ using Grasshopper.Kernel.Types;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using ProgesiCore;
+using Progesi.GhExcelReadContract;
 using ProgesiGrasshopperAssembly.Infrastructure; // ServiceHub, ProgesiIcons, MetadataRepositoryCompatExtensions
 using Rhino;
 using Rhino.DocObjects.Tables;
@@ -388,7 +389,7 @@ namespace ProgesiGrasshopperAssembly.Components
         throw new InvalidOperationException("RHINO repository not available.");
 
       // alias
-      var (varAliases, metaAliases) = BuildAliasMaps(mapJson);
+      var (varAliases, metaAliases) = GhExcelAliasMaps.Build(mapJson);
 
       // limiti/regex
       const int NAME_MAX = 128;
@@ -404,7 +405,7 @@ namespace ProgesiGrasshopperAssembly.Components
       using (var wb = new XLWorkbook(p))
       {
         // ========== METADATA ==========
-        var wsM = TryGetWorksheet(wb, "ProgesiMetadata", "Metadata");
+        var wsM = GhExcelWorksheetLocator.TryGetWorksheet(wb, GhExcelSheetNames.Metadata, GhExcelSheetNames.MetadataAlias);
         bool metaHeaderError = false;
         Dictionary<string, int> mapM = null;
         int r0M = 1, rNM = 0;
@@ -417,9 +418,9 @@ namespace ProgesiGrasshopperAssembly.Components
         }
         else
         {
-          var headerM = BuildHeaderMap(wsM, out r0M, out rNM);
-          mapM = ResolveColumns(headerM, metaAliases);
-          var missingMeta = MissingRequired(mapM, new[] { "BY", "DESCRIPTION" });
+          var headerM = GhExcelHeaderMap.Build(wsM, out r0M, out rNM);
+          mapM = GhExcelColumnMap.ResolveColumns(headerM, metaAliases);
+          var missingMeta = GhExcelColumnMap.MissingRequired(mapM, new[] { "BY", "DESCRIPTION" });
           if (missingMeta.Count > 0)
           {
             string m = "Missing headers (Meta): " + string.Join(",", missingMeta);
@@ -432,12 +433,12 @@ namespace ProgesiGrasshopperAssembly.Components
         {
           for (int r = r0M + 1; r <= rNM; r++)
           {
-            string by = ReadCell(wsM, r, mapM, "BY");
-            string desc = ReadCell(wsM, r, mapM, "DESCRIPTION");
-            string refs = ReadCell(wsM, r, mapM, "REFS");
-            int id = ToInt(ReadCell(wsM, r, mapM, "ID"));
+            string by = GhExcelCellReader.ReadCell(wsM, r, mapM, "BY");
+            string desc = GhExcelCellReader.ReadCell(wsM, r, mapM, "DESCRIPTION");
+            string refs = GhExcelCellReader.ReadCell(wsM, r, mapM, "REFS");
+            int id = GhExcelValueParsing.ToInt(GhExcelCellReader.ReadCell(wsM, r, mapM, "ID"));
 
-            if (IsBlank(by) && IsBlank(desc) && IsBlank(refs))
+            if (GhExcelValueParsing.IsBlank(by) && GhExcelValueParsing.IsBlank(desc) && GhExcelValueParsing.IsBlank(refs))
             { WARN(0, $"[Meta R{r}] empty row → skip"); metaWarn++; metaRows++; continue; }
 
             // controlli extra
@@ -474,7 +475,7 @@ namespace ProgesiGrasshopperAssembly.Components
         }
 
         // ========== VARIABLES ==========
-        var wsV = TryGetWorksheet(wb, "ProgesiVariables", "Variables");
+        var wsV = GhExcelWorksheetLocator.TryGetWorksheet(wb, GhExcelSheetNames.Variables, GhExcelSheetNames.VariablesAlias);
         bool varHeaderError = false;
         Dictionary<string, int> mapV = null;
         int r0V = 1, rNV = 0;
@@ -487,9 +488,9 @@ namespace ProgesiGrasshopperAssembly.Components
         }
         else
         {
-          var headerV = BuildHeaderMap(wsV, out r0V, out rNV);
-          mapV = ResolveColumns(headerV, varAliases);
-          var missingVar = MissingRequired(mapV, new[] { "NAME", "VALUE" });
+          var headerV = GhExcelHeaderMap.Build(wsV, out r0V, out rNV);
+          mapV = GhExcelColumnMap.ResolveColumns(headerV, varAliases);
+          var missingVar = GhExcelColumnMap.MissingRequired(mapV, new[] { "NAME", "VALUE" });
           if (missingVar.Count > 0)
           {
             string m = "Missing headers (Vars): " + string.Join(",", missingVar);
@@ -502,14 +503,14 @@ namespace ProgesiGrasshopperAssembly.Components
         {
           for (int r = r0V + 1; r <= rNV; r++)
           {
-            string name = ReadCell(wsV, r, mapV, "NAME");
-            string value = ReadCell(wsV, r, mapV, "VALUE");
-            string deps = ReadCell(wsV, r, mapV, "DEPENDS");
-            string asS = ReadCell(wsV, r, mapV, "ASSUMPTION");
-            int id = ToInt(ReadCell(wsV, r, mapV, "ID"));
-            int mid = ToInt(ReadCell(wsV, r, mapV, "METAID"));
+            string name = GhExcelCellReader.ReadCell(wsV, r, mapV, "NAME");
+            string value = GhExcelCellReader.ReadCell(wsV, r, mapV, "VALUE");
+            string deps = GhExcelCellReader.ReadCell(wsV, r, mapV, "DEPENDS");
+            string asS = GhExcelCellReader.ReadCell(wsV, r, mapV, "ASSUMPTION");
+            int id = GhExcelValueParsing.ToInt(GhExcelCellReader.ReadCell(wsV, r, mapV, "ID"));
+            int mid = GhExcelValueParsing.ToInt(GhExcelCellReader.ReadCell(wsV, r, mapV, "METAID"));
 
-            if (IsBlank(name) && IsBlank(value) && IsBlank(deps) && IsBlank(asS))
+            if (GhExcelValueParsing.IsBlank(name) && GhExcelValueParsing.IsBlank(value) && GhExcelValueParsing.IsBlank(deps) && GhExcelValueParsing.IsBlank(asS))
             { WARN(1, $"[Var R{r}] empty row → skip"); varWarn++; varRows++; continue; }
 
             // extra checks
@@ -526,8 +527,8 @@ namespace ProgesiGrasshopperAssembly.Components
               { var msg = $"[Var R{r}] METAID not found: {mid}"; (strict ? ERR : WARN)(1, msg); AddErrRC(1, r, mapV.TryGetValue("METAID", out var c) ? c : 0); if (strict) { varErr++; continue; } else { varWarn++; mid = 0; } }
             }
 
-            int[] depArr = ParseDepends(deps);
-            bool ass = ToBool(asS);
+            int[] depArr = GhExcelValueParsing.ParseDepends(deps);
+            bool ass = GhExcelValueParsing.ToBool(asS);
 
             if (!dryRun)
             {
@@ -1150,62 +1151,6 @@ CREATE TABLE IF NOT EXISTS ClusterVariables (
       return (db, logPath, warnTree, errTree, counts, errRC, info);
     }
 
-    private static (Dictionary<string, HashSet<string>> varAliases,
-                    Dictionary<string, HashSet<string>> metaAliases)
-      BuildAliasMaps(string mapJson)
-    {
-      var varA = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase)
-      {
-        ["ID"] = new HashSet<string>(new[] { "ID", "IDVAR", "VARID" }, StringComparer.OrdinalIgnoreCase),
-        ["HASH"] = new HashSet<string>(new[] { "HASH", "DIGEST", "SHA" }, StringComparer.OrdinalIgnoreCase),
-        ["NAME"] = new HashSet<string>(new[] { "NAME", "VAR", "VARIABLE", "NOME", "FIELD" }, StringComparer.OrdinalIgnoreCase),
-        ["VALUE"] = new HashSet<string>(new[] { "VALUE", "VAL", "VALORE" }, StringComparer.OrdinalIgnoreCase),
-        ["VALC"] = new HashSet<string>(new[] { "VALC", "VALUECANONICAL", "VAL_CANONICAL", "CANONICAL" }, StringComparer.OrdinalIgnoreCase),
-        ["METAID"] = new HashSet<string>(new[] { "METAID", "MID", "METADATAID", "META_ID" }, StringComparer.OrdinalIgnoreCase),
-        ["DEPENDS"] = new HashSet<string>(new[] { "DEPENDS", "DEPENDENCIES", "DEPS", "DEP", "PARENT_IDS" }, StringComparer.OrdinalIgnoreCase),
-        ["ASSUMPTION"] = new HashSet<string>(new[] { "ASSUMPTION", "ASS", "ISASSUMPTION", "ASSUME" }, StringComparer.OrdinalIgnoreCase)
-      };
-      var metaA = new Dictionary<string, HashSet<string>>(StringComparer.OrdinalIgnoreCase)
-      {
-        ["ID"] = new HashSet<string>(new[] { "ID", "METAID" }, StringComparer.OrdinalIgnoreCase),
-        ["HASH"] = new HashSet<string>(new[] { "HASH", "DIGEST" }, StringComparer.OrdinalIgnoreCase),
-        ["BY"] = new HashSet<string>(new[] { "BY", "AUTHOR", "CREATEDBY", "CREATED_BY", "OWNER" }, StringComparer.OrdinalIgnoreCase),
-        ["DESCRIPTION"] = new HashSet<string>(new[] { "DESCRIPTION", "DESC", "DESCR", "INFO", "NOTE", "NOTES" }, StringComparer.OrdinalIgnoreCase),
-        ["REFS"] = new HashSet<string>(new[] { "REFS", "REF", "REFERENCE", "REFERENCES", "URLS", "LINKS" }, StringComparer.OrdinalIgnoreCase),
-        ["SNIPS"] = new HashSet<string>(new[] { "SNIPS", "SNIP", "ATTACHMENTS", "IMAGES" }, StringComparer.OrdinalIgnoreCase),
-        ["LM"] = new HashSet<string>(new[] { "LM", "LASTMODIFIED", "LAST_MODIFIED", "UPDATED", "LASTUPDATE", "LAST_UPDATE" }, StringComparer.OrdinalIgnoreCase)
-      };
-      if (!string.IsNullOrWhiteSpace(mapJson))
-      {
-        try
-        {
-          var j = JObject.Parse(mapJson);
-          if (j["Variables"] is JObject vj) MergeAliases(vj, varA);
-          if (j["Metadata"] is JObject mj) MergeAliases(mj, metaA);
-        }
-        catch { /* ignore malformed */ }
-      }
-      return (varA, metaA);
-
-      static void MergeAliases(JObject obj, Dictionary<string, HashSet<string>> target)
-      {
-        foreach (var prop in obj.Properties())
-        {
-          var key = NormalizeKey(prop.Name);
-          if (string.IsNullOrEmpty(key)) continue;
-          if (!target.ContainsKey(key)) target[key] = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-          if (prop.Value is JArray arr)
-          {
-            foreach (var t in arr)
-            {
-              var s = t?.ToString();
-              if (!string.IsNullOrWhiteSpace(s))
-                target[key].Add(NormalizeKey(s));
-            }
-          }
-        }
-      }
-    }
     private static string ResolveSqlitePath(string inputPath)
     {
       // Se è una directory, metti dentro un default filename
@@ -1217,108 +1162,6 @@ CREATE TABLE IF NOT EXISTS ClusterVariables (
         return inputPath + ".db";
 
       return inputPath;
-    }
-
-    private static string NormalizeKey(string s)
-    {
-      if (string.IsNullOrEmpty(s)) return "";
-      var up = s.Trim().ToUpperInvariant();
-      var buf = new StringBuilder(up.Length);
-      for (int i = 0; i < up.Length; i++) if (char.IsLetterOrDigit(up[i])) buf.Append(up[i]);
-      return buf.ToString();
-    }
-
-    private static IXLWorksheet TryGetWorksheet(IXLWorkbook wb, params string[] names)
-    {
-      foreach (var n in names)
-        foreach (var ws in wb.Worksheets)
-          if (string.Equals(ws.Name, n, StringComparison.OrdinalIgnoreCase))
-            return ws;
-      return null;
-    }
-
-    private static Dictionary<string, int> BuildHeaderMap(IXLWorksheet ws, out int firstRow, out int lastRow)
-    {
-      var used = ws.RangeUsed();
-      if (used == null)
-      {
-        firstRow = 1; lastRow = 0;
-        return new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-      }
-      firstRow = used.RangeAddress.FirstAddress.RowNumber;
-      lastRow = used.RangeAddress.LastAddress.RowNumber;
-
-      var map = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-      var hdr = ws.Row(firstRow);
-      foreach (var c in hdr.CellsUsed())
-      {
-        var key = NormalizeKey(c.GetString());
-        if (!string.IsNullOrEmpty(key) && !map.ContainsKey(key))
-          map[key] = c.Address.ColumnNumber;
-      }
-      return map;
-    }
-
-    private static Dictionary<string, int> ResolveColumns(Dictionary<string, int> header, Dictionary<string, HashSet<string>> aliases)
-    {
-      var result = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-      foreach (var kv in aliases)
-      {
-        string canonical = kv.Key;
-        if (header.TryGetValue(canonical, out int col)) { result[canonical] = col; continue; }
-        foreach (var alt in kv.Value) if (header.TryGetValue(alt, out col)) { result[canonical] = col; break; }
-      }
-      return result;
-    }
-
-    private static List<string> MissingRequired(Dictionary<string, int> map, IEnumerable<string> required)
-    {
-      var miss = new List<string>();
-      foreach (var r in required) if (!map.ContainsKey(r)) miss.Add(r);
-      return miss;
-    }
-
-    private static string ReadCell(IXLWorksheet ws, int row, Dictionary<string, int> map, string key)
-    {
-      if (!map.TryGetValue(key, out int col)) return "";
-      var cell = ws.Cell(row, col);
-
-      var s = cell.GetString();
-      if (!string.IsNullOrWhiteSpace(s)) return s;
-
-      s = cell.GetFormattedString();
-      if (!string.IsNullOrWhiteSpace(s)) return s;
-
-      try { return cell.Value.ToString(); }
-      catch { return ""; }
-    }
-
-    private static bool IsBlank(string s) => string.IsNullOrWhiteSpace(s);
-
-    private static int ToInt(string s)
-    {
-      int n; return int.TryParse((s ?? "").Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out n) ? n : 0;
-    }
-
-    private static bool ToBool(string s)
-    {
-      var t = (s ?? "").Trim();
-      if (t == "1") return true;
-      if (t == "0") return false;
-      bool b; return bool.TryParse(t, out b) && b;
-    }
-
-    private static int[] ParseDepends(string s)
-    {
-      if (string.IsNullOrWhiteSpace(s)) return Array.Empty<int>();
-      var tokens = s.Split(new[] { ',', ';', '|', ' ' }, StringSplitOptions.RemoveEmptyEntries);
-      var list = new List<int>();
-      foreach (var t in tokens)
-      {
-        int n; if (int.TryParse(t.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out n) && n > 0) list.Add(n);
-      }
-      list.Sort();
-      return list.ToArray();
     }
 
     private static void ReadPersistedId(object persisted, ref int target)
