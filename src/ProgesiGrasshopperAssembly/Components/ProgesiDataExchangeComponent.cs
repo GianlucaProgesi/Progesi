@@ -262,6 +262,7 @@ namespace ProgesiGrasshopperAssembly.Components
       var vars = ReadAllVarsFromTable(table);
       var metas = ReadAllMetasFromTable(table);
       var clusters = ReadAllClustersFromTable(table);
+      int unsupportedVarExports = vars.Count(v => v.IsExcelUnsupported);
       using (var wb = new XLWorkbook())
       {
         // Variables
@@ -335,6 +336,8 @@ namespace ProgesiGrasshopperAssembly.Components
       }
 
       string info = $"OK ExportExcel → {p} (Vars:{vars.Length}, Meta:{metas.Length}, Clusters:{clusters.Length})";
+      if (unsupportedVarExports > 0)
+        info += $" | UnsupportedVarValues:{unsupportedVarExports}";
       return (p, info);
     }
     private static string NormalizeExportPath(string inPath)
@@ -529,6 +532,15 @@ namespace ProgesiGrasshopperAssembly.Components
 
             int[] depArr = GhExcelValueParsing.ParseDepends(deps);
             bool ass = GhExcelValueParsing.ToBool(asS);
+
+            if (!GhExcelVariableValueSupport.IsImportSupported(value, out var unsupportedKind, out var unsupportedDetail))
+            {
+              var msg = GhExcelVariableValueSupport.BuildImportSkipMessage(r, unsupportedKind, unsupportedDetail);
+              if (strict) { ERR(1, msg); AddErrRC(1, r, mapV.TryGetValue("VALUE", out var c) ? c : 0); varErr++; }
+              else { WARN(1, msg); AddErrRC(1, r, mapV.TryGetValue("VALUE", out var c) ? c : 0); varWarn++; }
+              varRows++;
+              continue;
+            }
 
             if (!dryRun)
             {
@@ -1213,6 +1225,7 @@ CREATE TABLE IF NOT EXISTS ClusterVariables (
       public int MetaId;
       public int[] Depends;
       public bool Assumption;
+      public bool IsExcelUnsupported;
     }
 
     private sealed class MetaRow
@@ -1300,6 +1313,9 @@ CREATE TABLE IF NOT EXISTS ClusterVariables (
         string valc = ProgesiHash.CanonicalValue(typed);
         int[] deps = dto.Depends ?? Array.Empty<int>();
         bool ass = dto.IsAssumption ?? false;
+        string valueType = dto.ValueType ?? "string";
+        string excelValue = GhExcelVariableValueSupport.FormatExportValue(valueType, dto.Value ?? "", valc);
+        bool isExcelUnsupported = GhExcelVariableValueSupport.RequiresUnsupportedExportHandling(valueType, dto.Value ?? "");
 
         var pv = new ProgesiVariable(id, dto.Name ?? "", typed, deps, dto.MetadataId, ass);
         string hash = ProgesiHash.Compute(pv);
@@ -1309,11 +1325,12 @@ CREATE TABLE IF NOT EXISTS ClusterVariables (
           Id = id,
           Hash = hash,
           Name = dto.Name ?? "",
-          Value = dto.Value ?? "",
+          Value = excelValue,
           ValC = valc,
           MetaId = dto.MetadataId ?? 0,
           Depends = deps,
-          Assumption = ass
+          Assumption = ass,
+          IsExcelUnsupported = isExcelUnsupported
         });
       }
       return list.ToArray();
