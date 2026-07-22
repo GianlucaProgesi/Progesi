@@ -55,8 +55,10 @@ namespace ProgesiCore.Persistence
 
           dto.AxisId = r.GetInt32(0);
           dto.AxisName = r.GetString(1);
-          dto.AxisLength = r.IsDBNull(2) ? (double?)null : r.GetDouble(2);
-          dto.RuleId = r.IsDBNull(3) ? (int?)null : r.GetInt32(3);
+        dto.AxisLength = r.IsDBNull(2) ? (double?)null : r.GetDouble(2);
+        dto.Name = r.GetString(3);
+        dto.ValueTypeKey = r.GetString(4);
+        dto.RuleId = r.IsDBNull(5) ? (int?)null : r.GetInt32(5);
         }
       }
 
@@ -72,9 +74,8 @@ namespace ProgesiCore.Persistence
           {
             dto.Entries.Add(new ProgesiAxisVariableDto.Entry
             {
-              VariableName = r.GetString(1),
-              Position = r.GetDouble(2),
-              VariableId = r.GetInt32(3)
+              Position = r.GetDouble(1),
+              VariableId = r.GetInt32(2)
             });
           }
         }
@@ -116,6 +117,8 @@ namespace ProgesiCore.Persistence
           AddParam(ins, "@AxisId", dto.AxisId);
           AddParam(ins, "@AxisName", dto.AxisName);
           AddParam(ins, "@AxisLength", (object?)dto.AxisLength ?? DBNull.Value);
+          AddParam(ins, "@Name", dto.Name);
+          AddParam(ins, "@ValueTypeKey", dto.ValueTypeKey);
           AddParam(ins, "@RuleId", (object?)dto.RuleId ?? DBNull.Value);
           ins.ExecuteNonQuery();
         }
@@ -128,7 +131,6 @@ namespace ProgesiCore.Persistence
             insE.Transaction = tx;
             insE.CommandText = ProgesiAxisVariableSql.InsertAxisEntry;
             AddParam(insE, "@AxisId", dto.AxisId);
-            AddParam(insE, "@VariableName", e.VariableName);
             AddParam(insE, "@Position", e.Position);
             AddParam(insE, "@VariableId", e.VariableId);
             insE.ExecuteNonQuery();

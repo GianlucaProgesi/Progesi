@@ -27,6 +27,7 @@ namespace ProgesiCore
             double d => d.ToString(System.Globalization.CultureInfo.InvariantCulture),
             float f => f.ToString(System.Globalization.CultureInfo.InvariantCulture),
             decimal m => m.ToString(System.Globalization.CultureInfo.InvariantCulture),
+            DateTime dt => dt.ToUniversalTime().ToString("o"),
             _ => JsonConvert.SerializeObject(obj, JsonSettings) ?? string.Empty,
           };
     }
@@ -72,8 +73,29 @@ namespace ProgesiCore
         v.Name,
         Value = CanonicalValue(v.Value),
         Depends = depends,
-        v.MetadataId
+        v.MetadataId,
+        Assumption = v.IsAssumption
       };
+      string json = JsonConvert.SerializeObject(payload, JsonSettings) ?? string.Empty;
+      return Sha256Hex(json);
+    }
+
+    // ===== Compute per VariableCluster =====
+    public static string Compute(ProgesiVariableCluster c)
+    {
+      if (c == null) throw new ArgumentNullException(nameof(c));
+
+      int[] ids = (c.ProgesiVariableIds ?? Array.Empty<int>())
+        .OrderBy(x => x)
+        .ToArray();
+
+      var payload = new
+      {
+        c.Name,
+        VariableIds = ids,
+        c.Description
+      };
+
       string json = JsonConvert.SerializeObject(payload, JsonSettings) ?? string.Empty;
       return Sha256Hex(json);
     }

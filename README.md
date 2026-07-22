@@ -1,129 +1,87 @@
-<!-- PROGESI:HERO:START -->
-<p align="center">
-  <img src="docs/assets/progesi-logo.jpg" alt="Progesi Logo" width="400"/>
-</p>
+# Progesi – DataEx (Grasshopper)
 
-<h1 align="center">Progesi Engineering Toolchain</h1>
+DataEx è il componente GH per **Import/Export** dei dati Progesi:
+- **Excel** (`ExportExcel` / `ImportExcel`) – ClosedXML
+- **SQLite** (`ExportSqlite` / `ImportSqlite`) – database di staging
+- **EF** (`ExportEf` / `ImportEf`) – *alias* di SQLite nel plugin GH (S2-C/2: pipeline “pure SQLite”)
 
-<p align="center">
-  <a href="https://github.com/GianlucaProgesi/Progesi/actions/workflows/release.yml"><img src="https://github.com/GianlucaProgesi/Progesi/actions/workflows/release.yml/badge.svg" alt="Build"/></a>
-  <a href="https://www.nuget.org/packages/ProgesiCore"><img src="https://img.shields.io/nuget/v/ProgesiCore.svg" alt="NuGet"/></a>
-  <a href="https://www.nuget.org/packages/ProgesiCore"><img src="https://img.shields.io/nuget/dt/ProgesiCore.svg" alt="Downloads"/></a>
-  <a href="tools/Release-HealthCheck.ps1"><img src="https://img.shields.io/badge/Release%20Health-Run%20check-2ea44f?logo=powershell&logoColor=white" alt="Release Health"/></a>
-</p>
-
----
-<!-- PROGESI:HERO:END -->
-
-<!-- PROGESI:GPR:START -->
-## Using GitHub Packages (GPR)
-
-### Option A — `nuget.config`
-
-Create a `nuget.config` next to your solution and set **GPR_PAT** env var with `read:packages` scope.
-
-```xml
-<configuration>
-  <packageSources>
-    <add key="nuget.org" value="https://api.nuget.org/v3/index.json" />
-    <add key="github" value="https://nuget.pkg.github.com/GianlucaProgesi/index.json" />
-  </packageSources>
-  <packageSourceCredentials>
-    <github>
-      <add key="Username" value="GianlucaProgesi" />
-      <add key="ClearTextPassword" value="%GPR_PAT%" />
-    </github>
-  </packageSourceCredentials>
-</configuration>
-```
-
-Windows (PowerShell):
-```powershell
-$Env:GPR_PAT = "<your PAT with read:packages>"
-dotnet nuget remove source github 2>$null; dotnet nuget add source "https://nuget.pkg.github.com/GianlucaProgesi/index.json" --name "github" --username "GianlucaProgesi" --password "$Env:GPR_PAT" --store-password-in-clear-text
-```
-
-macOS/Linux (bash):
-```bash
-export GPR_PAT="<your PAT with read:packages>"
-dotnet nuget remove source github >/dev/null 2>&1; dotnet nuget add source "https://nuget.pkg.github.com/GianlucaProgesi/index.json" --name "github" --username "GianlucaProgesi" --password "$GPR_PAT" --store-password-in-clear-text
-```
-<!-- PROGESI:GPR:END -->
-
-<!-- PROGESI:PACKAGES:START -->
-## Packages
-
-| Package | NuGet | Install |
-|---|---|---|
-| ProgesiCore | [nuget.org](https://www.nuget.org/packages/ProgesiCore) | `dotnet add package ProgesiCore` |
-| ProgesiRepositories.InMemory | [nuget.org](https://www.nuget.org/packages/ProgesiRepositories.InMemory) | `dotnet add package ProgesiRepositories.InMemory` |
-| ProgesiRepositories.Rhino | [nuget.org](https://www.nuget.org/packages/ProgesiRepositories.Rhino) | `dotnet add package ProgesiRepositories.Rhino` |
-| ProgesiRepositories.Sqlite | [nuget.org](https://www.nuget.org/packages/ProgesiRepositories.Sqlite) | `dotnet add package ProgesiRepositories.Sqlite` |
-<!-- PROGESI:PACKAGES:END -->
-
-<!-- PROGESI:BADGES:START -->
-[![Release Health](https://img.shields.io/badge/Release%20Health-Run%20check-2ea44f?logo=powershell&logoColor=white)](tools/Release-HealthCheck.ps1)
-<!-- PROGESI:BADGES:END -->
-
-<!-- PROGESI:OVERVIEW:START -->
-
-## ℹ️ Overview
-
-**Progesi** – a modular toolchain for bridge and structural engineering:
-- 🧩 **Grasshopper/Rhino components** for variables, metadata, and repositories
-- 📦 Modular **NuGet packages** with SourceLink and built-in docs
-- 🚀 Automated **CI/CD pipeline** (NuGet.org + GitHub Packages)
-- 📝 Auto-generated **CHANGELOG** and **README** via PowerShell scripts
-- ✅ **Health check** and maintenance checklist for reliable releases
+> **Nota EF (S2-C/2):** Il plugin GH **non carica** più EF/SQLite-EF6 in-proc. Gli act `ExportEf/ImportEf`
+> mappano direttamente su **SQLite** (stesso schema). L’uso di EF è riservato agli strumenti esterni
+> (`Progesi.Data.EF`, `Progesi.EF.Tool`) o ad altre app.
 
 ---
 
-**Progesi** è una toolchain modulare per l’ingegneria dei ponti e delle strutture complesse:
-- 🧩 Componenti **Grasshopper/Rhino** per variabili, metadata e repository
-- 📦 Pacchetti **NuGet** modulari con SourceLink e documentazione integrata
-- 🚀 Pipeline **CI/CD** automatizzata (NuGet.org + GitHub Packages)
-- 📝 **CHANGELOG** e **README** generati automaticamente via script PowerShell
-- ✅ **Health check** e checklist di manutenzione per rilasci affidabili
+## Input/Output del componente
 
-<!-- PROGESI:OVERVIEW:END -->
+### Inputs
+| Nome | Sigla | Tipo | Default | Descrizione |
+| --- | --- | --- | --- | --- |
+| Run | Run | bool | `false` | Esegue l’azione quando *true* |
+| Action | Act | text | `ExportExcel` | Una tra: `ExportExcel` `ImportExcel` `ExportSqlite` `ImportSqlite` `ExportEf` `ImportEf` |
+| Path | Path | text | `""` | Percorso file `.xlsx` o `.db` (se vuoto, usa Desktop con nome di default) |
+| Overwrite | Ovr | bool | `true` | In export, sovrascrive il file se esiste |
+| Mode | Mode | text | `Lenient` | Solo import: `Strict` / `Lenient` |
+| Fail on error | Fail | bool | `false` | Stop import se errori ≥ MaxErr |
+| Max errors | MaxErr | int | `1000` | Soglia errori per stop |
+| Aliases map | Map | text | `""` | JSON opzionale per alias header Excel |
+| Preview | Dry | bool | `false` | Import **senza scrivere** (validazione + log) |
 
+### Outputs
+| Nome | Sigla | Tipo | Descrizione |
+| --- | --- | --- | --- |
+| Info | Info | string | Esito sintetico (es. `OK ExportSqlite → …`) |
+| Path | Path | string | File interessato (o log) |
+| Warnings | Warn | tree\<string\> | Avvisi su Meta (branch {0}) e Vars (branch {1}) |
+| Errors | Err | tree\<string\> | Errori su Meta (branch {0}) e Vars (branch {1}) |
+| Counts | Counts | tree\<string\> | Riepilogo import: `Meta rows=… ok=… warn=… err=…` e `Vars rows=… ok=… warn=… err=…` |
+| Err row/col | ErrRC | tree\<int\> | Coordinate errori `[row, col]` per branch {0}=Meta, {1}=Vars |
 
-![Coverage](docs/coverage/badge_linecoverage.svg)
+---
 
-[![CI](https://github.com/GianlucaProgesi/Progesi/actions/workflows/ci.yml/badge.svg)](https://github.com/GianlucaProgesi/Progesi/actions/workflows/ci.yml) ![Coverage](docs/badges/coverage-core.svg)
+## Workflow rapidi
 
-(https://github.com/GianlucaProgesi/Progesi/actions/workflows/ci.yml)
+### Excel
+- **Export**: `Run=TRUE`, `Act="ExportExcel"`, `Path=…\progesi.xlsx` → crea due fogli `ProgesiVariables`, `ProgesiMetadata`.
+- **Import**: `Run=TRUE`, `Act="ImportExcel"`, `Mode="Strict"`/`"Lenient"`, `Dry=TRUE/FALSE` → validazione header, mapping alias, log `*.import.log.txt`.
 
-(incolla QUI tutto il contenuto markdown riportato sopra)
+### SQLite
+- **Export**: `Run=TRUE`, `Act="ExportSqlite"`, `Path=…\progesi.db` → schema sottostante (vedi sotto).
+- **Import**: `Run=TRUE`, `Act="ImportSqlite"`, opzioni come Excel, stesse semantiche.
 
-<!-- PROGESI:QUICKSTART:START -->
-## Quick start
+### EF (*alias SQLite inside GH*)
+- **ExportEf/ImportEf**: identici ai comandi SQLite (Info mostra prefisso `[DB:SQLite] …`).
 
-```csharp
-// using ProgesiCore;
-// var v = new ProgesiVariable("Span", 35.0);
-```
-<!-- PROGESI:QUICKSTART:END -->
+---
 
-<!-- PROGESI:RELMAINT:START -->
+## Schema SQLite (staging)
 
-## 🔧 Release & Maintenance
-
-- 📖 **Release Flow:** vedi [docs/RELEASE-FLOW.md](docs/RELEASE-FLOW.md)  
-- 🛠️ **Maintenance Checklist:** vedi [docs/RELEASE-MAINTENANCE.md](docs/RELEASE-MAINTENANCE.md)  
-- 🚦 **Health Check (prima di un rilascio):
-  ```powershell
-  pwsh -File ./tools/Release-HealthCheck.ps1
-  ```
-- 🚀 **One-liner di rilascio:**
-  ```powershell
-  # simulazione
-  pwsh -File ./tools/End-to-End-Release.ps1 -DryRun
-
-  # rilascio reale
-  pwsh -File ./tools/End-to-End-Release.ps1
-  ```
-
-<!-- PROGESI:RELMAINT:END -->
-
-(Labeler smoke test: 2025-09-15T18:31:20)
+```sql
+CREATE TABLE IF NOT EXISTS Metadata (
+  Id           INTEGER PRIMARY KEY,
+  Hash         TEXT NOT NULL,
+  By           TEXT,
+  Description  TEXT,
+  LM           TEXT
+);
+CREATE TABLE IF NOT EXISTS Variables (
+  Id           INTEGER PRIMARY KEY,
+  Hash         TEXT NOT NULL,
+  Name         TEXT NOT NULL,
+  Value        TEXT,
+  ValC         TEXT,
+  MetaId       INTEGER NULL,
+  Assumption   INTEGER NOT NULL DEFAULT 0,
+  FOREIGN KEY (MetaId) REFERENCES Metadata(Id) ON DELETE SET NULL
+);
+CREATE TABLE IF NOT EXISTS Refs (
+  MetaId       INTEGER NOT NULL,
+  Ref          TEXT NOT NULL,
+  PRIMARY KEY (MetaId, Ref),
+  FOREIGN KEY (MetaId) REFERENCES Metadata(Id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS VariableDepends (
+  VarId        INTEGER NOT NULL,
+  DepId        INTEGER NOT NULL,
+  PRIMARY KEY (VarId, DepId),
+  FOREIGN KEY (VarId) REFERENCES Variables(Id) ON DELETE CASCADE
+);

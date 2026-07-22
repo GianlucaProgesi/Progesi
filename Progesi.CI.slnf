@@ -4,7 +4,8 @@
     "projects": [
       "src\\ProgesiCore\\ProgesiCore.csproj",
       "src\\ProgesiRepositories.InMemory\\ProgesiRepositories.InMemory.csproj",
-      "tests\\ProgesiCore.Tests\\ProgesiCore.Tests.csproj"
+      "tests\\ProgesiCore.Tests\\ProgesiCore.Tests.csproj",
+      "tests\\ProgesiDataExchange.Tests\\ProgesiDataExchange.Tests.csproj"
     ]
   }
 }
