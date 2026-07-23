@@ -7,8 +7,8 @@ Agents are assistants, **not autonomous project owners**. Nothing here enables a
 - AxisVar remains **frozen** and in abeyance — no modification, deletion, DTO consolidation, persistence move, or Grasshopper wiring.
 - ProgesiVariableCluster: **Phase 1 recovered and closed** for the submitted/manual-validation scenarios; **Phase 2 (SQLite) and Phase 3 (EF/DataExchange) are not recovered** and remain blocked. Not full release validation. See the Phase 1 exception below and the dated reconciliation section at the end of this file.
 - DataExchange is **not** a Core domain object — it is the interchange boundary.
-- Current operating baseline: **88/88 passing at `6286aec`** (after PR #63 / Cluster Phase 1); the historical protected source-code checkpoint remains **64/64 at `376d81e`**.
-- **No code cleanup is authorised yet.**
+- Current operating baseline: **main @ `d09130a` — Functional GH Beta v0 complete, 230/230 tests passing, deployment succeeded**. Historical baseline: **88/88 at `6286aec`** (post-Cluster Phase 1 checkpoint). Historical protected source-code checkpoint: **64/64 at `376d81e`**.
+- **No source-code cleanup is authorised yet** (read-only audits allowed; destructive cleanup remains gated — see the dated Post-Beta v0 reconciliation at the end of this file).
 
 ## Principles
 - Agents are **planned, not autonomous project owners**.
@@ -120,7 +120,7 @@ The Orchestrator may prepare/reroute Phase 1 prompts but must not execute implem
 
 This section reconciles the standing constraints above with the current post-Cluster-Phase-1 / post-ADR-acceptance state. Where earlier text names `376d81e` / 64/64 as the *current* baseline, treat that wording as **historical**. This section does **not** weaken any standing constraint, the AxisVar freeze, the implementation prompt guard, the Phase 1 exception, or any agent maturity/limit. It grants no new authorisation and enables no autonomy.
 
-1. **Baselines.** Current operating baseline: **88/88 tests passing at `6286aec`** (after PR #63 / Cluster Phase 1). Historical protected source-code checkpoint: **64/64 at `376d81e`** on `feat/axis-variable-core`.
+1. **Baselines.** *(Superseded 2026-07-23 — the current baseline is now `main` @ `d09130a`, 230/230; see the Post-Beta v0 reconciliation below.)* As recorded on 2026-07-15, the operating baseline was **88/88 tests passing at `6286aec`** (after PR #63 / Cluster Phase 1), with the historical protected source-code checkpoint **64/64 at `376d81e`** on `feat/axis-variable-core`.
 
 2. **ProgesiVariableCluster.** Phase 1 is **recovered and closed** for the submitted/manual-validation scenarios (GH-CLUSTER-001..004 recorded Passed). **Phase 2 (SQLite) and Phase 3 (EF / DataExchange) are not recovered and remain blocked** until separately approved. Not a full release-validation sign-off. The Phase 1 exception above remains in force; the Orchestrator still must not execute implementation.
 
@@ -130,6 +130,24 @@ This section reconciles the standing constraints above with the current post-Clu
 
 5. **Agents and Notion Curator.** All agents remain **controlled and human-gated** at their documented maturity levels; no autonomous Task Board execution; `implementation-agent-disabled` stays disabled; the Notion Curator operates only within its approved controlled-write scope.
 
-6. **`main` and any beta/release line.** Future-only — no merge to `main` and no release tagging is authorised here.
+6. **`main` and any beta/release line.** *(Superseded 2026-07-23.)* At the 2026-07-15 reconciliation this was future-only with no merge to `main`. **This no longer holds:** Functional GH Beta v0 is now integrated into `main` at `d09130a` (via PR #72). See the Post-Beta v0 reconciliation section below.
 
 7. **No new authorisation.** This section records state only; it authorises no implementation, cleanup, ADR-driven code change, branch/tag cleanup, or scope broadening.
+
+## Post-Beta v0 reconciliation — 2026-07-23
+
+This section records the current operating state after **Functional GH Beta v0** was integrated into `main`. It supersedes earlier wording that treats `main` as untouched/future-only or the mode as "no-code handover". It does **not** weaken the AxisVar freeze, the implementation prompt guard, the Phase 1 exception, any agent maturity level, or any hard limit. **It grants no new authorisation and enables no autonomy.**
+
+1. **Baselines (retiered).** Current operating baseline: `main` @ `d09130a` — Functional GH Beta v0 complete, **230/230 tests passing**, deployment succeeded. Historical baseline: **88/88 at `6286aec`** (post-Cluster Phase 1). Historical protected source-code checkpoint: **64/64 at `376d81e`**.
+
+2. **Current-State source of truth.** The Notion page **"Progesi Current State — Post Functional GH Beta v0"** is canonical. Agents and future Claude sessions should start from that page, the active Task Board rows, the Architecture Map, the Roadmap, and `git status`.
+
+3. **Posture.** The earlier no-code handover posture is **superseded**; the current posture is post-beta consolidation / Claude handover / cleanup governance. Agents remain **controlled and human-gated** at their documented maturity levels; no autonomous Task Board execution; `implementation-agent-disabled` stays disabled.
+
+4. **`main` status.** `main` is no longer untouched — Functional GH Beta v0 is integrated at `d09130a` (PR #72). Item 6 of the 2026-07-15 reconciliation ("future-only") is historical and superseded here.
+
+5. **GitHub / Notion cleanup.** Audit-first. Safe first passes and read-only audits have occurred (GitHub Cleanup Audit 366, settings verification 369A). Destructive cleanup remains gated: no branch/tag deletion, no Notion archive/delete/move, no ADR status change, no schema change, no AxisVar work without explicit approval. No agent may perform GitHub or code cleanup.
+
+6. **Preserved.** AxisVar freeze, historical checkpoints, ADR references and posture, all human-approval gates, agent maturity limits, and protected/staged workflow language remain in force.
+
+7. **No new authorisation.** State record only; no implementation, cleanup, ADR-driven code change, Notion deletion, or scope broadening is authorised, and no agent autonomy is enabled.
