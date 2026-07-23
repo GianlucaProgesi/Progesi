@@ -7,7 +7,7 @@ Copy this template per task. A brief is only actionable after **Human approval s
 - AxisVar remains **frozen** and in abeyance — no modification, deletion, DTO consolidation, persistence move, or Grasshopper wiring.
 - ProgesiVariableCluster: **Phase 1 recovered and closed** for the submitted/manual-validation scenarios; **Phase 2 (SQLite) and Phase 3 (EF/DataExchange) are not recovered** and remain blocked. Not full release validation. See the Phase 1 recovery exception in `CLAUDE.md`.
 - DataExchange is **not** a Core domain object — it is the interchange boundary.
-- Current operating baseline: **88/88 passing at `6286aec`** (after PR #63 / Cluster Phase 1); the historical protected source-code checkpoint remains **64/64 at `376d81e`**.
+- Current operating baseline: **main @ `d09130a` — Functional GH Beta v0 complete, 230/230 tests passing, deployment succeeded**. Historical baseline: **88/88 at `6286aec`** (post-Cluster Phase 1); historical protected source-code checkpoint: **64/64 at `376d81e`**.
 - **No code cleanup is authorised yet.**
 
 ---
@@ -43,7 +43,7 @@ Copy this template per task. A brief is only actionable after **Human approval s
 <bullet list of objectively checkable outcomes>
 
 ## Tests to run
-<exact commands, e.g. `dotnet build -c Release`, `dotnet test`; expected: current operating baseline **88/88 at `6286aec`** unless the task adds tests (historical checkpoint: 64/64 at `376d81e`)>
+<exact commands, e.g. `dotnet build -c Release`, `dotnet test`; expected: current operating baseline **230/230 on `main` @ `d09130a`** unless the task adds tests (historical baselines: 88/88 at `6286aec`; 64/64 at `376d81e`)>
 
 ## Manual validation required
 <Grasshopper Manual Test Matrix rows / procedures, if GH is affected; otherwise "None">

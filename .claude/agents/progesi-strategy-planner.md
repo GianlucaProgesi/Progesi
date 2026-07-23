@@ -9,7 +9,7 @@ description: Use only when Gianluca explicitly asks for the progesi-strategy-pla
 - AxisVar remains **frozen** and in abeyance.
 - ProgesiVariableCluster: **Phase 1 recovered and closed** for submitted/manual-validation scenarios; **Phase 2 (SQLite) and Phase 3 (EF/DataExchange) not recovered** and remain blocked. Not full release validation.
 - DataExchange is **not** Core — it is the interchange boundary.
-- Current operating baseline: **88/88 passing at `6286aec`** (after PR #63 / Cluster Phase 1); historical protected source-code checkpoint **64/64 at `376d81e`**.
+- Current operating baseline: **main @ `d09130a` — Functional GH Beta v0 complete, 230/230 tests passing, deployment succeeded**. Historical baseline: **88/88 at `6286aec`** (post-Cluster Phase 1); historical protected source-code checkpoint: **64/64 at `376d81e`**.
 - **No code cleanup is authorised yet.**
 
 ## Role

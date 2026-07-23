@@ -7,20 +7,20 @@ If anything here conflicts with Notion, **stop and report** before acting.
 - AxisVar remains **frozen** and in abeyance — no modification, deletion, DTO consolidation, persistence move, or Grasshopper wiring.
 - ProgesiVariableCluster: **Phase 1 recovered and closed** for the submitted/manual-validation scenarios (Core model/service, InMemory repository, narrow Rhino support repository, ClusterDef/ClusterOut components, `ProgesiClusters` Excel export, and Cluster tests). **Phase 2 (SQLite) and Phase 3 (EF/DataExchange) are not recovered** and remain blocked. This is not full release validation. See the Phase 1 recovery exception below and the dated reconciliation section at the end of this file.
 - DataExchange is **not** a Core domain object — it is the interchange boundary.
-- Current operating baseline: **88/88 passing at `6286aec`** (after PR #63 / Cluster Phase 1). The historical protected source-code checkpoint remains **64/64 at `376d81e`** on `feat/axis-variable-core`.
-- **No code cleanup is authorised yet.**
+- Current operating baseline: **main @ `d09130a` — Functional GH Beta v0 complete, 230/230 tests passing, deployment succeeded**. Historical baseline: **88/88 at `6286aec`** (post-Cluster Phase 1 checkpoint). Historical protected source-code checkpoint: **64/64 at `376d81e`** on `feat/axis-variable-core`.
+- **No source-code cleanup is authorised yet** (read-only audits are allowed; destructive cleanup remains gated — see the dated Post-Beta v0 reconciliation at the end of this file).
 
 ## 1. Current mode
-- Mode: **no-code handover / governance setup**.
-- Protected checkpoint: branch **`feat/axis-variable-core`** at commit **`376d81e`** (clean tree, release build passing, 64/64 tests).
-- The current branch **`docs/claude-handover-rules`** is for **documentation/rules only**. No source code, tests, solution files, or project files may be changed on it.
+- Mode: **post-beta consolidation / Claude handover / cleanup governance**. The earlier **no-code handover / governance setup** posture is **superseded** — see the dated Post-Beta v0 reconciliation at the end of this file.
+- Historical protected checkpoint: branch **`feat/axis-variable-core`** at commit **`376d81e`** (clean tree, release build passing, 64/64 tests) — retained as a historical reference, not the current baseline.
+- Documentation/rules changes continue to run on approved docs/rules branches (e.g. the current `docs/post-beta-governance-reconciliation`). No source code, tests, solution files, or project files may be changed on such a branch.
 
 ## 2. Non-negotiable rules
 - No source code changes unless explicitly approved.
 - No tests modified unless explicitly approved.
 - No AxisVar work of any kind.
 - No legacy removal (code or files).
-- No GitHub cleanup (no branch/tag deletion, no history rewrite, no force-push).
+- No destructive GitHub cleanup (no branch/tag deletion, no history rewrite, no force-push) without explicit approval. Read-only audits are allowed, and audit-first passes have already occurred (see the dated Post-Beta v0 reconciliation below).
 - No autonomous Task Board execution.
 - Do not mark implementation tasks **Done** without human approval and test evidence.
 - Do not broaden task scope or perform opportunistic refactors.
@@ -68,7 +68,7 @@ Read-only inspection and documentation are allowed. The freeze lifts only after 
 
 ## 7. Build/test commands
 - Run build/test **only when explicitly instructed**.
-- Canonical commands: `dotnet build -c Release` then `dotnet test`. Current operating baseline: **88/88 passing at `6286aec`** (after PR #63 / Cluster Phase 1). Historical protected source-code checkpoint: **64/64 at `376d81e`**.
+- Canonical commands: `dotnet build -c Release` then `dotnet test`. Current operating baseline: **230/230 passing on `main` @ `d09130a`** (Functional GH Beta v0). Historical baseline: **88/88 at `6286aec`** (post-Cluster Phase 1). Historical protected source-code checkpoint: **64/64 at `376d81e`**.
 - Never run Rhino or Grasshopper from here.
 
 ## 8. Reporting requirements
@@ -111,7 +111,7 @@ Phase 2 and Phase 3 remain blocked until separately approved.
 
 This section reconciles the standing constraints and mode notes above with the current post-Cluster-Phase-1 / post-ADR-acceptance state. Where earlier text names `376d81e` / 64/64 as the *current* baseline, or describes the mode as "no-code handover", treat that wording as **historical**; the current operating state is recorded here. This section does **not** weaken any standing constraint, the AxisVar freeze, the implementation prompt guard (§9), or the ProgesiVariableCluster Phase 1 recovery exception above. It grants no new authorisation.
 
-1. **Baselines.** Current operating baseline: **88/88 tests passing at `6286aec`** (state after the PR #63 / Cluster Phase 1 merge). Historical protected source-code checkpoint: **64/64 at `376d81e`** on `feat/axis-variable-core` — retained as the pre-Cluster reference, not the current count. §1 "Current mode" predates ADR acceptance and Cluster Phase 1 and is superseded by this section for current-state purposes.
+1. **Baselines.** *(Superseded 2026-07-23 — the current baseline is now `main` @ `d09130a`, 230/230; see the Post-Beta v0 reconciliation below.)* As recorded on 2026-07-15, the operating baseline was **88/88 tests passing at `6286aec`** (state after the PR #63 / Cluster Phase 1 merge), with the historical protected source-code checkpoint **64/64 at `376d81e`** on `feat/axis-variable-core`. §1 "Current mode" predates ADR acceptance and Cluster Phase 1 and is superseded by this section for current-state purposes.
 
 2. **ProgesiVariableCluster.** Phase 1 is **recovered and closed** for the submitted and manually validated scenarios (Core model/service, InMemory repository, narrow Rhino support repository, ClusterDef/ClusterOut Grasshopper components, `ProgesiClusters` Excel export, Cluster tests; GH-CLUSTER-001..004 recorded Passed). **Phase 2 (SQLite persistence) and Phase 3 (EF / DataExchange) are not recovered and remain blocked** until separately approved. This is not a full release-validation sign-off. The Phase 1 recovery exception above remains in force exactly as written.
 
@@ -125,6 +125,27 @@ This section reconciles the standing constraints and mode notes above with the c
 
 5. **Agents and Notion Curator.** All agents remain **controlled and human-gated** at their documented maturity levels (see `AGENTS.md`); no autonomous Task Board execution; implementation agents remain disabled; the Notion Curator operates only within its approved controlled-write scope.
 
-6. **`main` and any beta/release line.** Untouched by this work and **future-only** — no merge to `main` and no release tagging is authorised by this reconciliation.
+6. **`main` and any beta/release line.** *(Superseded 2026-07-23.)* At the time of the 2026-07-15 reconciliation, `main` was untouched and this work was future-only. **This no longer holds:** Functional GH Beta v0 is now integrated into `main` at `d09130a` (via PR #72). See the Post-Beta v0 reconciliation section below.
 
 7. **No new authorisation.** This section records state; it authorises no code cleanup, no ADR-driven implementation, no branch/tag cleanup, and no scope broadening.
+
+## Post-Beta v0 reconciliation — 2026-07-23
+
+This section records the current operating state after **Functional GH Beta v0** was integrated into `main`. It supersedes any earlier wording — including §1 "Current mode" and the 2026-07-15 reconciliation — that describes the mode as "no-code handover" or `main` as untouched/future-only. It does **not** weaken the AxisVar freeze, the implementation prompt guard (§9), the ProgesiVariableCluster Phase 1 recovery exception, or any authorisation gate. **It grants no new authorisation.**
+
+1. **Baselines (retiered).**
+   - **Current operating baseline:** `main` @ `d09130a` — Functional GH Beta v0 complete, **230/230 tests passing**, deployment succeeded.
+   - **Historical baseline:** **88/88 at `6286aec`** — post-Cluster Phase 1 checkpoint.
+   - **Historical protected source-code checkpoint:** **64/64 at `376d81e`** on `feat/axis-variable-core`.
+
+2. **Current-State source of truth.** The Notion page **"Progesi Current State — Post Functional GH Beta v0"** is canonical. Future Claude sessions should start from that page, the active Task Board rows, the Architecture Map, the Roadmap, and `git status` — not from prior chat/session memory.
+
+3. **Posture.** The earlier **no-code handover / governance setup** posture is **superseded**. The current posture is **post-beta consolidation / Claude handover / cleanup governance**.
+
+4. **`main` status.** `main` is **no longer untouched**. Functional GH Beta v0 is integrated into `main` at `d09130a` (via PR #72). Any statement elsewhere in this file that `main` is untouched or future-only is historical and superseded by this section.
+
+5. **GitHub / Notion cleanup.** Cleanup remains **audit-first**. Safe first passes and read-only audits have occurred (e.g. GitHub Cleanup Audit 366 and branch-protection settings verification 369A). **Destructive cleanup remains gated:** no branch/tag deletion, no Notion archive/delete/move, no ADR status change, no schema change, and no AxisVar work without explicit approval.
+
+6. **Preserved.** The AxisVar freeze, the historical checkpoints (`6286aec`, `376d81e`), all ADR references and their acceptance posture, every human-approval/authorisation gate, and the protected/staged workflow language all remain in force exactly as written above.
+
+7. **No new authorisation.** This section records state only. It authorises no code cleanup, no ADR-driven implementation, no branch/tag cleanup, no Notion deletion, and no scope broadening.
