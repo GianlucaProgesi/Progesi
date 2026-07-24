@@ -151,3 +151,19 @@ This section records the current operating state after **Functional GH Beta v0**
 6. **Preserved.** AxisVar freeze, historical checkpoints, ADR references and posture, all human-approval gates, agent maturity limits, and protected/staged workflow language remain in force.
 
 7. **No new authorisation.** State record only; no implementation, cleanup, ADR-driven code change, Notion deletion, or scope broadening is authorised, and no agent autonomy is enabled.
+
+## Autonomous Operating Charter reconciliation — 2026-07-24
+
+This section reconciles the agent registry with the **Autonomous Operating Charter & Standing Green Authorisation** (Notion, 08 — Governance and Tooling). It **does not** raise any agent's maturity level, enable autonomous Task Board execution, re-enable `implementation-agent-disabled`, or weaken any hard limit, the AxisVar freeze, the implementation prompt guard, or the Phase 1 exception. **It grants no new authorisation and enables no agent autonomy.**
+
+1. **Where the tiers apply.** The Charter's **Green / Amber / Red** tiers govern the *ceremony* of controlled work, not agent maturity. Standing **Green** (routine Notion hygiene, Current-State / Strategic-Planning-Log / change-log maintenance, `{}` resolution) maps to work already inside the `notion-project-curator`'s Level-2 controlled-write scope — it removes the per-step prompt, not the scope boundary. **Amber** still requires one explicit human go per package. **Red** (branch/tag deletion, ADR status, schema, source code, Cursor implementation, AxisVar) still requires recorded Human Input and remains outside every agent's authority.
+
+2. **Agent maturity unchanged.** All agents remain at their documented maximum levels (see the Agent list). `implementation-agent-disabled` stays disabled. No agent may work through the Task Board autonomously or mark implementation tasks Done. The standing Green authorisation does **not** promote any agent.
+
+3. **`{@Claude …}` marker.** Agents that read Notion pages must honour the refined `{}` protocol: `{@Claude <question>}` is answered inline; `{@Claude <action>}` is executed only if Green, otherwise converted to `{⛔}` and escalated. Agents never delete or rewrite original human text.
+
+4. **Change-log obligation.** Any agent whose task changes state must ensure its Notion Curator packet feeds the dual change log (Notion *ChatGPT Sync — Change Log* + on-disk mirror), consistent with the Agent completion rule above.
+
+5. **Preserved.** All hard limits, maturity levels, the AxisVar freeze, and the human-gated posture remain in force exactly as written.
+
+6. **No new authorisation.** Governance-model record only.

@@ -14,6 +14,7 @@ If anything here conflicts with Notion, **stop and report** before acting.
 - Mode: **post-beta consolidation / Claude handover / cleanup governance**. The earlier **no-code handover / governance setup** posture is **superseded** — see the dated Post-Beta v0 reconciliation at the end of this file.
 - Historical protected checkpoint: branch **`feat/axis-variable-core`** at commit **`376d81e`** (clean tree, release build passing, 64/64 tests) — retained as a historical reference, not the current baseline.
 - Documentation/rules changes continue to run on approved docs/rules branches (e.g. the current `docs/post-beta-governance-reconciliation`). No source code, tests, solution files, or project files may be changed on such a branch.
+- **Autonomy is tiered** per the **Autonomous Operating Charter & Standing Green Authorisation** (Notion, 08 — Governance): **Green** = pre-authorised routine Notion hygiene / Current-State + change-log maintenance / `{}` marker resolution (no per-step prompt); **Amber** = one explicit human go per scoped package; **Red** = explicit Human Input recorded before acting. See the dated Charter reconciliation at the end of this file. The Charter grants **no** new source-code, cleanup, ADR, branch/tag, or AxisVar authority.
 
 ## 2. Non-negotiable rules
 - No source code changes unless explicitly approved.
@@ -149,3 +150,24 @@ This section records the current operating state after **Functional GH Beta v0**
 6. **Preserved.** The AxisVar freeze, the historical checkpoints (`6286aec`, `376d81e`), all ADR references and their acceptance posture, every human-approval/authorisation gate, and the protected/staged workflow language all remain in force exactly as written above.
 
 7. **No new authorisation.** This section records state only. It authorises no code cleanup, no ADR-driven implementation, no branch/tag cleanup, no Notion deletion, and no scope broadening.
+
+## Autonomous Operating Charter reconciliation — 2026-07-24
+
+This section reconciles these operating rules with the **Autonomous Operating Charter & Standing Green Authorisation** (Notion, 08 — Governance and Tooling), created to let agents work with as little per-step ceremony as is safe while guaranteeing no information loss and safe rollback. It **does not weaken** any standing constraint, the AxisVar freeze (§5), §2's non-negotiable rules, the implementation prompt guard (§9), the ProgesiVariableCluster Phase 1 recovery exception, or any human-approval gate. **It grants no new authorisation.**
+
+1. **Autonomy tiers.** Work is classified into three tiers:
+   - **Green — pre-authorised (no per-step prompt).** Routine Notion hygiene (superseded notices, canonical pointers, archive/pointer organisation with no deletion), Current-State / Strategic-Planning-Log / change-log maintenance, and `{}` marker resolution. Green work is reversible via Notion version history and is always recorded in the change log.
+   - **Amber — one explicit human go per scoped package.** E.g. the R1 GitHub-cleanup decision package, this governance-docs reconciliation, Task Board grouping.
+   - **Red — explicit Human Input recorded before acting.** Branch/tag deletion, history rewrite, force-push, ADR status change, schema change, source-code change, Cursor implementation, and anything touching AxisVar. Red is never bundled; each Red action needs its own recorded decision.
+
+2. **`{}` protocol (refined).** In addition to `{➕}` (human-added), `{⁉️}` (check currency), and `{⛔}` (Claude-raised block), the marker **`{@Claude …}`** is now supported: a **question** (Claude answers inline, appending `{answer: …}`, leaving the original text intact) or an **in-page action request** (e.g. `{@Claude move this section elsewhere}`). Green actions are executed, logged, and marked `{done: …}`; Amber/Red actions are converted to `{⛔}` and escalated for approval. Claude never deletes human content and never rewrites the original human wording; resolution is additive.
+
+3. **No-information-loss guarantees.** Persist-then-archive, never delete; back up before any page-archive; child pages preserved as `<page>` blocks; mandatory dual change log (the Notion *ChatGPT Sync — Change Log* page and the on-disk `C:\Users\gianl\source\repos\ChatGPT_Sync_Change_Log.md` mirror, updated at the end of every controlled write).
+
+4. **Rollback.** Notion version history for pages; Git branches/commits for any repository change (docs/rules only, on an approved docs/rules branch); additive/reversible Task Board schema (`Risk Tier`).
+
+5. **Turn-end reminder.** A user-level Stop-hook (in `~/.claude/settings.json`, outside this repo) prints a change-log-update reminder when a turn ends inside the Progesi repository. It is a deterministic reminder only — it cannot compose the semantic change-log entry itself; that still requires an invoked Claude session. True recurring autonomy requires a separately approved scheduled driver.
+
+6. **Preserved.** Everything above this section remains in force exactly as written.
+
+7. **No new authorisation.** State and governance-model record only.
