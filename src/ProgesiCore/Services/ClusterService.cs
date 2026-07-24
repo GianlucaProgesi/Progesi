@@ -13,10 +13,14 @@ namespace ProgesiCore.Services
   public sealed class ClusterService : IClusterService
   {
     private readonly IProgesiVariableClusterRepository _clusterRepository;
+    private readonly IVariableRepository? _variableRepository;
 
-    public ClusterService(IProgesiVariableClusterRepository clusterRepository)
+    public ClusterService(
+      IProgesiVariableClusterRepository clusterRepository,
+      IVariableRepository? variableRepository = null)
     {
       _clusterRepository = clusterRepository ?? throw new ArgumentNullException(nameof(clusterRepository));
+      _variableRepository = variableRepository;
     }
 
     public async Task<ProgesiVariableCluster> CreateOrGetClusterAsync(
@@ -40,6 +44,22 @@ namespace ProgesiCore.Services
 
       if (ids.Count == 0)
         throw new ArgumentException("Cluster must contain at least one variable id.", nameof(progesiVariableIds));
+
+      // R2-G: referential integrity — reject a cluster that references non-existent ProgesiVariable(s).
+      // Only enforced when a variable repository is supplied (create path); read paths pass null.
+      if (_variableRepository != null)
+      {
+        var missing = new List<int>();
+        foreach (var vid in ids)
+        {
+          var existingVar = await _variableRepository.GetByIdAsync(vid, ct).ConfigureAwait(false);
+          if (existingVar == null) missing.Add(vid);
+        }
+        if (missing.Count > 0)
+          throw new ArgumentException(
+            $"Cluster references non-existent ProgesiVariable id(s): {string.Join(", ", missing)}.",
+            nameof(progesiVariableIds));
+      }
 
       // Candidate "logico" (Id=0) solo per confronto con i cluster esistenti
       var candidate = ProgesiVariableCluster.CreateNew(name, ids, description);
@@ -89,5 +109,40 @@ namespace ProgesiCore.Services
       IEnumerable<int> ids,
       CancellationToken ct = default)
       => _clusterRepository.DeleteManyAsync(ids, ct);
+
+    // R2-G: when a ProgesiVariable is deleted, strip it from every cluster that references it.
+    // A cluster left with no variables is deleted (cluster invariant is >= 1 variable).
+    public async Task<int> CascadeRemoveVariableFromClustersAsync(
+      int variableId,
+      CancellationToken ct = default)
+    {
+      if (variableId <= 0) return 0;
+
+      var all = await _clusterRepository.GetAllAsync(ct).ConfigureAwait(false);
+      int affected = 0;
+
+      foreach (var cluster in all)
+      {
+        if (cluster.ProgesiVariableIds == null || !cluster.ProgesiVariableIds.Contains(variableId))
+          continue;
+
+        var remaining = cluster.ProgesiVariableIds.Where(v => v != variableId).ToList();
+
+        if (remaining.Count == 0)
+        {
+          await _clusterRepository.DeleteAsync(cluster.Id, ct).ConfigureAwait(false);
+        }
+        else
+        {
+          var updated = ProgesiVariableCluster.Rehydrate(
+            cluster.Id, cluster.Name, remaining, cluster.Description, null);
+          await _clusterRepository.SaveAsync(updated, ct).ConfigureAwait(false);
+        }
+
+        affected++;
+      }
+
+      return affected;
+    }
   }
 }

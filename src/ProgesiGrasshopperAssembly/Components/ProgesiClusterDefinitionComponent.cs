@@ -254,7 +254,9 @@ namespace ProgesiGrasshopperAssembly.Components
 
         // CREATE (default)
         {
-          var service = new ClusterService(clusterRepo);
+          // R2-G: pass the variable repository so creation rejects clusters that
+          // reference non-existent ProgesiVariable id(s) (surfaced via the catch below).
+          var service = new ClusterService(clusterRepo, varRepo);
           var cluster = service.CreateOrGetClusterAsync(name, ids, desc).GetAwaiter().GetResult();
 
           outId = cluster.Id;

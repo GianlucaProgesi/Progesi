@@ -38,5 +38,14 @@ namespace ProgesiCore.Services
     Task<int> DeleteManyAsync(
       IEnumerable<int> ids,
       CancellationToken ct = default);
+
+    /// <summary>
+    /// Rimuove la ProgesiVariable indicata da tutti i cluster che la referenziano.
+    /// Se un cluster resta senza variabili viene eliminato.
+    /// Ritorna il numero di cluster modificati o eliminati.
+    /// </summary>
+    Task<int> CascadeRemoveVariableFromClustersAsync(
+      int variableId,
+      CancellationToken ct = default);
   }
 }
