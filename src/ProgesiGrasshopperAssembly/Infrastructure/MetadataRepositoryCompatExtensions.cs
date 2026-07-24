@@ -577,6 +577,20 @@ namespace ProgesiGrasshopperAssembly.Infrastructure
           UnindexHash(table, "Progesi.VarHash", oldContent);
         }
 
+        // R2-G: cascade-remove this variable from any clusters that reference it
+        // (an emptied cluster is deleted) BEFORE deleting the variable itself.
+        try
+        {
+          var clusterRepo = new RhinoVariableClusterRepository(doc);
+          var clusterSvc = new ProgesiCore.Services.ClusterService(clusterRepo);
+          clusterSvc.CascadeRemoveVariableFromClustersAsync(id).GetAwaiter().GetResult();
+        }
+        catch (Exception cex)
+        {
+          info = "Cluster cascade cleanup failed: " + cex.Message;
+          return false;
+        }
+
         var ok = repo.DeleteAsync(id).GetAwaiter().GetResult();
         info = ok ? "OK" : "Delete non riuscita";
         return ok;
