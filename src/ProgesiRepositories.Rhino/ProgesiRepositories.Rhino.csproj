@@ -8,13 +8,10 @@
     <MSBuildWarningsAsMessages>$(MSBuildWarningsAsMessages);MSB3277</MSBuildWarningsAsMessages>
   </PropertyGroup>
 
-  <!-- RhinoCommon 8.20: niente PackageReference, solo Reference + HintPath -->
-  <ItemGroup>
-    <Reference Include="RhinoCommon">
-      <HintPath>..\..\thirdparty\Rhino8.20\RhinoCommon.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-  </ItemGroup>
+  <PropertyGroup>
+    <ImportRhinoSdk>true</ImportRhinoSdk>
+    <ImportRhinoCommon>true</ImportRhinoCommon>
+  </PropertyGroup>
 
   <!-- Dipendenze Progesi usate in questa libreria -->
   <ItemGroup>

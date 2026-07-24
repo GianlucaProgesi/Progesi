@@ -44,6 +44,9 @@ run-report-*/
 # If you keep local artifacts, ignore them
 artifacts/
 
+# Build/release artefacts (generated locally or in CI; not source-controlled)
+progesi-gh.zip
+
 # workflow backups
 .github/workflows/*.yml.bak
 
