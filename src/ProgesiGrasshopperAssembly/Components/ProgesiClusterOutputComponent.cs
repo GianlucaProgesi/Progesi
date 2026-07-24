@@ -216,6 +216,16 @@ namespace ProgesiGrasshopperAssembly.Components
         DA.SetDataList(2, names);
         DA.SetDataList(3, values);
 
+        // Guardia difensiva: se gli output dinamici non sono (ancora) allineati al
+        // numero di valori, forziamo una ricostruzione al solve successivo invece
+        // di lanciare IndexOutOfRange (Parameter 'index').
+        if (Params.Output.Count - 4 < values.Count)
+        {
+          _lastSignature = "";
+          ExpireSolution(true);
+          return;
+        }
+
         // Ora è sicuro scrivere nei dinamici
         for (int i = 0; i < values.Count; i++)
           DA.SetData(4 + i, values[i]);
@@ -301,8 +311,12 @@ namespace ProgesiGrasshopperAssembly.Components
     // ---------------- Helpers ----------------
     private bool EnsureDynamicOutputs(string signature, List<ProgesiCore.ProgesiVariable> vars)
     {
-      // Se firma uguale, non tocchiamo nulla
-      if (string.Equals(signature, _lastSignature, StringComparison.Ordinal))
+      // Se firma uguale E il numero di output dinamici è coerente, non tocchiamo nulla.
+      // (Se la firma coincide ma i parametri sono desincronizzati — es. dopo un cambio
+      //  di membership del cluster o un reload — ricostruiamo comunque per evitare
+      //  scritture fuori range sugli output dinamici.)
+      int existingSlots = Math.Max(0, Params.Output.Count - 4);
+      if (string.Equals(signature, _lastSignature, StringComparison.Ordinal) && existingSlots == vars.Count)
         return false;
 
       _lastSignature = signature;
