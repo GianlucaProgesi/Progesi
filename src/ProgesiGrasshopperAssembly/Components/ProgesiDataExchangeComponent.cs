@@ -404,6 +404,7 @@ namespace ProgesiGrasshopperAssembly.Components
       // contatori
       int metaRows = 0, metaOk = 0, metaWarn = 0, metaErr = 0, maxMetaId = 0;
       int varRows = 0, varOk = 0, varWarn = 0, varErr = 0, maxVarId = 0;
+      int clusterRows = 0, clusterOk = 0, clusterWarn = 0, clusterErr = 0;
 
       using (var wb = new XLWorkbook(p))
       {
@@ -567,6 +568,109 @@ namespace ProgesiGrasshopperAssembly.Components
             varOk++; varRows++;
           }
         }
+
+        // ========== CLUSTERS ==========
+        var wsC = GhExcelWorksheetLocator.TryGetWorksheet(wb, GhExcelSheetNames.Clusters, GhExcelSheetNames.ClustersAlias);
+        bool clusterHeaderError = false;
+        Dictionary<string, int> mapC = null;
+        int r0C = 1, rNC = 0;
+
+        if (wsC == null)
+        {
+          string m = "Sheet 'ProgesiClusters' not found.";
+          if (strict) { ERR(2, m); clusterHeaderError = true; }
+          else { WARN(2, m); }
+        }
+        else
+        {
+          var headerC = GhExcelHeaderMap.Build(wsC, out r0C, out rNC);
+          mapC = GhExcelClusterSheet.ResolveClusterColumns(headerC);
+          var missingCluster = GhExcelColumnMap.MissingRequired(mapC, new[] { "ID" });
+          if (missingCluster.Count > 0)
+          {
+            string m = "Missing headers (Clusters): " + string.Join(",", missingCluster);
+            if (strict) { ERR(2, m); clusterHeaderError = true; AddErrRC(2, r0C, -1); }
+            else { WARN(2, m); clusterWarn += missingCluster.Count; }
+          }
+        }
+
+        StringTable clusterTable = null;
+        if (!dryRun && wsC != null && !clusterHeaderError)
+        {
+          var clusterDoc = RhinoDoc.ActiveDoc ?? throw new InvalidOperationException("RhinoDoc.ActiveDoc is null.");
+          clusterTable = clusterDoc.Strings ?? throw new InvalidOperationException("RhinoDoc.Strings is null.");
+        }
+
+        if (!clusterHeaderError && wsC != null)
+        {
+          for (int r = r0C + 1; r <= rNC; r++)
+          {
+            if (GhExcelClusterImport.IsBlankDataRow(wsC, r, mapC))
+            { WARN(2, $"[Cluster R{r}] empty row → skip"); clusterWarn++; clusterRows++; continue; }
+
+            if (!GhExcelClusterImport.TryBuildRowDto(wsC, r, mapC, out var rowDto, out var parseError))
+            {
+              var msg = $"[Cluster R{r}] {parseError}";
+              if (strict) { ERR(2, msg); AddErrRC(2, r, mapC.TryGetValue("ID", out var cidCol) ? cidCol : 0); clusterErr++; }
+              else { WARN(2, msg); clusterWarn++; }
+              clusterRows++;
+              continue;
+            }
+
+            if (!string.IsNullOrWhiteSpace(rowDto.ParseWarning))
+            {
+              var msg = $"[Cluster R{r}] {rowDto.ParseWarning}";
+              if (strict) { ERR(2, msg); AddErrRC(2, r, mapC.TryGetValue("VARIABLEIDS", out var vidCol) ? vidCol : 0); clusterErr++; clusterRows++; continue; }
+              else { WARN(2, msg); clusterWarn++; }
+            }
+
+            if (rowDto.VariableIds == null || rowDto.VariableIds.Length == 0)
+            {
+              WARN(2, $"[Cluster R{r}] no VariableIds → skip persist");
+              clusterWarn++;
+              clusterRows++;
+              continue;
+            }
+
+            string cName = rowDto.Name ?? "";
+            if (cName.Length > NAME_MAX || !IsPrintable(cName))
+            {
+              var msg = $"[Cluster R{r}] NAME invalid (len/charset)";
+              if (strict) { ERR(2, msg); AddErrRC(2, r, mapC.TryGetValue("NAME", out var nameCol) ? nameCol : 0); clusterErr++; clusterRows++; continue; }
+              else { WARN(2, msg); clusterWarn++; }
+            }
+
+            string cDesc = rowDto.Description ?? "";
+            if (cDesc.Length > DESC_MAX || !IsPrintable(cDesc))
+            {
+              var msg = $"[Cluster R{r}] DESCRIPTION invalid (len/charset)";
+              if (strict) { ERR(2, msg); AddErrRC(2, r, mapC.TryGetValue("DESCRIPTION", out var descCol) ? descCol : 0); clusterErr++; clusterRows++; continue; }
+              else { WARN(2, msg); clusterWarn++; }
+            }
+
+            if (!dryRun && clusterTable != null)
+            {
+              var clusterDto = new ClusterDto
+              {
+                Id = rowDto.Id,
+                Name = cName,
+                Description = cDesc,
+                VariableIds = rowDto.VariableIds,
+                Hashtag = rowDto.Hashtag
+              };
+
+              string json = JsonConvert.SerializeObject(clusterDto);
+              clusterTable.SetString("Progesi.Cluster", "cluster:" + rowDto.Id.ToString(CultureInfo.InvariantCulture), json);
+
+              int next = ReadCounter(clusterTable, "Progesi.Cluster");
+              if (rowDto.Id + 1 > next)
+                clusterTable.SetString("Progesi.Cluster", "__next__", (rowDto.Id + 1).ToString(CultureInfo.InvariantCulture));
+            }
+
+            clusterOk++;
+            clusterRows++;
+          }
+        }
       } // using wb
 
       // Aggiorna contatori solo se NON è DryRun
@@ -587,10 +691,13 @@ namespace ProgesiGrasshopperAssembly.Components
       // counts
       counts.Append(new GH_String($"Meta rows={metaRows} ok={metaOk} warn={metaWarn} err={metaErr}"), new GH_Path(0));
       counts.Append(new GH_String($"Vars rows={varRows} ok={varOk} warn={varWarn} err={varErr}"), new GH_Path(1));
+      counts.Append(new GH_String($"Clusters rows={clusterRows} ok={clusterOk} warn={clusterWarn} err={clusterErr}"), new GH_Path(2));
 
       string prefix = dryRun ? "PREVIEW " : "OK ";
       string info = $"{prefix}ImportExcel ← {p} | Meta {metaOk}/{metaRows} (warn:{metaWarn}, err:{metaErr}) | " +
-                    $"Vars {varOk}/{varRows} (warn:{varWarn}, err:{varErr}) | Log: {(string.IsNullOrWhiteSpace(logPath) ? "-" : logPath)}";
+                    $"Vars {varOk}/{varRows} (warn:{varWarn}, err:{varErr}) | " +
+                    $"Clusters {clusterOk}/{clusterRows} (warn:{clusterWarn}, err:{clusterErr}) | " +
+                    $"Log: {(string.IsNullOrWhiteSpace(logPath) ? "-" : logPath)}";
 
       return (p, logPath, warnTree, errTree, counts, errRC, info);
     }
