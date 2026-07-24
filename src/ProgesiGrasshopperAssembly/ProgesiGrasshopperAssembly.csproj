@@ -8,20 +8,13 @@
     <MSBuildWarningsAsMessages>$(MSBuildWarningsAsMessages);MSB3277</MSBuildWarningsAsMessages>
   </PropertyGroup>
 
-  <!-- Rhino/Grasshopper/GH_IO pin a SDK 8.20 nel repo -->
+  <PropertyGroup>
+    <ImportRhinoSdk>true</ImportRhinoSdk>
+    <ImportRhinoCommon>true</ImportRhinoCommon>
+    <ImportGrasshopper>true</ImportGrasshopper>
+  </PropertyGroup>
+
   <ItemGroup>
-    <Reference Include="RhinoCommon">
-      <HintPath>..\..\thirdparty\Rhino8.20\RhinoCommon.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="Grasshopper">
-      <HintPath>..\..\thirdparty\Rhino8.20\Grasshopper.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="GH_IO">
-      <HintPath>..\..\thirdparty\Rhino8.20\GH_IO.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
     <Reference Include="System.Windows.Forms" />
   </ItemGroup>
 

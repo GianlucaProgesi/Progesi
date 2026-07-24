@@ -6,6 +6,9 @@
     <MinVerBuildMetadata>build.{0:yyyyMMdd-HHmmss}</MinVerBuildMetadata>
     <Deterministic>true</Deterministic>
     <ContinuousIntegrationBuild>true</ContinuousIntegrationBuild>
+    <!-- Rhino 8.20 SDK: build-time NuGet references only (no runtime copy) -->
+    <RhinoSdkVersion>8.20.25147.11001-rc</RhinoSdkVersion>
+    <UseNugetRhino Condition="'$(UseNugetRhino)' == ''">true</UseNugetRhino>
   </PropertyGroup>
   <ItemGroup>
     <PackageReference Include="MinVer" Version="5.0.0" PrivateAssets="All" />

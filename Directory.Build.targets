@@ -1,0 +1,23 @@
+<Project>
+  <!--
+    Rhino/GH SDK: NuGet compile references when UseNugetRhino=true (default).
+    Projects opt in via ImportRhinoSdk=true.
+  -->
+  <PropertyGroup Condition="'$(ImportRhinoSdk)' == 'true' And '$(UseNugetRhino)' == 'true'">
+    <DisableImplicitNuGetFallbackFolder>true</DisableImplicitNuGetFallbackFolder>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(ImportRhinoSdk)' == 'true' And '$(UseNugetRhino)' == 'true' And '$(ImportRhinoCommon)' == 'true'">
+    <PackageReference Include="RhinoCommon" Version="$(RhinoSdkVersion)">
+      <PrivateAssets>all</PrivateAssets>
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </PackageReference>
+  </ItemGroup>
+
+  <ItemGroup Condition="'$(ImportRhinoSdk)' == 'true' And '$(UseNugetRhino)' == 'true' And '$(ImportGrasshopper)' == 'true'">
+    <PackageReference Include="Grasshopper" Version="$(RhinoSdkVersion)">
+      <PrivateAssets>all</PrivateAssets>
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </PackageReference>
+  </ItemGroup>
+</Project>

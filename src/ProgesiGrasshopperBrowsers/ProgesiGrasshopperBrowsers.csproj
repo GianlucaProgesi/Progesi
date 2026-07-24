@@ -9,19 +9,13 @@
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
   </PropertyGroup>
 
+  <PropertyGroup>
+    <ImportRhinoSdk>true</ImportRhinoSdk>
+    <ImportRhinoCommon>true</ImportRhinoCommon>
+    <ImportGrasshopper>true</ImportGrasshopper>
+  </PropertyGroup>
+
   <ItemGroup>
-    <Reference Include="RhinoCommon">
-      <HintPath>..\..\thirdparty\Rhino8.20\RhinoCommon.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="Grasshopper">
-      <HintPath>..\..\thirdparty\Rhino8.20\Grasshopper.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="GH_IO">
-      <HintPath>..\..\thirdparty\Rhino8.20\GH_IO.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
     <Reference Include="System.Windows.Forms" />
   </ItemGroup>
 

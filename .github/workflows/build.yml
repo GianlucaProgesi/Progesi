@@ -50,11 +50,17 @@ jobs:
         shell: pwsh
         run: pwsh -File ./tools/Publish-Plugin.ps1 -Configuration Release
 
+      - name: Package GH release zip (progesi-gh.zip)
+        shell: pwsh
+        run: pwsh -File ./Make-Releases-Save-Progesi-S2-C2.ps1 -Config Release
+
       - name: Upload artifact (zip)
         uses: actions/upload-artifact@v4
         with:
           name: progesi-plugin
-          path: out/*.zip
+          path: |
+            out/*.zip
+            progesi-gh.zip
 
       - name: Upload test results
         if: always()
@@ -72,5 +78,6 @@ jobs:
           prerelease: ${{ contains(github.ref_name, '-rc') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-alpha') }}
           files: |
             out/*.zip
+            progesi-gh.zip
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
