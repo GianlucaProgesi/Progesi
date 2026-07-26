@@ -372,6 +372,7 @@ namespace ProgesiGrasshopperAssembly.Infrastructure
           Hash = ProgesiHash.Compute(v),     // content-hash interno
           Name = name,
           Value = value,
+          TypedValue = v.Value,
           ValueCanonical = valc,
           By = by,
           LastModified = IsoNowUtc(),
@@ -435,9 +436,16 @@ namespace ProgesiGrasshopperAssembly.Infrastructure
           }
         }
 
-        // cast a tipo semplice
+        // cast a tipo semplice (geometry codec overrides string parsing)
         object typedValue = value;
-        if (int.TryParse(value, NumberStyles.Integer, inv, out var asInt)) typedValue = asInt;
+        var geometryJson = ReadString(payload, "geometryJson");
+        if (!string.IsNullOrWhiteSpace(geometryJson)
+            && ProgesiGeometryValueCodec.TryDecode(geometryJson, out var geometryValue)
+            && geometryValue != null)
+        {
+          typedValue = geometryValue;
+        }
+        else if (int.TryParse(value, NumberStyles.Integer, inv, out var asInt)) typedValue = asInt;
         else if (double.TryParse(value, NumberStyles.Float, inv, out var asDbl)) typedValue = asDbl;
         else if (string.Equals(value, "true", StringComparison.OrdinalIgnoreCase)) typedValue = true;
         else if (string.Equals(value, "false", StringComparison.OrdinalIgnoreCase)) typedValue = false;

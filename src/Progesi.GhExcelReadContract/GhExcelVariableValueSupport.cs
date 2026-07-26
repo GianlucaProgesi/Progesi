@@ -8,7 +8,8 @@ namespace Progesi.GhExcelReadContract
     Primitive,
     UnsupportedMarker,
     NonPrimitiveJsonLeak,
-    ReferencedObjectDisplayString
+    ReferencedObjectDisplayString,
+    ObjectSheetReference
   }
 
   /// <summary>
@@ -122,6 +123,13 @@ namespace Progesi.GhExcelReadContract
         return false;
       }
 
+      if (GhExcelObjectSheet.TryParseObjectMarker(value, out var objectType))
+      {
+        kind = GhExcelVariableValueKind.ObjectSheetReference;
+        detail = objectType;
+        return true;
+      }
+
       var trimmed = value.TrimStart();
       if (trimmed.StartsWith("{") || trimmed.StartsWith("["))
       {
@@ -143,6 +151,8 @@ namespace Progesi.GhExcelReadContract
           return $"[Var R{row}] VALUE non-primitive JSON not supported for Excel import → skip";
         case GhExcelVariableValueKind.ReferencedObjectDisplayString:
           return $"[Var R{row}] VALUE unsupported for Excel import ({detail}) → skip";
+        case GhExcelVariableValueKind.ObjectSheetReference:
+          return $"[Var R{row}] VALUE object reference missing payload ({detail}) → skip";
         default:
           return $"[Var R{row}] VALUE unsupported for Excel import → skip";
       }

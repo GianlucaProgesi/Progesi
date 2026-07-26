@@ -13,9 +13,11 @@ using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using ProgesiCore;
 using Progesi.GhExcelReadContract;
+using ProgesiRepositories.Rhino;
 using ProgesiGrasshopperAssembly.Infrastructure; // ServiceHub, ProgesiIcons, MetadataRepositoryCompatExtensions
 using Rhino;
 using Rhino.DocObjects.Tables;
+using Rhino.Geometry;
 using System;
 using System.Collections.Generic;
 using System.Data.SQLite;
@@ -263,6 +265,13 @@ namespace ProgesiGrasshopperAssembly.Components
       var metas = ReadAllMetasFromTable(table);
       var clusters = ReadAllClustersFromTable(table);
       int unsupportedVarExports = vars.Count(v => v.IsExcelUnsupported);
+      var objectChunkRows = new List<GhExcelObjectSheet.ObjectChunkRow>();
+      foreach (var v in vars)
+      {
+        if (string.IsNullOrWhiteSpace(v.ObjectPayloadJson))
+          continue;
+        objectChunkRows.AddRange(GhExcelObjectSheet.ChunkPayload(v.Id, v.ObjectType, v.ObjectPayloadJson));
+      }
       using (var wb = new XLWorkbook())
       {
         // Variables
@@ -332,10 +341,31 @@ namespace ProgesiGrasshopperAssembly.Components
         }
         wsC.Columns().AdjustToContents();
 
+        if (objectChunkRows.Count > 0)
+        {
+          var wsO = wb.Worksheets.Add(GhExcelSheetNames.VariableObjects);
+          wsO.Cell(1, 1).Value = "VarId";
+          wsO.Cell(1, 2).Value = "ChunkIndex";
+          wsO.Cell(1, 3).Value = "ChunkCount";
+          wsO.Cell(1, 4).Value = "ObjectType";
+          wsO.Cell(1, 5).Value = "Payload";
+          int r4 = 2;
+          foreach (var chunk in objectChunkRows)
+          {
+            wsO.Cell(r4, 1).Value = chunk.VarId;
+            wsO.Cell(r4, 2).Value = chunk.ChunkIndex;
+            wsO.Cell(r4, 3).Value = chunk.ChunkCount;
+            wsO.Cell(r4, 4).Value = chunk.ObjectType ?? "";
+            wsO.Cell(r4, 5).Value = chunk.Payload ?? "";
+            r4++;
+          }
+          wsO.Columns().AdjustToContents();
+        }
+
         wb.SaveAs(p);
       }
 
-      string info = $"OK ExportExcel → {p} (Vars:{vars.Length}, Meta:{metas.Length}, Clusters:{clusters.Length})";
+      string info = $"OK ExportExcel → {p} (Vars:{vars.Length}, Meta:{metas.Length}, Clusters:{clusters.Length}, ObjectChunks:{objectChunkRows.Count})";
       if (unsupportedVarExports > 0)
         info += $" | UnsupportedVarValues:{unsupportedVarExports}";
       return (p, info);
@@ -505,6 +535,8 @@ namespace ProgesiGrasshopperAssembly.Components
 
         if (!varHeaderError && wsV != null)
         {
+          var objectChunkRows = ReadObjectChunkRows(wb);
+
           for (int r = r0V + 1; r <= rNV; r++)
           {
             string name = GhExcelCellReader.ReadCell(wsV, r, mapV, "NAME");
@@ -534,7 +566,30 @@ namespace ProgesiGrasshopperAssembly.Components
             int[] depArr = GhExcelValueParsing.ParseDepends(deps);
             bool ass = GhExcelValueParsing.ToBool(asS);
 
-            if (!GhExcelVariableValueSupport.IsImportSupported(value, out var unsupportedKind, out var unsupportedDetail))
+            string geometryJson = null;
+            if (GhExcelObjectSheet.TryParseObjectMarker(value, out _))
+            {
+              if (!GhExcelObjectSheet.TryReassemblePayload(objectChunkRows, id, out var payload, out var objectType, out var objErr))
+              {
+                var msg = $"[Var R{r}] object payload missing/invalid: {objErr}";
+                if (strict) { ERR(1, msg); AddErrRC(1, r, mapV.TryGetValue("VALUE", out var c) ? c : 0); varErr++; }
+                else { WARN(1, msg); AddErrRC(1, r, mapV.TryGetValue("VALUE", out var c) ? c : 0); varWarn++; }
+                varRows++;
+                continue;
+              }
+
+              if (!ProgesiGeometryValueCodec.TryDecode(payload, out var geometry) || geometry == null)
+              {
+                var msg = $"[Var R{r}] object decode failed ({objectType})";
+                if (strict) { ERR(1, msg); AddErrRC(1, r, mapV.TryGetValue("VALUE", out var c) ? c : 0); varErr++; }
+                else { WARN(1, msg); AddErrRC(1, r, mapV.TryGetValue("VALUE", out var c) ? c : 0); varWarn++; }
+                varRows++;
+                continue;
+              }
+
+              geometryJson = payload;
+            }
+            else if (!GhExcelVariableValueSupport.IsImportSupported(value, out var unsupportedKind, out var unsupportedDetail))
             {
               var msg = GhExcelVariableValueSupport.BuildImportSkipMessage(r, unsupportedKind, unsupportedDetail);
               if (strict) { ERR(1, msg); AddErrRC(1, r, mapV.TryGetValue("VALUE", out var c) ? c : 0); varErr++; }
@@ -549,7 +604,8 @@ namespace ProgesiGrasshopperAssembly.Components
               {
                 id = id,
                 name = name ?? "",
-                value = value ?? "",
+                value = geometryJson ?? (value ?? ""),
+                geometryJson = geometryJson ?? "",
                 unit = "",
                 by = "",
                 isAssumption = ass,
@@ -1333,6 +1389,8 @@ CREATE TABLE IF NOT EXISTS ClusterVariables (
       public int[] Depends;
       public bool Assumption;
       public bool IsExcelUnsupported;
+      public string ObjectType = "";
+      public string ObjectPayloadJson = "";
     }
 
     private sealed class MetaRow
@@ -1421,8 +1479,23 @@ CREATE TABLE IF NOT EXISTS ClusterVariables (
         int[] deps = dto.Depends ?? Array.Empty<int>();
         bool ass = dto.IsAssumption ?? false;
         string valueType = dto.ValueType ?? "string";
-        string excelValue = GhExcelVariableValueSupport.FormatExportValue(valueType, dto.Value ?? "", valc);
-        bool isExcelUnsupported = GhExcelVariableValueSupport.RequiresUnsupportedExportHandling(valueType, dto.Value ?? "");
+        string excelValue;
+        string objectType = "";
+        string objectPayloadJson = "";
+        bool isExcelUnsupported;
+
+        if (typed is GeometryBase geometry)
+        {
+          objectType = ProgesiGeometryValueCodec.GetShortTypeName(geometry);
+          objectPayloadJson = ProgesiGeometryValueCodec.Encode(geometry);
+          excelValue = GhExcelObjectSheet.BuildObjectMarker(objectType);
+          isExcelUnsupported = false;
+        }
+        else
+        {
+          excelValue = GhExcelVariableValueSupport.FormatExportValue(valueType, dto.Value ?? "", valc);
+          isExcelUnsupported = GhExcelVariableValueSupport.RequiresUnsupportedExportHandling(valueType, dto.Value ?? "");
+        }
 
         var pv = new ProgesiVariable(id, dto.Name ?? "", typed, deps, dto.MetadataId, ass);
         string hash = ProgesiHash.Compute(pv);
@@ -1437,7 +1510,9 @@ CREATE TABLE IF NOT EXISTS ClusterVariables (
           MetaId = dto.MetadataId ?? 0,
           Depends = deps,
           Assumption = ass,
-          IsExcelUnsupported = isExcelUnsupported
+          IsExcelUnsupported = isExcelUnsupported,
+          ObjectType = objectType,
+          ObjectPayloadJson = objectPayloadJson
         });
       }
       return list.ToArray();
@@ -1494,13 +1569,60 @@ CREATE TABLE IF NOT EXISTS ClusterVariables (
       return ids.Distinct().ToArray();
     }
 
+    private static List<GhExcelObjectSheet.ObjectChunkRow> ReadObjectChunkRows(XLWorkbook workbook)
+    {
+      var rows = new List<GhExcelObjectSheet.ObjectChunkRow>();
+      var wsO = GhExcelWorksheetLocator.TryGetWorksheet(
+        workbook,
+        GhExcelSheetNames.VariableObjects,
+        GhExcelSheetNames.VariableObjectsAlias);
+      if (wsO == null)
+        return rows;
+
+      var header = GhExcelHeaderMap.Build(wsO, out int headerRow, out int lastRow);
+      if (!header.TryGetValue("VARID", out int colVarId)
+          || !header.TryGetValue("CHUNKINDEX", out int colChunkIndex)
+          || !header.TryGetValue("CHUNKCOUNT", out int colChunkCount)
+          || !header.TryGetValue("OBJECTTYPE", out int colObjectType)
+          || !header.TryGetValue("PAYLOAD", out int colPayload))
+      {
+        return rows;
+      }
+
+      for (int r = headerRow + 1; r <= lastRow; r++)
+      {
+        int varId = GhExcelValueParsing.ToInt(wsO.Cell(r, colVarId).GetString());
+        if (varId <= 0)
+          continue;
+
+        rows.Add(new GhExcelObjectSheet.ObjectChunkRow
+        {
+          VarId = varId,
+          ChunkIndex = GhExcelValueParsing.ToInt(wsO.Cell(r, colChunkIndex).GetString()),
+          ChunkCount = GhExcelValueParsing.ToInt(wsO.Cell(r, colChunkCount).GetString()),
+          ObjectType = wsO.Cell(r, colObjectType).GetString() ?? "",
+          Payload = wsO.Cell(r, colPayload).GetString() ?? ""
+        });
+      }
+
+      return rows;
+    }
+
     private static object ParseValue(string value, string valueType)
     {
-      string vt = (valueType ?? "string").Trim().ToLowerInvariant();
-      if (string.Equals(value, "null", StringComparison.OrdinalIgnoreCase) || vt == "null") return null;
+      string vt = (valueType ?? "string").Trim();
+      if (string.Equals(value, "null", StringComparison.OrdinalIgnoreCase)
+          || string.Equals(vt, "null", StringComparison.OrdinalIgnoreCase))
+        return null;
+
+      if (ProgesiGeometryValueCodec.IsGeometryValueType(vt)
+          && ProgesiGeometryValueCodec.TryDecode(value, out var geometry)
+          && geometry != null)
+        return geometry;
+
       try
       {
-        switch (vt)
+        switch (vt.ToLowerInvariant())
         {
           case "string": return value ?? "";
           case "int": return int.Parse(value ?? "0", CultureInfo.InvariantCulture);

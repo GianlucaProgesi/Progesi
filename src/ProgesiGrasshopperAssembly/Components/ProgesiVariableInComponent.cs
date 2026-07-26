@@ -6,8 +6,11 @@ using System.Linq;
 using System.Collections.Generic;
 using System.Reflection;
 using Grasshopper.Kernel;
+using Grasshopper.Kernel.Types;
 using ProgesiGrasshopperAssembly.Infrastructure;
 using ProgesiCore;
+using ProgesiRepositories.Rhino;
+using Rhino.Geometry;
 
 namespace ProgesiGrasshopperAssembly.Components
 {
@@ -29,7 +32,8 @@ namespace ProgesiGrasshopperAssembly.Components
       p.AddTextParameter("Act", "Act", "Create | Update | Delete", GH_ParamAccess.item, "Create");
       p.AddIntegerParameter("Id", "Id", "Id per Update/Delete.", GH_ParamAccess.item, 0);
       p.AddTextParameter("Name", "Name", "Nome variabile (es. LEN).", GH_ParamAccess.item, "");
-      p.AddTextParameter("Value", "Value", "Valore (string/number).", GH_ParamAccess.item, "");
+      p.AddGenericParameter("Value", "Value", "Valore (string/number/GeometryBase).", GH_ParamAccess.item);
+      Params.Input[Params.Input.Count - 1].Optional = true;
       p.AddTextParameter("Unit", "Unit", "Fattore numerico (double) applicato a Value se ENTRAMBI numerici; altrimenti ignorato.", GH_ParamAccess.item, "");
       p.AddTextParameter("By", "By", "Autore (es. GM).", GH_ParamAccess.item, "");
 
@@ -59,12 +63,14 @@ namespace ProgesiGrasshopperAssembly.Components
 
     protected override void SolveInstance(IGH_DataAccess DA)
     {
-      bool run = false; string act = "Create"; int id = 0; string name = ""; string val = ""; string unit = ""; string by = "";
+      bool run = false; string act = "Create"; int id = 0; string name = ""; string val = ""; string geometryJson = ""; string unit = ""; string by = "";
       bool isAss = false; string mid = "";
       var depends = new List<int>();
+      object valueInput = null;
 
       DA.GetData(0, ref run); DA.GetData(1, ref act); DA.GetData(2, ref id);
-      DA.GetData(3, ref name); DA.GetData(4, ref val); DA.GetData(5, ref unit); DA.GetData(6, ref by);
+      DA.GetData(3, ref name); DA.GetData(4, ref valueInput); DA.GetData(5, ref unit); DA.GetData(6, ref by);
+      CoerceValueInput(valueInput, out val, out geometryJson);
       DA.GetData(7, ref isAss); DA.GetData(8, ref mid);
       if (!DA.GetDataList(9, depends)) depends.Clear();
 
@@ -86,10 +92,11 @@ namespace ProgesiGrasshopperAssembly.Components
         return;
       }
 
-      // Unit come fattore numerico opzionale: Value × Unit se ENTRAMBI numerici
+      // Unit come fattore numerico opzionale: Value × Unit se ENTRAMBI numerici (non per geometry)
       var inv = CultureInfo.InvariantCulture;
-      if (double.TryParse(val, NumberStyles.Any, inv, out var vFix) &&
-          double.TryParse(unit, NumberStyles.Any, inv, out var uFix))
+      if (string.IsNullOrWhiteSpace(geometryJson)
+          && double.TryParse(val, NumberStyles.Any, inv, out var vFix)
+          && double.TryParse(unit, NumberStyles.Any, inv, out var uFix))
       {
         var combined = vFix * uFix;
         val = combined.ToString(inv);
@@ -116,6 +123,7 @@ namespace ProgesiGrasshopperAssembly.Components
           allowIdReassign = isCreate && IsTreeOrBatchInput(),
           name = name ?? "",
           value = val ?? "",
+          geometryJson = geometryJson ?? "",
           unit = unit ?? "",
           by = by ?? "",
           isAssumption = isAss,
@@ -135,8 +143,10 @@ namespace ProgesiGrasshopperAssembly.Components
         var prefix = string.IsNullOrWhiteSpace(upInfo) ? (upOk ? "OK" : "Operazione non riuscita") : upInfo;
         outInfo = string.IsNullOrWhiteSpace(summary) ? prefix : $"{prefix} | {summary}";
 
-        if (!upOk) { Fail(DA, val, outId, outHash, outInfo, name); return; }
-        Emit(DA, val, outId, outHash, outInfo, name);
+        string emitVal = val;
+        ReadIf(saved, "ValueCanonical", ref emitVal);
+        if (!upOk) { Fail(DA, emitVal, outId, outHash, outInfo, name); return; }
+        Emit(DA, emitVal, outId, outHash, outInfo, name);
       }
       catch (Exception ex) { Fail(DA, val, outId, outHash, "Errore: " + ex.Message, name); }
     }
@@ -159,6 +169,7 @@ namespace ProgesiGrasshopperAssembly.Components
       public bool allowIdReassign { get; set; }
       public string name { get; set; }
       public string value { get; set; }
+      public string geometryJson { get; set; }
       public string unit { get; set; }
       public string by { get; set; }
       public bool isAssumption { get; set; }
@@ -182,6 +193,81 @@ namespace ProgesiGrasshopperAssembly.Components
       if (pi == null) return;
       var v = pi.GetValue(obj, null);
       target = v == null ? "" : v.ToString();
+    }
+
+    private static void CoerceValueInput(object input, out string val, out string geometryJson)
+    {
+      val = "";
+      geometryJson = "";
+
+      if (input == null)
+        return;
+
+      if (input is IGH_Goo goo)
+      {
+        if (goo is GH_ObjectWrapper ow && ow.Value != null)
+          input = ow.Value;
+        else if (TryCastGeometry(goo, out var geomFromGoo))
+        {
+          geometryJson = ProgesiGeometryValueCodec.Encode(geomFromGoo);
+          val = geometryJson;
+          return;
+        }
+        else
+        {
+          string s;
+          if (goo.CastTo(out s))
+          {
+            val = s ?? "";
+            return;
+          }
+
+          int i;
+          if (goo.CastTo(out i))
+          {
+            val = i.ToString(CultureInfo.InvariantCulture);
+            return;
+          }
+
+          double d;
+          if (goo.CastTo(out d))
+          {
+            val = d.ToString(CultureInfo.InvariantCulture);
+            return;
+          }
+
+          bool b;
+          if (goo.CastTo(out b))
+          {
+            val = b ? "true" : "false";
+            return;
+          }
+        }
+      }
+
+      if (input is GeometryBase geometry)
+      {
+        geometryJson = ProgesiGeometryValueCodec.Encode(geometry);
+        val = geometryJson;
+        return;
+      }
+
+      val = input.ToString() ?? "";
+    }
+
+    private static bool TryCastGeometry(IGH_Goo goo, out GeometryBase geometry)
+    {
+      geometry = null;
+      if (goo == null)
+        return false;
+
+      if (goo is GH_ObjectWrapper ow && ow.Value is GeometryBase wrapped)
+      {
+        geometry = wrapped;
+        return true;
+      }
+
+      return goo.CastTo(out geometry) && geometry != null;
     }
 
     // Esito bloccante: errore rosso sul componente + Info testuale, senza overwrite silenzioso.
