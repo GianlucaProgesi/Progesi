@@ -13,6 +13,9 @@ namespace ProgesiRepositories.Rhino
 {
   public sealed class RhinoMetadataRepository : IMetadataRepository
   {
+    private const string MetaSection = "Progesi.Meta";
+    private const string MetaHashtagIndexSection = "Progesi.MetaHashtag";
+
     private readonly StringTable _table;
     public RhinoMetadataRepository(RhinoDoc doc)
     {
@@ -24,7 +27,7 @@ namespace ProgesiRepositories.Rhino
     {
       var key = KeyOf(id);
       // FIX: GetValue (non GetString)
-      var json = _table.GetValue("Progesi.Meta", key);
+      var json = _table.GetValue(MetaSection, key);
       if (string.IsNullOrWhiteSpace(json))
         return Task.FromResult<ProgesiMetadata?>(null);
 
@@ -66,9 +69,26 @@ namespace ProgesiRepositories.Rhino
       return Task.FromResult<ProgesiMetadata?>(meta);
     }
 
+    public Task<ProgesiMetadata?> GetByHashtagAsync(string hashtag, CancellationToken ct = default)
+    {
+      if (string.IsNullOrWhiteSpace(hashtag))
+        return Task.FromResult<ProgesiMetadata?>(null);
+
+      var idStr = _table.GetValue(MetaHashtagIndexSection, hashtag);
+      if (!int.TryParse(idStr, out var id) || id <= 0)
+        return Task.FromResult<ProgesiMetadata?>(null);
+
+      return GetAsync(id, ct);
+    }
+
     public Task UpsertAsync(ProgesiMetadata meta, CancellationToken ct = default)
     {
+      var hashtag = ProgesiHash.Compute(meta);
       var key = KeyOf(meta.Id);
+
+      var current = GetAsync(meta.Id, ct).GetAwaiter().GetResult();
+      if (current != null)
+        UnindexHashtag(current.Hashtag);
 
       var dto = new Dto
       {
@@ -83,18 +103,24 @@ namespace ProgesiRepositories.Rhino
           Caption = s.Caption ?? string.Empty,
           Source = s.Source?.ToString(),
           Content = s.Content ?? Array.Empty<byte>()
-        })
+        }),
+        Hashtag = hashtag
       };
 
       var json = JsonConvert.SerializeObject(dto) ?? string.Empty;
-      _table.SetString("Progesi.Meta", key, json); // ? niente var = ...
+      _table.SetString(MetaSection, key, json);
+      IndexHashtag(hashtag, meta.Id);
       return Task.CompletedTask;
     }
 
     public Task<bool> DeleteAsync(int id, CancellationToken ct = default)
     {
+      var current = GetAsync(id, ct).GetAwaiter().GetResult();
+      if (current != null)
+        UnindexHashtag(current.Hashtag);
+
       var key = KeyOf(id);
-      _table.Delete("Progesi.Meta", key);
+      _table.Delete(MetaSection, key);
       return Task.FromResult(true);
     }
 
@@ -106,6 +132,18 @@ namespace ProgesiRepositories.Rhino
 
     private static string KeyOf(int id) => $"meta:{id}";
 
+    private void IndexHashtag(string hashtag, int id)
+    {
+      if (string.IsNullOrWhiteSpace(hashtag) || id <= 0) return;
+      _table.SetString(MetaHashtagIndexSection, hashtag, id.ToString(System.Globalization.CultureInfo.InvariantCulture));
+    }
+
+    private void UnindexHashtag(string hashtag)
+    {
+      if (string.IsNullOrWhiteSpace(hashtag)) return;
+      _table.Delete(MetaHashtagIndexSection, hashtag);
+    }
+
     private sealed class Dto
     {
       public int Id { get; set; }
@@ -114,6 +152,7 @@ namespace ProgesiRepositories.Rhino
       public string? AdditionalInfo { get; set; }
       public string[]? References { get; set; }
       public SnipDto[]? Snips { get; set; }
+      public string? Hashtag { get; set; }
     }
 
     private sealed class SnipDto

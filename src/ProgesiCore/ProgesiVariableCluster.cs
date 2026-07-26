@@ -68,7 +68,7 @@ namespace ProgesiCore
       _progesiVariableIds.Clear();
       _progesiVariableIds.AddRange(ids);
 
-      Hashtag = BuildHashtag(Id, Name, _progesiVariableIds);
+      Hashtag = ComputeContentHashtag();
     }
 
     /// <summary>
@@ -142,18 +142,17 @@ namespace ProgesiCore
     /// </summary>
     public ProgesiVariableCluster RecalculateHashtag()
     {
-      Hashtag = BuildHashtag(Id, Name, _progesiVariableIds);
+      Hashtag = ComputeContentHashtag();
       return this;
     }
 
-    private static string BuildHashtag(int id, string name, IEnumerable<int> orderedIds)
+    private string ComputeContentHashtag() => ProgesiHash.Compute(this);
+
+    /// <summary>Pre-R2-J human-readable hashtag for same-store back-compat lookups.</summary>
+    public static string BuildLegacyHashtag(int id, string name, IEnumerable<int> orderedIds)
     {
       var idsPart = string.Join(",", orderedIds);
-      var seed = $"{id}|{name.Trim()}|{idsPart}";
-
-      // QUI puoi sostituire con la stessa logica usata per Variable/Metadata
-      // ad es. passando seed a un servizio SHA-256 comune.
-      return seed;
+      return $"{id}|{name.Trim()}|{idsPart}";
     }
 
     protected override IEnumerable<object> GetEqualityComponents()

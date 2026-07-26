@@ -187,6 +187,25 @@ public sealed class EfVariableRepositoryTests : IDisposable
     removed.Should().Be(0);
   }
 
+  [Fact]
+  public async Task GetByHashtagAsync_After_Save_Returns_Same_Variable()
+  {
+    var original = new ProgesiVariable(15, "Tagged", 99, metadataIds: new[] { 2 });
+    await _repo.SaveAsync(original);
+
+    var loaded = await _repo.GetByHashtagAsync(original.Hashtag);
+
+    loaded.Should().NotBeNull();
+    loaded!.Id.Should().Be(15);
+    loaded.Hashtag.Should().Be(original.Hashtag);
+  }
+
+  [Fact]
+  public async Task GetByHashtagAsync_Miss_Returns_Null()
+  {
+    (await _repo.GetByHashtagAsync("deadbeef")).Should().BeNull();
+  }
+
   public void Dispose()
   {
     var path = _connectionString.Replace("Data Source=", string.Empty);

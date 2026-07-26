@@ -120,6 +120,7 @@ namespace ProgesiGrasshopperAssembly.Components
           int outId = 0, mid = 0;
           bool ass = false;
           int[] deps = Array.Empty<int>();
+          string digest = "";
           string summary = "";
 
           if (ok && obj != null)
@@ -134,6 +135,7 @@ namespace ProgesiGrasshopperAssembly.Components
             ReadIf(obj, "MetaId", ref mid);
             ass = ReadBool(obj, "IsAssumption");
             deps = ReadDepends(obj);
+            ReadIf(obj, "Hash", ref digest);
             ReadIf(obj, "Summary", ref summary);
           }
 
@@ -152,7 +154,7 @@ namespace ProgesiGrasshopperAssembly.Components
           else
             tVal.Append(new GH_String(value ?? ""), path);
           tId.Append(new GH_Integer(outId), path);
-          tHash.Append(new GH_String(summary), path);
+          tHash.Append(new GH_String(!string.IsNullOrWhiteSpace(digest) ? digest : summary), path);
           tName.Append(new GH_String(name ?? ""), path);
           tValue.Append(new GH_String(value ?? ""), path);
           tValC.Append(new GH_String(valc ?? ""), path);

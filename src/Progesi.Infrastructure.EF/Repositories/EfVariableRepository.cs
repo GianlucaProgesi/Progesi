@@ -60,6 +60,23 @@ public sealed class EfVariableRepository : IVariableRepository
     return await GetByIdAsync(variable.Id, ct) ?? variable;
   }
 
+  public async Task<ProgesiVariable?> GetByHashtagAsync(string hashtag, CancellationToken ct = default)
+  {
+    if (string.IsNullOrWhiteSpace(hashtag))
+      return null;
+
+    var id = await _context.Variables
+        .AsNoTracking()
+        .Where(v => v.ContentHash == hashtag)
+        .Select(v => (int?)v.Id)
+        .FirstOrDefaultAsync(ct);
+
+    if (!id.HasValue)
+      return null;
+
+    return await GetByIdAsync(id.Value, ct);
+  }
+
   public async Task<ProgesiVariable> GetByIdAsync(int id, CancellationToken ct = default)
   {
     var entity = await _context.Variables

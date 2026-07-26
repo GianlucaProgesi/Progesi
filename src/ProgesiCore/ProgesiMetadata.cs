@@ -86,6 +86,9 @@ namespace ProgesiCore
 
     public IReadOnlyList<ProgesiSnip> Snips => _snips.ToList();
 
+    /// <summary>Content-based hashtag (SHA-256 digest; derived, not part of equality).</summary>
+    public string Hashtag => ProgesiHash.Compute(this);
+
     public void UpdateAdditionalInfo(string? info)
     {
       AdditionalInfo = info ?? string.Empty;
@@ -231,6 +234,9 @@ namespace ProgesiCore
     public string MimeType { get; private set; } = "image/png";
     public string Caption { get; private set; } = string.Empty;
     public string? Source { get; private set; }
+
+    /// <summary>Content-based hashtag (SHA-256 digest; derived, not part of equality).</summary>
+    public string Hashtag => ProgesiHash.Compute(this);
 
     protected override IEnumerable<object> GetEqualityComponents()
     {

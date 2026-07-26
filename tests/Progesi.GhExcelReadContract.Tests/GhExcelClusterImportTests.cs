@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using ClosedXML.Excel;
 using FluentAssertions;
+using ProgesiCore;
 using Xunit;
 
 namespace Progesi.GhExcelReadContract.Tests
@@ -57,7 +58,9 @@ namespace Progesi.GhExcelReadContract.Tests
       var ok = GhExcelClusterImport.TryBuildRowDto(ws, 2, columns, out var dto, out var error);
 
       ok.Should().BeTrue();
-      dto.Hashtag.Should().Be("7|SpanSet|3,4");
+      var expected = ProgesiVariableCluster.Rehydrate(7, "SpanSet", new[] { 3, 4 }, "Notes");
+      dto.Hashtag.Should().Be(expected.Hashtag);
+      dto.Hashtag.Should().Be(ProgesiHash.Compute(expected));
     }
 
     [Fact]

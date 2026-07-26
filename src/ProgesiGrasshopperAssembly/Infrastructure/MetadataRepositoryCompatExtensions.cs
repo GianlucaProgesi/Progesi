@@ -261,22 +261,29 @@ namespace ProgesiGrasshopperAssembly.Infrastructure
       {
         var doc = rh.Doc;
         var table = doc.Strings;
+        var metaRepo = new RhinoMetadataRepository(doc);
 
-        int rid = id;
-
-        // priorità HASH: prima summary umano (ID:), poi digest content
-        if (rid <= 0) { var tryId = ExtractIdFromSummary(hash); if (tryId > 0) rid = tryId; }
-        if (rid <= 0)
+        int rid = 0;
+        ProgesiMetadata? found = null;
+        var digest = ExtractDigest(hash);
+        if (!string.IsNullOrWhiteSpace(digest))
         {
-          var digest = ExtractDigest(hash);
-          if (!string.IsNullOrWhiteSpace(digest))
+          found = metaRepo.GetByHashtagAsync(digest).GetAwaiter().GetResult();
+          if (found != null) rid = found.Id;
+        }
+
+        if (rid <= 0) { var tryId = ExtractIdFromSummary(hash); if (tryId > 0) rid = tryId; }
+        if (rid <= 0 && !string.IsNullOrWhiteSpace(digest))
+        {
+          if (!TryResolveIdByHash(table, "Progesi.MetaHashtag", digest, out rid))
             TryResolveIdByHash(table, "Progesi.MetaContentHash", digest, out rid);
         }
 
+        if (rid <= 0 && id > 0) rid = id;
+
         if (rid <= 0) { info = "Input non valido (hash/id)."; return false; }
 
-        var repo = new RhinoMetadataRepository(doc);
-        var m = repo.GetAsync(rid).GetAwaiter().GetResult();
+        var m = found ?? metaRepo.GetAsync(rid).GetAwaiter().GetResult();
         if (m == null) { info = "Non trovato (rhino)"; return false; }
 
         var by = m.CreatedBy ?? "";
@@ -289,7 +296,7 @@ namespace ProgesiGrasshopperAssembly.Infrastructure
         metadata = new
         {
           Id = m.Id,
-          Hash = summary,                 // summary umano
+          Hash = m.Hashtag,
           Summary = summary,
           LastModified = m.LastModified.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture),
           By = string.IsNullOrWhiteSpace(by) ? "-" : by,
@@ -333,7 +340,7 @@ namespace ProgesiGrasshopperAssembly.Infrastructure
 
         var repo = new RhinoMetadataRepository(doc);
 
-        // se update: togli vecchio content-hash se BY/INFO cambiano
+        // se update: togli vecchi indici se BY/INFO o contenuto cambiano
         var current = repo.GetAsync(id).GetAwaiter().GetResult();
         if (current != null)
         {
@@ -341,6 +348,7 @@ namespace ProgesiGrasshopperAssembly.Infrastructure
           var prevHash = Sha256Hex(prevSig);
           if (!string.Equals(prevHash, contentHash, StringComparison.Ordinal))
             UnindexHash(table, "Progesi.MetaContentHash", prevHash);
+          UnindexHash(table, "Progesi.MetaHashtag", ProgesiHash.Compute(current));
         }
 
         // costruisci metadata e **salva i Ref normalizzati**
@@ -356,11 +364,12 @@ namespace ProgesiGrasshopperAssembly.Infrastructure
         }
         repo.UpsertAsync(meta).GetAwaiter().GetResult();
 
-        // indicizza BY+INFO
+        // indicizza BY+INFO (legacy dedupe) e domain hashtag
         IndexHash(table, "Progesi.MetaContentHash", contentHash, id);
+        IndexHash(table, "Progesi.MetaHashtag", ProgesiHash.Compute(meta), id);
 
         var summary = $"ID:{id} | BY:{(string.IsNullOrEmpty(byN) ? "-" : byN)} | DESC:{descrN}";
-        persisted = new { Id = id, Hash = summary, Summary = summary };
+        persisted = new { Id = id, Hash = ProgesiHash.Compute(meta), Summary = summary };
         return true;
       }
 
@@ -384,6 +393,7 @@ namespace ProgesiGrasshopperAssembly.Infrastructure
           var prevSig = $"BY={ToNorm(current.CreatedBy ?? "")}|INFO={(current.AdditionalInfo ?? "").Trim()}";
           var prevHash = Sha256Hex(prevSig);
           UnindexHash(table, "Progesi.MetaContentHash", prevHash);
+          UnindexHash(table, "Progesi.MetaHashtag", ProgesiHash.Compute(current));
         }
 
         var ok = repo.DeleteAsync(id).GetAwaiter().GetResult();
@@ -411,29 +421,34 @@ namespace ProgesiGrasshopperAssembly.Infrastructure
       {
         var doc = rh.Doc;
         var table = doc.Strings;
+        var varRepo = new RhinoVariableRepository(doc);
 
-        // 1) priorità HASH (summary umano con ID:..., poi digest strict/content)
         int rid = 0;
-        var tryId = ExtractIdFromSummary(hash);
-        if (tryId > 0) rid = tryId;
+        ProgesiVariable? found = null;
+        var digest = ExtractDigest(hash);
+        if (!string.IsNullOrWhiteSpace(digest))
+        {
+          found = varRepo.GetByHashtagAsync(digest).GetAwaiter().GetResult();
+          if (found != null) rid = found.Id;
+        }
 
         if (rid <= 0)
         {
-          var digest = ExtractDigest(hash);
-          if (!string.IsNullOrWhiteSpace(digest))
-          {
-            if (!TryResolveIdByHash(table, "Progesi.VarStrictHash", digest, out rid))
-              TryResolveIdByHash(table, "Progesi.VarHash", digest, out rid);
-          }
+          var tryId = ExtractIdFromSummary(hash);
+          if (tryId > 0) rid = tryId;
         }
 
-        // 2) fallback all'Id input
+        if (rid <= 0 && !string.IsNullOrWhiteSpace(digest))
+        {
+          if (!TryResolveIdByHash(table, "Progesi.VarStrictHash", digest, out rid))
+            TryResolveIdByHash(table, "Progesi.VarHash", digest, out rid);
+        }
+
         if (rid <= 0 && id > 0) rid = id;
 
         if (rid <= 0) { info = "Input non valido (hash/id)."; return false; }
 
-        var repo = new RhinoVariableRepository(doc);
-        var v = repo.GetByIdAsync(rid).GetAwaiter().GetResult();
+        var v = found ?? varRepo.GetByIdAsync(rid).GetAwaiter().GetResult();
         if (v == null) { info = "Non trovato (rhino)"; return false; }
 
         var name = v.Name ?? "";
@@ -451,7 +466,7 @@ namespace ProgesiGrasshopperAssembly.Infrastructure
         variable = new
         {
           Id = v.Id,
-          Hash = ProgesiHash.Compute(v),     // content-hash interno
+          Hash = v.Hashtag,
           Name = name,
           Value = value,
           TypedValue = v.Value,
@@ -633,12 +648,12 @@ namespace ProgesiGrasshopperAssembly.Infrastructure
         persisted = new
         {
           Id = id,
-          Hash = summary,                 // per la porta Hash (umano)
+          Hash = newContent,
           MetaId = metadataIds.Length > 0 ? metadataIds[0] : 0,
           Depends = depN,
           IsAssumption = isAss,
           ValueCanonical = valc,
-          Summary = summary              // per la porta Info
+          Summary = summary
         };
         return true;
       }

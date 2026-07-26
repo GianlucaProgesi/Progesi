@@ -14,6 +14,9 @@ namespace ProgesiRepositories.Rhino
 {
   public sealed class RhinoVariableRepository : IVariableRepository
   {
+    private const string VarSection = "Progesi.Var";
+    private const string VarHashtagIndexSection = "Progesi.VarHash";
+
     private readonly StringTable _table;
 
     public RhinoVariableRepository(RhinoDoc doc)
@@ -24,7 +27,13 @@ namespace ProgesiRepositories.Rhino
 
     public Task<ProgesiVariable> SaveAsync(ProgesiVariable variable, CancellationToken ct = default)
     {
+      var hashtag = ProgesiHash.Compute(variable);
       var key = KeyOf(variable.Id);
+
+      var current = GetByIdAsync(variable.Id, ct).GetAwaiter().GetResult();
+      if (current != null)
+        UnindexHashtag(current.Hashtag);
+
       var payload = new
       {
         variable.Id,
@@ -34,10 +43,12 @@ namespace ProgesiRepositories.Rhino
         variable.MetadataId,
         MetadataIds = variable.MetadataIds ?? Array.Empty<int>(),
         Depends = variable.DependsFrom ?? Array.Empty<int>(),
-        variable.IsAssumption
+        variable.IsAssumption,
+        Hashtag = hashtag
       };
       var json = JsonConvert.SerializeObject(payload) ?? string.Empty;
-      _table.SetString("Progesi.Var", key, json);
+      _table.SetString(VarSection, key, json);
+      IndexHashtag(hashtag, variable.Id);
       return Task.FromResult(variable);
     }
 
@@ -45,7 +56,7 @@ namespace ProgesiRepositories.Rhino
     public Task<ProgesiVariable> GetByIdAsync(int id, CancellationToken ct = default)
     {
       var key = KeyOf(id);
-      var json = _table.GetValue("Progesi.Var", key);
+      var json = _table.GetValue(VarSection, key);
       if (string.IsNullOrWhiteSpace(json)) return Task.FromResult<ProgesiVariable>(null);
 
       var dto = JsonConvert.DeserializeObject<Dto>(json);
@@ -58,6 +69,18 @@ namespace ProgesiRepositories.Rhino
 
       return Task.FromResult(new ProgesiVariable(dto.Id, dto.Name ?? string.Empty, value, depends, metadataIds, isAss));
     }
+
+    public async Task<ProgesiVariable?> GetByHashtagAsync(string hashtag, CancellationToken ct = default)
+    {
+      if (string.IsNullOrWhiteSpace(hashtag))
+        return null;
+
+      var idStr = _table.GetValue(VarHashtagIndexSection, hashtag);
+      if (!int.TryParse(idStr, out var id) || id <= 0)
+        return null;
+
+      return await GetByIdAsync(id, ct);
+    }
 #nullable enable
 
     public async Task<IReadOnlyList<ProgesiVariable>> GetAllAsync(CancellationToken ct = default)
@@ -69,8 +92,12 @@ namespace ProgesiRepositories.Rhino
 
     public Task<bool> DeleteAsync(int id, CancellationToken ct = default)
     {
+      var current = GetByIdAsync(id, ct).GetAwaiter().GetResult();
+      if (current != null)
+        UnindexHashtag(current.Hashtag);
+
       var key = KeyOf(id);
-      _table.Delete("Progesi.Var", key);
+      _table.Delete(VarSection, key);
       return Task.FromResult(true);
     }
 
@@ -87,6 +114,18 @@ namespace ProgesiRepositories.Rhino
 
     private static string KeyOf(int id) => $"var:{id}";
 
+    private void IndexHashtag(string hashtag, int id)
+    {
+      if (string.IsNullOrWhiteSpace(hashtag) || id <= 0) return;
+      _table.SetString(VarHashtagIndexSection, hashtag, id.ToString(System.Globalization.CultureInfo.InvariantCulture));
+    }
+
+    private void UnindexHashtag(string hashtag)
+    {
+      if (string.IsNullOrWhiteSpace(hashtag)) return;
+      _table.Delete(VarHashtagIndexSection, hashtag);
+    }
+
     private sealed class Dto
     {
       public int Id { get; set; }
@@ -97,6 +136,7 @@ namespace ProgesiRepositories.Rhino
       public int[]? MetadataIds { get; set; }
       public int[]? Depends { get; set; }
       public bool? IsAssumption { get; set; }
+      public string? Hashtag { get; set; }
     }
 
     private static int[] ReadMetadataIds(int[]? metadataIds, int? metadataId)

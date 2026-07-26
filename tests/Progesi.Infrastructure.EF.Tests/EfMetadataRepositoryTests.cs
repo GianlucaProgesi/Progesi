@@ -110,6 +110,25 @@ public sealed class EfMetadataRepositoryTests : IDisposable
     (await _repo.ListAsync()).Should().HaveCount(1);
   }
 
+  [Fact]
+  public async Task GetByHashtagAsync_After_Upsert_Returns_Same_Metadata()
+  {
+    var original = ProgesiMetadata.Create("tagged", "info", id: 6);
+    await _repo.UpsertAsync(original);
+
+    var loaded = await _repo.GetByHashtagAsync(original.Hashtag);
+
+    loaded.Should().NotBeNull();
+    loaded!.Id.Should().Be(6);
+    loaded.Hashtag.Should().Be(original.Hashtag);
+  }
+
+  [Fact]
+  public async Task GetByHashtagAsync_Miss_Returns_Null()
+  {
+    (await _repo.GetByHashtagAsync("missing")).Should().BeNull();
+  }
+
   public void Dispose()
   {
     var path = _connectionString.Replace("Data Source=", string.Empty);
