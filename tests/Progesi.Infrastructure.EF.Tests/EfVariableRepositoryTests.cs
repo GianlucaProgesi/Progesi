@@ -1,5 +1,6 @@
 using FluentAssertions;
 using ProgesiCore;
+using Progesi.Infrastructure.EF;
 using Progesi.Infrastructure.EF.Repositories;
 
 namespace Progesi.Infrastructure.EF.Tests;
@@ -25,7 +26,7 @@ public sealed class EfVariableRepositoryTests : IDisposable
   [Fact]
   public async Task SaveAsync_Then_GetByIdAsync_RoundTrips_Fields()
   {
-    var original = new ProgesiVariable(5, "Span", 12.5, new[] { 1, 2 }, metadataId: 3);
+    var original = new ProgesiVariable(5, "Span", 12.5, new[] { 1, 2 }, metadataIds: new[] { 3 });
 
     await _repo.SaveAsync(original);
     var loaded = await _repo.GetByIdAsync(5);
@@ -36,6 +37,58 @@ public sealed class EfVariableRepositoryTests : IDisposable
     loaded.Value.Should().Be(12.5);
     loaded.DependsFrom.Should().BeEquivalentTo(new[] { 1, 2 });
     loaded.MetadataId.Should().Be(3);
+    loaded.MetadataIds.Should().Equal(3);
+  }
+
+  [Fact]
+  public async Task SaveAsync_RoundTrips_MetadataIds_List()
+  {
+    var original = new ProgesiVariable(12, "Links", 1, metadataIds: new[] { 3, 7 });
+
+    await _repo.SaveAsync(original);
+    var loaded = await _repo.GetByIdAsync(12);
+
+    loaded.Should().NotBeNull();
+    loaded!.MetadataIds.Should().Equal(3, 7);
+    loaded.MetadataId.Should().Be(3);
+  }
+
+  [Fact]
+  public async Task GetByIdAsync_Legacy_Scalar_Only_Reads_As_Single_Element_List()
+  {
+    using var ctx = ProgesiDbContextFactory.Create(_connectionString, resetSchema: true);
+    ctx.Variables.Add(new Progesi.Infrastructure.EF.Entities.VariableEntity
+    {
+      Id = 21,
+      Name = "Legacy",
+      ValueType = "int",
+      Value = "9",
+      MetadataId = 5,
+      MetadataIdsJson = "[]",
+      DependsJson = "[]",
+      ContentHash = "legacy-scalar-only"
+    });
+    await ctx.SaveChangesAsync();
+    ctx.Dispose();
+
+    var loaded = await _repo.GetByIdAsync(21);
+
+    loaded.Should().NotBeNull();
+    loaded!.MetadataIds.Should().Equal(5);
+    loaded.MetadataId.Should().Be(5);
+  }
+
+  [Fact]
+  public async Task SaveAsync_Empty_MetadataIds_RoundTrips_As_Empty()
+  {
+    var original = new ProgesiVariable(13, "NoMeta", 0);
+
+    await _repo.SaveAsync(original);
+    var loaded = await _repo.GetByIdAsync(13);
+
+    loaded.Should().NotBeNull();
+    loaded!.MetadataIds.Should().BeEmpty();
+    loaded.MetadataId.Should().BeNull();
   }
 
   [Fact]
@@ -74,7 +127,7 @@ public sealed class EfVariableRepositoryTests : IDisposable
   [Fact]
   public async Task SaveAsync_Preserves_Hash_Computable_Content()
   {
-    var original = new ProgesiVariable(11, "Load", 42, new[] { 3, 1, 2 }, metadataId: 4);
+    var original = new ProgesiVariable(11, "Load", 42, new[] { 3, 1, 2 }, metadataIds: new[] { 4 });
 
     await _repo.SaveAsync(original);
     var loaded = await _repo.GetByIdAsync(11);
@@ -86,10 +139,10 @@ public sealed class EfVariableRepositoryTests : IDisposable
   [Fact]
   public async Task Save_Deduplicates_By_ContentHash()
   {
-    var v1 = new ProgesiVariable(1, "A", 42, new[] { 3, 1, 2 }, metadataId: 7);
+    var v1 = new ProgesiVariable(1, "A", 42, new[] { 3, 1, 2 }, metadataIds: new[] { 7 });
     await _repo.SaveAsync(v1);
 
-    var v2 = new ProgesiVariable(2, "A", 42, new[] { 2, 3, 1 }, metadataId: 7);
+    var v2 = new ProgesiVariable(2, "A", 42, new[] { 2, 3, 1 }, metadataIds: new[] { 7 });
     var ret = await _repo.SaveAsync(v2);
 
     ret.Id.Should().Be(1);

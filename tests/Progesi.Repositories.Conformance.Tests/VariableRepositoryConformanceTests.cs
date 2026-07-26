@@ -25,7 +25,7 @@ namespace Progesi.Repositories.Conformance.Tests
     {
       using var store = createStore();
       var repo = store.Repository;
-      var original = new ProgesiVariable(5, "Span", 12.5, new[] { 1, 2 }, metadataId: 3);
+      var original = new ProgesiVariable(5, "Span", 12.5, new[] { 1, 2 }, metadataIds: new[] { 3 });
 
       await repo.SaveAsync(original);
       var loaded = await repo.GetByIdAsync(5);
@@ -36,6 +36,37 @@ namespace Progesi.Repositories.Conformance.Tests
       loaded.Value.Should().Be(12.5);
       loaded.DependsFrom.Should().BeEquivalentTo(new[] { 1, 2 });
       loaded.MetadataId.Should().Be(3);
+      loaded.MetadataIds.Should().Equal(3);
+    }
+
+    [Theory]
+    [MemberData(nameof(VariableRepositoryConformanceStoreProvider.StoreFactories), MemberType = typeof(VariableRepositoryConformanceStoreProvider))]
+    public async Task SaveAsync_RoundTrips_MetadataIds_List(string storeName, System.Func<IVariableRepositoryConformanceStore> createStore)
+    {
+      using var store = createStore();
+      var original = new ProgesiVariable(12, "Links", 1, metadataIds: new[] { 3, 7 });
+
+      await store.Repository.SaveAsync(original);
+      var loaded = await store.Repository.GetByIdAsync(12);
+
+      loaded.Should().NotBeNull();
+      loaded!.MetadataIds.Should().Equal(3, 7);
+      loaded.MetadataId.Should().Be(3);
+    }
+
+    [Theory]
+    [MemberData(nameof(VariableRepositoryConformanceStoreProvider.StoreFactories), MemberType = typeof(VariableRepositoryConformanceStoreProvider))]
+    public async Task SaveAsync_Empty_MetadataIds_RoundTrips_As_Empty(string storeName, System.Func<IVariableRepositoryConformanceStore> createStore)
+    {
+      using var store = createStore();
+      var original = new ProgesiVariable(13, "NoMeta", 0);
+
+      await store.Repository.SaveAsync(original);
+      var loaded = await store.Repository.GetByIdAsync(13);
+
+      loaded.Should().NotBeNull();
+      loaded!.MetadataIds.Should().BeEmpty();
+      loaded.MetadataId.Should().BeNull();
     }
 
     [Theory]
@@ -86,7 +117,7 @@ namespace Progesi.Repositories.Conformance.Tests
     {
       using var store = createStore();
       var repo = store.Repository;
-      var original = new ProgesiVariable(11, "Load", 42, new[] { 3, 1, 2 }, metadataId: 4);
+      var original = new ProgesiVariable(11, "Load", 42, new[] { 3, 1, 2 }, metadataIds: new[] { 4 });
 
       await repo.SaveAsync(original);
       var loaded = await repo.GetByIdAsync(11);

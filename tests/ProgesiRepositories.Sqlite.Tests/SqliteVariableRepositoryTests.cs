@@ -26,7 +26,7 @@ namespace ProgesiRepositories.Sqlite.Tests
     [Fact]
     public async Task Can_Create_And_Save_Variable()
     {
-      var v = new ProgesiVariable(1, "A", 42, new[] { 1, 2, 3 }, metadataId: 7);
+      var v = new ProgesiVariable(1, "A", 42, new[] { 1, 2, 3 }, metadataIds: new[] { 7 });
 
       var saved = await _repo.SaveAsync(v);
       saved.Id.Should().Be(1);
@@ -41,10 +41,10 @@ namespace ProgesiRepositories.Sqlite.Tests
     [Fact]
     public async Task Save_Deduplicates_By_ContentHash()
     {
-      var v1 = new ProgesiVariable(1, "A", 42, new[] { 3, 1, 2 }, metadataId: 7);
+      var v1 = new ProgesiVariable(1, "A", 42, new[] { 3, 1, 2 }, metadataIds: new[] { 7 });
       await _repo.SaveAsync(v1);
 
-      var v2 = new ProgesiVariable(2, "A", 42, new[] { 2, 3, 1 }, metadataId: 7);
+      var v2 = new ProgesiVariable(2, "A", 42, new[] { 2, 3, 1 }, metadataIds: new[] { 7 });
       var ret = await _repo.SaveAsync(v2);
 
       ret.Id.Should().Be(1);

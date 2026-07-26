@@ -292,7 +292,7 @@ namespace ProgesiGrasshopperAssembly.Components
           wsV.Cell(r, 3).Value = v.Name ?? "";
           wsV.Cell(r, 4).Value = v.Value ?? "";
           wsV.Cell(r, 5).Value = v.ValC ?? "";
-          wsV.Cell(r, 6).Value = v.MetaId;
+          wsV.Cell(r, 6).Value = FormatMetaIdForExcel(v.MetadataIds);
           wsV.Cell(r, 7).Value = (v.Depends != null && v.Depends.Length > 0) ? string.Join(",", v.Depends) : "";
           wsV.Cell(r, 8).Value = v.Assumption ? 1 : 0;
           r++;
@@ -544,7 +544,8 @@ namespace ProgesiGrasshopperAssembly.Components
             string deps = GhExcelCellReader.ReadCell(wsV, r, mapV, "DEPENDS");
             string asS = GhExcelCellReader.ReadCell(wsV, r, mapV, "ASSUMPTION");
             int id = GhExcelValueParsing.ToInt(GhExcelCellReader.ReadCell(wsV, r, mapV, "ID"));
-            int mid = GhExcelValueParsing.ToInt(GhExcelCellReader.ReadCell(wsV, r, mapV, "METAID"));
+            string metaCell = GhExcelCellReader.ReadCell(wsV, r, mapV, "METAID");
+            int[] metaIds = ParseMetadataIds(metaCell);
 
             if (GhExcelValueParsing.IsBlank(name) && GhExcelValueParsing.IsBlank(value) && GhExcelValueParsing.IsBlank(deps) && GhExcelValueParsing.IsBlank(asS))
             { WARN(1, $"[Var R{r}] empty row → skip"); varWarn++; varRows++; continue; }
@@ -554,13 +555,21 @@ namespace ProgesiGrasshopperAssembly.Components
             { var msg = $"[Var R{r}] NAME invalid (len/charset)"; (strict ? ERR : WARN)(1, msg); AddErrRC(1, r, mapV.TryGetValue("NAME", out var c) ? c : 0); if (strict) { varErr++; continue; } else { varWarn++; } }
 
             // MetaId existence (se fornito)
-            if (mid > 0)
+            if (metaIds.Length > 0)
             {
-              object dummy; string lookupInfo;
-              bool okMeta = MetadataRepositoryCompatExtensions.TryGetByHashThenId(repo, "", mid, out dummy, out lookupInfo);
+              foreach (var mid in metaIds)
+              {
+                object dummy; string lookupInfo;
+                bool okMeta = MetadataRepositoryCompatExtensions.TryGetByHashThenId(repo, "", mid, out dummy, out lookupInfo);
 
-              if (!okMeta)
-              { var msg = $"[Var R{r}] METAID not found: {mid}"; (strict ? ERR : WARN)(1, msg); AddErrRC(1, r, mapV.TryGetValue("METAID", out var c) ? c : 0); if (strict) { varErr++; continue; } else { varWarn++; mid = 0; } }
+                if (!okMeta)
+                {
+                  var msg = $"[Var R{r}] METAID not found: {mid}";
+                  if (strict) { ERR(1, msg); AddErrRC(1, r, mapV.TryGetValue("METAID", out var c) ? c : 0); varErr++; metaIds = Array.Empty<int>(); break; }
+                  else { WARN(1, msg); AddErrRC(1, r, mapV.TryGetValue("METAID", out var c) ? c : 0); varWarn++; metaIds = Array.Empty<int>(); break; }
+                }
+              }
+              if (metaIds.Length == 0 && strict) { varRows++; continue; }
             }
 
             int[] depArr = GhExcelValueParsing.ParseDepends(deps);
@@ -609,7 +618,8 @@ namespace ProgesiGrasshopperAssembly.Components
                 unit = "",
                 by = "",
                 isAssumption = ass,
-                mid = (mid > 0 ? mid.ToString(CultureInfo.InvariantCulture) : ""),
+                metadataIds = (object)metaIds,
+                mid = FormatMetaIdForExcel(metaIds),
                 depends = (object)depArr
               };
 
@@ -1364,6 +1374,7 @@ CREATE TABLE IF NOT EXISTS ClusterVariables (
       public string Value { get; set; }
       public string ValueType { get; set; }
       public int? MetadataId { get; set; }
+      public int[] MetadataIds { get; set; }
       public int[] Depends { get; set; }
       public bool? IsAssumption { get; set; }
     }
@@ -1386,6 +1397,7 @@ CREATE TABLE IF NOT EXISTS ClusterVariables (
       public string Value;
       public string ValC;
       public int MetaId;
+      public int[] MetadataIds = Array.Empty<int>();
       public int[] Depends;
       public bool Assumption;
       public bool IsExcelUnsupported;
@@ -1497,7 +1509,8 @@ CREATE TABLE IF NOT EXISTS ClusterVariables (
           isExcelUnsupported = GhExcelVariableValueSupport.RequiresUnsupportedExportHandling(valueType, dto.Value ?? "");
         }
 
-        var pv = new ProgesiVariable(id, dto.Name ?? "", typed, deps, dto.MetadataId, ass);
+        var metadataIds = ReadVarDtoMetadataIds(dto);
+        var pv = new ProgesiVariable(id, dto.Name ?? "", typed, deps, metadataIds, ass);
         string hash = ProgesiHash.Compute(pv);
 
         list.Add(new VarRow
@@ -1507,7 +1520,8 @@ CREATE TABLE IF NOT EXISTS ClusterVariables (
           Name = dto.Name ?? "",
           Value = excelValue,
           ValC = valc,
-          MetaId = dto.MetadataId ?? 0,
+          MetaId = metadataIds.Length > 0 ? metadataIds[0] : 0,
+          MetadataIds = metadataIds,
           Depends = deps,
           Assumption = ass,
           IsExcelUnsupported = isExcelUnsupported,
@@ -1636,6 +1650,58 @@ CREATE TABLE IF NOT EXISTS ClusterVariables (
         }
       }
       catch { return value ?? ""; }
+    }
+
+    private static int[] ReadVarDtoMetadataIds(VarDto dto)
+    {
+      if (dto?.MetadataIds != null && dto.MetadataIds.Length > 0)
+        return dto.MetadataIds;
+
+      if (dto?.MetadataId.HasValue == true && dto.MetadataId.Value > 0)
+        return new[] { dto.MetadataId.Value };
+
+      return Array.Empty<int>();
+    }
+
+    private static int[] ParseMetadataIds(string cellValue)
+    {
+      if (string.IsNullOrWhiteSpace(cellValue))
+        return Array.Empty<int>();
+
+      var trimmed = cellValue.Trim();
+      if (trimmed == "0")
+        return Array.Empty<int>();
+
+      if (!trimmed.Contains(",") && !trimmed.Contains(";") && !trimmed.Contains("|"))
+      {
+        if (int.TryParse(trimmed, NumberStyles.Integer, CultureInfo.InvariantCulture, out var single) && single > 0)
+          return new[] { single };
+        return Array.Empty<int>();
+      }
+
+      var tokens = trimmed.Split(new[] { ',', ';', '|', ' ' }, StringSplitOptions.RemoveEmptyEntries);
+      var seen = new HashSet<int>();
+      var list = new List<int>();
+      foreach (var token in tokens)
+      {
+        if (int.TryParse(token.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var n)
+            && n > 0
+            && seen.Add(n))
+          list.Add(n);
+      }
+
+      return list.ToArray();
+    }
+
+    private static string FormatMetaIdForExcel(int[] metadataIds)
+    {
+      if (metadataIds == null || metadataIds.Length == 0)
+        return string.Empty;
+
+      if (metadataIds.Length == 1)
+        return metadataIds[0].ToString(CultureInfo.InvariantCulture);
+
+      return string.Join(",", metadataIds);
     }
   }
 

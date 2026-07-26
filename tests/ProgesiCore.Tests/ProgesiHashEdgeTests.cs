@@ -33,17 +33,17 @@ namespace ProgesiCore.Tests
     public void Compute_Variable_OrderIndependent_And_Sensitive_To_DependsOrName()
     {
       // Stesso id, name, value, metadata; dipendenze stesse ma in ordine diverso -> hash uguale
-      var a = new ProgesiVariable(10, "K", 42, new[] { 3, 1, 2 }, metadataId: 7);
-      var b = new ProgesiVariable(10, "K", 42, new[] { 1, 2, 3 }, metadataId: 7);
+      var a = new ProgesiVariable(10, "K", 42, new[] { 3, 1, 2 }, metadataIds: new[] { 7 });
+      var b = new ProgesiVariable(10, "K", 42, new[] { 1, 2, 3 }, metadataIds: new[] { 7 });
 
       _ = ProgesiHash.Compute(a).Should().Be(ProgesiHash.Compute(b)); // l'ordine NON conta
 
       // Cambia il contenuto delle dipendenze -> hash diverso
-      var c = new ProgesiVariable(10, "K", 42, new[] { 1, 2, 4 }, metadataId: 7);
+      var c = new ProgesiVariable(10, "K", 42, new[] { 1, 2, 4 }, metadataIds: new[] { 7 });
       _ = ProgesiHash.Compute(a).Should().NotBe(ProgesiHash.Compute(c));
 
       // (in alternativa) cambiare il Name deve cambiare l'hash
-      var d = new ProgesiVariable(10, "K2", 42, new[] { 3, 1, 2 }, metadataId: 7);
+      var d = new ProgesiVariable(10, "K2", 42, new[] { 3, 1, 2 }, metadataIds: new[] { 7 });
       _ = ProgesiHash.Compute(a).Should().NotBe(ProgesiHash.Compute(d));
     }
   }

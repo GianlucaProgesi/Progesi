@@ -32,6 +32,7 @@ namespace ProgesiRepositories.Rhino
         ValueType = TypeOf(variable.Value),
         Value = Stringify(variable.Value),
         variable.MetadataId,
+        MetadataIds = variable.MetadataIds ?? Array.Empty<int>(),
         Depends = variable.DependsFrom ?? Array.Empty<int>(),
         variable.IsAssumption
       };
@@ -52,9 +53,10 @@ namespace ProgesiRepositories.Rhino
 
       var value = ParseValue(dto.Value ?? string.Empty, dto.ValueType ?? "string");
       var depends = dto.Depends ?? Array.Empty<int>();
+      var metadataIds = ReadMetadataIds(dto.MetadataIds, dto.MetadataId);
       var isAss = dto.IsAssumption ?? false;
 
-      return Task.FromResult(new ProgesiVariable(dto.Id, dto.Name ?? string.Empty, value, depends, dto.MetadataId, isAss));
+      return Task.FromResult(new ProgesiVariable(dto.Id, dto.Name ?? string.Empty, value, depends, metadataIds, isAss));
     }
 #nullable enable
 
@@ -92,8 +94,20 @@ namespace ProgesiRepositories.Rhino
       public string? ValueType { get; set; }
       public string? Value { get; set; }
       public int? MetadataId { get; set; }
+      public int[]? MetadataIds { get; set; }
       public int[]? Depends { get; set; }
       public bool? IsAssumption { get; set; }
+    }
+
+    private static int[] ReadMetadataIds(int[]? metadataIds, int? metadataId)
+    {
+      if (metadataIds != null && metadataIds.Length > 0)
+        return metadataIds;
+
+      if (metadataId.HasValue && metadataId.Value > 0)
+        return new[] { metadataId.Value };
+
+      return Array.Empty<int>();
     }
 
     // ---- helpers (null-safe)

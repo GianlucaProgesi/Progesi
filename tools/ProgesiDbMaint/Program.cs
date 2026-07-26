@@ -152,6 +152,7 @@ CREATE TABLE IF NOT EXISTS Variables (
     ValueType    TEXT NOT NULL,
     Value        TEXT NOT NULL,
     MetadataId   INTEGER NULL,
+    MetadataIdsJson TEXT NOT NULL DEFAULT '[]',
     DependsJson  TEXT NOT NULL,
     ContentHash  TEXT
 );
@@ -221,22 +222,23 @@ SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM __SchemaInfo);";
     }
   }
 
-  static long UpsertVariable(SqliteConnection c, string name, string valueType, string value, long? metadataId, string dependsJson)
+  static long UpsertVariable(SqliteConnection c, string name, string valueType, string value, long? metadataId, string metadataIdsJson, string dependsJson)
   {
     var md = metadataId.HasValue ? metadataId.Value.ToString(CultureInfo.InvariantCulture) : "";
-    var content = $"{name}|{valueType}|{value}|{dependsJson}|{md}";
+    var content = $"{name}|{valueType}|{value}|{dependsJson}|{metadataIdsJson}|{md}";
     var h = Sha256Hex(content);
 
     using (var ins = c.CreateCommand())
     {
       ins.CommandText = @"
-INSERT OR IGNORE INTO Variables(Name,ValueType,Value,MetadataId,DependsJson,ContentHash)
-VALUES($n,$t,$v,$m,$d,$h);";
+INSERT OR IGNORE INTO Variables(Name,ValueType,Value,MetadataId,MetadataIdsJson,DependsJson,ContentHash)
+VALUES($n,$t,$v,$m,$mids,$d,$h);";
       ins.Parameters.AddWithValue("$n", name);
       ins.Parameters.AddWithValue("$t", valueType);
       ins.Parameters.AddWithValue("$v", value);
       if (metadataId.HasValue) ins.Parameters.AddWithValue("$m", metadataId.Value);
       else ins.Parameters.AddWithValue("$m", DBNull.Value);
+      ins.Parameters.AddWithValue("$mids", metadataIdsJson ?? "[]");
       ins.Parameters.AddWithValue("$d", dependsJson);
       ins.Parameters.AddWithValue("$h", h);
       ins.ExecuteNonQuery();
@@ -282,9 +284,9 @@ VALUES($n,$t,$v,$m,$d,$h);";
     var m1 = UpsertMetadata(c, json1, lm);
     var m2 = UpsertMetadata(c, json2, lm);
 
-    var v1 = UpsertVariable(c, "alpha", "int", "1", m1, "[]");
-    var v2 = UpsertVariable(c, "beta", "string", "hello", m1, "[ " + v1.ToString(CultureInfo.InvariantCulture) + " ]");
-    var v3 = UpsertVariable(c, "gamma", "double", "3.14", m2, "[]");
+    var v1 = UpsertVariable(c, "alpha", "int", "1", m1, "[]", "[]");
+    var v2 = UpsertVariable(c, "beta", "string", "hello", m1, "[ " + m1.ToString(CultureInfo.InvariantCulture) + " ]", "[ " + v1.ToString(CultureInfo.InvariantCulture) + " ]");
+    var v3 = UpsertVariable(c, "gamma", "double", "3.14", m2, "[ " + m2.ToString(CultureInfo.InvariantCulture) + " ]", "[]");
 
     tx.Commit();
 
@@ -390,6 +392,19 @@ CREATE INDEX IF NOT EXISTS IX_Metadata_LastModified ON Metadata(LastModified);";
           cmd.ExecuteNonQuery();
         }
         v = 2;
+        SetSchemaVersion(c, v);
+      }
+
+      // v2 -> v3: MetadataIdsJson column on Variables
+      if (v < 3)
+      {
+        using (var cmd = c.CreateCommand())
+        {
+          cmd.CommandText = @"
+ALTER TABLE Variables ADD COLUMN MetadataIdsJson TEXT NOT NULL DEFAULT '[]';";
+          try { cmd.ExecuteNonQuery(); } catch { /* column may already exist */ }
+        }
+        v = 3;
         SetSchemaVersion(c, v);
       }
 
