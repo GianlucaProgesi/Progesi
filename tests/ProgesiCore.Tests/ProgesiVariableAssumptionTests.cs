@@ -15,8 +15,8 @@ namespace ProgesiCore.Tests
     [Fact]
     public void Hash_Differs_When_IsAssumption_Changes()
     {
-      var a = new ProgesiVariable(1, "K", 100, new[] { 1, 2 }, metadataId: 7, isAssumption: false);
-      var b = new ProgesiVariable(1, "K", 100, new[] { 1, 2 }, metadataId: 7, isAssumption: true);
+      var a = new ProgesiVariable(1, "K", 100, new[] { 1, 2 }, metadataIds: new[] { 7 }, isAssumption: false);
+      var b = new ProgesiVariable(1, "K", 100, new[] { 1, 2 }, metadataIds: new[] { 7 }, isAssumption: true);
 
       ProgesiHash.Compute(a).Should().NotBe(ProgesiHash.Compute(b));
     }
@@ -24,8 +24,8 @@ namespace ProgesiCore.Tests
     [Fact]
     public void Equality_Fails_When_IsAssumption_Differs()
     {
-      var a = new ProgesiVariable(1, "X", 5.0, new[] { 1, 3 }, metadataId: 10, isAssumption: false);
-      var b = new ProgesiVariable(1, "X", 5.0, new[] { 1, 3 }, metadataId: 10, isAssumption: true);
+      var a = new ProgesiVariable(1, "X", 5.0, new[] { 1, 3 }, metadataIds: new[] { 10 }, isAssumption: false);
+      var b = new ProgesiVariable(1, "X", 5.0, new[] { 1, 3 }, metadataIds: new[] { 10 }, isAssumption: true);
 
       a.Should().NotBe(b);
     }

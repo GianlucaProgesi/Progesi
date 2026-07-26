@@ -68,15 +68,34 @@ namespace ProgesiCore
     public static string Compute(ProgesiVariable v)
     {
       int[] depends = (v.DependsFrom ?? Array.Empty<int>()).OrderBy(x => x).ToArray();
-      var payload = new
+      int[] metadataIds = v.MetadataIds ?? Array.Empty<int>();
+
+      string json;
+      if (metadataIds.Length <= 1)
       {
-        v.Name,
-        Value = CanonicalValue(v.Value),
-        Depends = depends,
-        v.MetadataId,
-        Assumption = v.IsAssumption
-      };
-      string json = JsonConvert.SerializeObject(payload, JsonSettings) ?? string.Empty;
+        var payload = new
+        {
+          v.Name,
+          Value = CanonicalValue(v.Value),
+          Depends = depends,
+          MetadataId = metadataIds.Length == 1 ? (int?)metadataIds[0] : null,
+          Assumption = v.IsAssumption
+        };
+        json = JsonConvert.SerializeObject(payload, JsonSettings) ?? string.Empty;
+      }
+      else
+      {
+        var payload = new
+        {
+          v.Name,
+          Value = CanonicalValue(v.Value),
+          Depends = depends,
+          MetadataIds = metadataIds.OrderBy(x => x).ToArray(),
+          Assumption = v.IsAssumption
+        };
+        json = JsonConvert.SerializeObject(payload, JsonSettings) ?? string.Empty;
+      }
+
       return Sha256Hex(json);
     }
 

@@ -95,6 +95,88 @@ namespace ProgesiGrasshopperAssembly.Infrastructure
                    .Where(n => n > 0).Distinct().OrderBy(n => n).ToArray();
     }
 
+    private static int[] ReadMetadataIds(object payload, StringTable table, out string error)
+    {
+      error = string.Empty;
+      var fromPayload = ReadMetadataIdsArray(payload);
+      if (fromPayload != null)
+        return fromPayload;
+
+      var midStr = ReadString(payload, "mid");
+      if (string.IsNullOrWhiteSpace(midStr))
+        return Array.Empty<int>();
+
+      var trimmed = midStr.Trim();
+      if (ContainsMetadataListSeparator(trimmed))
+        return ParseMetadataIdList(trimmed);
+
+      if (int.TryParse(trimmed, NumberStyles.Integer, CultureInfo.InvariantCulture, out var midNum) && midNum > 0)
+        return new[] { midNum };
+
+      var digest = ExtractDigest(trimmed);
+      if (!string.IsNullOrWhiteSpace(digest) && TryResolveIdByHash(table, "Progesi.MetaContentHash", digest, out var ridMeta))
+        return new[] { ridMeta };
+
+      error = "Metadata non risolvibile: '" + trimmed + "'.";
+      return Array.Empty<int>();
+    }
+
+    private static int[] ReadMetadataIdsArray(object payload)
+    {
+      var pi = payload?.GetType().GetProperty("metadataIds", BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+      if (pi == null) return null;
+      var v = pi.GetValue(payload, null);
+      if (v == null) return null;
+
+      if (v is IEnumerable<int> ints)
+      {
+        var seen = new HashSet<int>();
+        var list = new List<int>();
+        foreach (var n in ints)
+        {
+          if (n > 0 && seen.Add(n))
+            list.Add(n);
+        }
+        return list.Count > 0 ? list.ToArray() : null;
+      }
+      if (v is IEnumerable en && !(v is string))
+      {
+        var list = new List<int>();
+        var seen = new HashSet<int>();
+        foreach (var o in en)
+        {
+          if (o == null) continue;
+          int n = o is int ii ? ii : (int.TryParse(o.ToString(), out var parsed) ? parsed : 0);
+          if (n > 0 && seen.Add(n)) list.Add(n);
+        }
+        return list.Count > 0 ? list.ToArray() : null;
+      }
+
+      return null;
+    }
+
+    private static bool ContainsMetadataListSeparator(string value)
+    {
+      return value.IndexOf(',') >= 0
+          || value.IndexOf(';') >= 0
+          || value.IndexOf('|') >= 0;
+    }
+
+    private static int[] ParseMetadataIdList(string value)
+    {
+      var tokens = value.Split(new[] { ',', ';', '|', ' ' }, StringSplitOptions.RemoveEmptyEntries);
+      var seen = new HashSet<int>();
+      var list = new List<int>();
+      foreach (var token in tokens)
+      {
+        if (int.TryParse(token.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var n)
+            && n > 0
+            && seen.Add(n))
+          list.Add(n);
+      }
+      return list.ToArray();
+    }
+
     private static string IsoNowUtc() => DateTime.UtcNow.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
     private static string ToNorm(string s) => (s ?? "").Trim().ToUpperInvariant();
 
@@ -412,6 +494,7 @@ namespace ProgesiGrasshopperAssembly.Infrastructure
         var isAss = ReadBool(payload, "isAssumption");
         var midStr = ReadString(payload, "mid");
         var depends = ReadDepends(payload);
+        var metadataIds = ReadMetadataIds(payload, table, out var metaResolveError);
 
         var inv = CultureInfo.InvariantCulture;
         // Value × Unit se ENTRAMBI numerici
@@ -422,18 +505,11 @@ namespace ProgesiGrasshopperAssembly.Infrastructure
           unit = "";
         }
 
-        // resolve MetaId da mid (Id numerico o Hash di MetaContent)
-        int? metaId = null;
-        if (!string.IsNullOrWhiteSpace(midStr))
+        // resolve metadata ids from payload / mid string (numeric, comma-list, or single hash)
+        if (metaResolveError != null)
         {
-          if (int.TryParse(midStr.Trim(), NumberStyles.Integer, inv, out var midNum) && midNum > 0)
-            metaId = midNum;
-          else
-          {
-            var digest = ExtractDigest(midStr.Trim());
-            if (!string.IsNullOrWhiteSpace(digest) && TryResolveIdByHash(table, "Progesi.MetaContentHash", digest, out var ridMeta))
-              metaId = ridMeta;
-          }
+          info = metaResolveError;
+          return false;
         }
 
         // cast a tipo semplice (geometry codec overrides string parsing)
@@ -468,20 +544,23 @@ namespace ProgesiGrasshopperAssembly.Infrastructure
           return false;
         }
 
-        // 2) Metadata: se fornito un MId, deve risolvere a un record esistente.
-        if (!string.IsNullOrWhiteSpace(midStr))
+        // 2) Metadata: ogni Id referenziato deve esistere.
+        if (metadataIds.Length > 0)
         {
-          if (!metaId.HasValue)
+          foreach (var metaId in metadataIds)
           {
-            info = "Metadata non risolvibile: '" + midStr.Trim() + "'.";
-            return false;
+            var mm = metaRepo.GetAsync(metaId).GetAwaiter().GetResult();
+            if (mm == null)
+            {
+              info = "Metadata inesistente: Id " + metaId + ".";
+              return false;
+            }
           }
-          var mm = metaRepo.GetAsync(metaId.Value).GetAwaiter().GetResult();
-          if (mm == null)
-          {
-            info = "Metadata inesistente: Id " + metaId.Value + ".";
-            return false;
-          }
+        }
+        else if (!string.IsNullOrWhiteSpace(midStr))
+        {
+          info = "Metadata non risolvibile: '" + midStr.Trim() + "'.";
+          return false;
         }
 
         // 3) Overwrite safety per Id esplicito: Create singolo rifiuta un Id esistente;
@@ -510,7 +589,7 @@ namespace ProgesiGrasshopperAssembly.Infrastructure
 
         // dedupe sul content-hash DI DOMINIO
         var depN = (depends ?? Array.Empty<int>()).Distinct().OrderBy(x => x).ToArray();
-        var tmp = new ProgesiVariable(0, name ?? string.Empty, typedValue, depN, metaId, isAss);
+        var tmp = new ProgesiVariable(0, name ?? string.Empty, typedValue, depN, metadataIds, isAss);
         var contentHash = ProgesiHash.Compute(tmp);
 
         if (id <= 0 && TryResolveIdByHash(table, "Progesi.VarHash", contentHash, out var existsId))
@@ -528,7 +607,7 @@ namespace ProgesiGrasshopperAssembly.Infrastructure
 
         var variableNew = new ProgesiVariable(id, name ?? string.Empty, typedValue,
                                               dependsFrom: depN,
-                                              metadataId: metaId,
+                                              metadataIds: metadataIds,
                                               isAssumption: isAss);
 
         varRepo.SaveAsync(variableNew).GetAwaiter().GetResult();
@@ -546,7 +625,7 @@ namespace ProgesiGrasshopperAssembly.Infrastructure
         var depStr = depN.Length == 0 ? "-" : string.Join(",", depN);
         var assN = isAss ? "1" : "0";
         var nameN = ToNorm(name);
-        var summary = $"ID:{id} | NAME:{nameN} | VALC:{valc} | BY:{(string.IsNullOrEmpty(byN) ? "-" : byN)} | MID:{(metaId.HasValue ? metaId.Value.ToString() : "-")} | DEP:[{depStr}] | ASS:{assN}";
+        var summary = $"ID:{id} | NAME:{nameN} | VALC:{valc} | BY:{(string.IsNullOrEmpty(byN) ? "-" : byN)} | MID:{(metadataIds.Length > 0 ? string.Join(",", metadataIds) : "-")} | DEP:[{depStr}] | ASS:{assN}";
 
         if (idReassignedFrom > 0)
           info = "Id " + idReassignedFrom + " già in uso; assegnato Id " + id + ".";
@@ -555,7 +634,7 @@ namespace ProgesiGrasshopperAssembly.Infrastructure
         {
           Id = id,
           Hash = summary,                 // per la porta Hash (umano)
-          MetaId = metaId ?? 0,
+          MetaId = metadataIds.Length > 0 ? metadataIds[0] : 0,
           Depends = depN,
           IsAssumption = isAss,
           ValueCanonical = valc,

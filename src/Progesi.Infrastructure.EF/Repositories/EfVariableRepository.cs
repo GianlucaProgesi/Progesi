@@ -38,6 +38,7 @@ public sealed class EfVariableRepository : IVariableRepository
     }
 
     var depends = (variable.DependsFrom ?? Array.Empty<int>()).ToArray();
+    var metadataIds = variable.MetadataIds ?? Array.Empty<int>();
     var entity = await _context.Variables.FindAsync(new object[] { variable.Id }, ct);
 
     if (entity == null)
@@ -50,6 +51,7 @@ public sealed class EfVariableRepository : IVariableRepository
     entity.ValueType = ValueSerialization.TypeOf(variable.Value);
     entity.Value = ValueSerialization.Stringify(variable.Value);
     entity.MetadataId = variable.MetadataId;
+    entity.MetadataIdsJson = JsonConvert.SerializeObject(metadataIds);
     entity.DependsJson = JsonConvert.SerializeObject(depends);
     entity.ContentHash = hash;
 
@@ -67,8 +69,24 @@ public sealed class EfVariableRepository : IVariableRepository
     if (entity == null) return null!;
 
     var depends = JsonConvert.DeserializeObject<int[]>(entity.DependsJson) ?? Array.Empty<int>();
+    var metadataIds = ReadMetadataIds(entity.MetadataIdsJson, entity.MetadataId);
     var value = ValueSerialization.ParseValue(entity.Value, entity.ValueType);
-    return new ProgesiVariable(entity.Id, entity.Name, value, depends, entity.MetadataId);
+    return new ProgesiVariable(entity.Id, entity.Name, value, depends, metadataIds);
+  }
+
+  private static int[] ReadMetadataIds(string? metadataIdsJson, int? metadataId)
+  {
+    if (!string.IsNullOrWhiteSpace(metadataIdsJson))
+    {
+      var parsed = JsonConvert.DeserializeObject<int[]>(metadataIdsJson);
+      if (parsed != null && parsed.Length > 0)
+        return parsed;
+    }
+
+    if (metadataId.HasValue && metadataId.Value > 0)
+      return new[] { metadataId.Value };
+
+    return Array.Empty<int>();
   }
 
   public async Task<IReadOnlyList<ProgesiVariable>> GetAllAsync(CancellationToken ct = default)

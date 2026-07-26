@@ -7,6 +7,7 @@ public sealed class VariableEntity
   public string ValueType { get; set; } = string.Empty;
   public string Value { get; set; } = string.Empty;
   public int? MetadataId { get; set; }
+  public string MetadataIdsJson { get; set; } = "[]";
   public string DependsJson { get; set; } = "[]";
   public string ContentHash { get; set; } = string.Empty;
 }

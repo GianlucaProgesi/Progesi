@@ -41,6 +41,7 @@ CREATE TABLE Variables (
     ValueType    TEXT NOT NULL,
     Value        TEXT NOT NULL,
     MetadataId   INTEGER NULL,
+    MetadataIdsJson TEXT NOT NULL DEFAULT '[]',
     DependsJson  TEXT NOT NULL,
     ContentHash  TEXT
 );";
@@ -56,6 +57,7 @@ CREATE TABLE IF NOT EXISTS Variables (
     ValueType    TEXT NOT NULL,
     Value        TEXT NOT NULL,
     MetadataId   INTEGER NULL,
+    MetadataIdsJson TEXT NOT NULL DEFAULT '[]',
     DependsJson  TEXT NOT NULL,
     ContentHash  TEXT
 );";
@@ -63,6 +65,7 @@ CREATE TABLE IF NOT EXISTS Variables (
 
           // per DB legacy che non avessero ContentHash
           AddColumnIfMissing(conn, "Variables", "ContentHash", "TEXT");
+          AddColumnIfMissing(conn, "Variables", "MetadataIdsJson", "TEXT NOT NULL DEFAULT '[]'");
         }
       }
       EnsureContentHash(conn, "Variables");
@@ -102,18 +105,21 @@ CREATE TABLE IF NOT EXISTS Variables (
 
         var depends = (v.DependsFrom ?? Array.Empty<int>()).ToArray();
         var payloadDepends = JsonConvert.SerializeObject(depends);
+        var metadataIds = v.MetadataIds ?? Array.Empty<int>();
+        var payloadMetadataIds = JsonConvert.SerializeObject(metadataIds);
 
         using (var cmd = conn.CreateCommand())
         {
           cmd.Transaction = tx;
           cmd.CommandText = @"
-INSERT INTO Variables (Id, Name, ValueType, Value, MetadataId, DependsJson, ContentHash)
-VALUES ($id, $name, $vt, $val, $mid, $dep, $h)
+INSERT INTO Variables (Id, Name, ValueType, Value, MetadataId, MetadataIdsJson, DependsJson, ContentHash)
+VALUES ($id, $name, $vt, $val, $mid, $mids, $dep, $h)
 ON CONFLICT(Id) DO UPDATE SET
   Name=excluded.Name,
   ValueType=excluded.ValueType,
   Value=excluded.Value,
   MetadataId=excluded.MetadataId,
+  MetadataIdsJson=excluded.MetadataIdsJson,
   DependsJson=excluded.DependsJson,
   ContentHash=excluded.ContentHash;";
           cmd.Parameters.AddWithValue("$id", v.Id);
@@ -122,6 +128,7 @@ ON CONFLICT(Id) DO UPDATE SET
           cmd.Parameters.AddWithValue("$val", Stringify(v.Value));
           if (v.MetadataId.HasValue) cmd.Parameters.AddWithValue("$mid", v.MetadataId.Value);
           else cmd.Parameters.AddWithValue("$mid", DBNull.Value);
+          cmd.Parameters.AddWithValue("$mids", payloadMetadataIds);
           cmd.Parameters.AddWithValue("$dep", payloadDepends);
           cmd.Parameters.AddWithValue("$h", hash);
           var n = await cmd.ExecuteNonQueryAsync(ct);
@@ -143,7 +150,7 @@ ON CONFLICT(Id) DO UPDATE SET
       {
         using var conn = OpenConnection();
         using var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT Id, Name, ValueType, Value, MetadataId, DependsJson FROM Variables WHERE Id=$id;";
+        cmd.CommandText = "SELECT Id, Name, ValueType, Value, MetadataId, MetadataIdsJson, DependsJson FROM Variables WHERE Id=$id;";
         cmd.Parameters.AddWithValue("$id", id);
 
         using var r = await cmd.ExecuteReaderAsync(ct);
@@ -158,13 +165,30 @@ ON CONFLICT(Id) DO UPDATE SET
         var vType = r.GetString(2);
         var valStr = r.GetString(3);
         int? mid = r.IsDBNull(4) ? (int?)null : r.GetInt32(4);
-        var depJs = r.IsDBNull(5) ? "[]" : r.GetString(5);
+        var metadataIdsJson = r.IsDBNull(5) ? "[]" : r.GetString(5);
+        var depJs = r.IsDBNull(6) ? "[]" : r.GetString(6);
         var depends = JsonConvert.DeserializeObject<int[]>(depJs) ?? Array.Empty<int>();
+        var metadataIds = ReadMetadataIds(metadataIdsJson, mid);
 
         var value = ParseValue(valStr, vType);
         _log.Debug($"[SQLite] Variable get Id={id}: hit.");
-        return new ProgesiVariable(vid, name, value, depends, mid);
+        return new ProgesiVariable(vid, name, value, depends, metadataIds);
       }, ct: ct);
+    }
+
+    private static int[] ReadMetadataIds(string? metadataIdsJson, int? metadataId)
+    {
+      if (!string.IsNullOrWhiteSpace(metadataIdsJson))
+      {
+        var parsed = JsonConvert.DeserializeObject<int[]>(metadataIdsJson);
+        if (parsed != null && parsed.Length > 0)
+          return parsed;
+      }
+
+      if (metadataId.HasValue && metadataId.Value > 0)
+        return new[] { metadataId.Value };
+
+      return Array.Empty<int>();
     }
 #nullable enable
 

@@ -23,6 +23,7 @@ public sealed class ProgesiDbContext : DbContext
       entity.Property(e => e.ValueType).IsRequired();
       entity.Property(e => e.Value).IsRequired();
       entity.Property(e => e.DependsJson).IsRequired();
+      entity.Property(e => e.MetadataIdsJson).IsRequired();
       entity.Property(e => e.ContentHash).IsRequired();
       entity.HasIndex(e => e.ContentHash).IsUnique();
     });

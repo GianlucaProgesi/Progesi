@@ -11,14 +11,16 @@ namespace ProgesiCore
     public string Name { get; private set; } = string.Empty;
     public object? Value { get; private set; }   // può essere null
     public int[] DependsFrom { get; private set; } = Array.Empty<int>();
-    public int? MetadataId { get; private set; }
+    public int[] MetadataIds { get; private set; } = Array.Empty<int>();
+    /// <summary>First linked metadata id, or null when the list is empty (read-only compat).</summary>
+    public int? MetadataId => MetadataIds.Length > 0 ? MetadataIds[0] : (int?)null;
     /// <summary>
     /// True se il valore è un'ipotesi (assumption) provvisoria.
     /// Influenza uguaglianza e calcolo dell'hash.
     /// </summary>
     public bool IsAssumption { get; private set; } = false;
 
-    public ProgesiVariable(int id, string name, object? value, IEnumerable<int>? dependsFrom = null, int? metadataId = null, bool isAssumption = false)
+    public ProgesiVariable(int id, string name, object? value, IEnumerable<int>? dependsFrom = null, IEnumerable<int>? metadataIds = null, bool isAssumption = false)
     {
       Guard.Against.Negative(id, nameof(id));
       Guard.Against.NullOrWhiteSpace(name, nameof(name));
@@ -27,21 +29,41 @@ namespace ProgesiCore
       Name = name;
       Value = value; // null ammesso
       DependsFrom = (dependsFrom ?? Array.Empty<int>()).ToArray();
-      MetadataId = metadataId;
+      MetadataIds = NormalizeMetadataIds(metadataIds);
       IsAssumption = isAssumption;
     }
 
     public ProgesiVariable WithValue(object? value)
-      => new ProgesiVariable(Id, Name, value, DependsFrom, MetadataId, IsAssumption);
+      => new ProgesiVariable(Id, Name, value, DependsFrom, MetadataIds, IsAssumption);
 
     public ProgesiVariable WithDependsFrom(IEnumerable<int>? dependsFrom)
-      => new ProgesiVariable(Id, Name, Value, dependsFrom ?? Array.Empty<int>(), MetadataId, IsAssumption);
+      => new ProgesiVariable(Id, Name, Value, dependsFrom ?? Array.Empty<int>(), MetadataIds, IsAssumption);
+
+    public ProgesiVariable WithMetadataIds(IEnumerable<int>? metadataIds)
+      => new ProgesiVariable(Id, Name, Value, DependsFrom, metadataIds, IsAssumption);
 
     public ProgesiVariable WithMetadataId(int? metadataId)
-      => new ProgesiVariable(Id, Name, Value, DependsFrom, metadataId, IsAssumption);
+      => WithMetadataIds(metadataId.HasValue && metadataId.Value > 0 ? new[] { metadataId.Value } : Array.Empty<int>());
 
     public ProgesiVariable WithIsAssumption(bool isAssumption)
-      => new ProgesiVariable(Id, Name, Value, DependsFrom, MetadataId, isAssumption);
+      => new ProgesiVariable(Id, Name, Value, DependsFrom, MetadataIds, isAssumption);
+
+    private static int[] NormalizeMetadataIds(IEnumerable<int>? metadataIds)
+    {
+      if (metadataIds == null)
+        return Array.Empty<int>();
+
+      var seen = new HashSet<int>();
+      var list = new List<int>();
+      foreach (var id in metadataIds)
+      {
+        if (id <= 0 || !seen.Add(id))
+          continue;
+        list.Add(id);
+      }
+
+      return list.ToArray();
+    }
 
     // Nota: il base richiede IEnumerable<object> NON nullable
     protected override IEnumerable<object> GetEqualityComponents()
@@ -55,7 +77,10 @@ namespace ProgesiCore
       {
         yield return d;
       }
-      yield return MetadataId.HasValue ? (object)MetadataId.Value : "<null>";
+      foreach (int m in MetadataIds.OrderBy(x => x))
+      {
+        yield return m;
+      }
       yield return IsAssumption; // nuovo componente rilevante
     }
   }

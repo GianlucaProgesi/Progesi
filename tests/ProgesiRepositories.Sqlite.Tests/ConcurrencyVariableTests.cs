@@ -26,7 +26,7 @@ namespace ProgesiRepositories.Sqlite.Tests
     {
       var tasks = Enumerable.Range(0, 8).Select(async _ =>
       {
-        var v = new ProgesiVariable(1 + _, "A", 42, new[] { 3, 1, 2 }, metadataId: 7);
+        var v = new ProgesiVariable(1 + _, "A", 42, new[] { 3, 1, 2 }, metadataIds: new[] { 7 });
         await _repo.SaveAsync(v);
       });
 
