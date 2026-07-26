@@ -8,6 +8,7 @@ using System.Linq;
 using System.Reflection;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Data;
+using Grasshopper.Kernel.Parameters;
 using Grasshopper.Kernel.Types;
 using ProgesiGrasshopperAssembly.Infrastructure;
 
@@ -38,7 +39,14 @@ namespace ProgesiGrasshopperAssembly.Components
 
     protected override void RegisterOutputParams(GH_OutputParamManager p)
     {
-      p.AddTextParameter("Val", "Val", "Dynamic: Value con NickName uguale al Name (se singolo elemento).", GH_ParamAccess.tree);
+      var valOut = new Param_GenericObject
+      {
+        Name = "Val",
+        NickName = "Val",
+        Description = "Dynamic: Value con NickName uguale al Name (GenericObject).",
+        Access = GH_ParamAccess.tree
+      };
+      p.AddParameter(valOut);
       p.AddIntegerParameter("Id", "Id", "Id.", GH_ParamAccess.tree);
       p.AddTextParameter("Hash", "Hash", "Riepilogo umano: ID/NAME/VALC/BY/MID/DEP/ASS.", GH_ParamAccess.tree);
       p.AddTextParameter("Name", "Name", "Nome.", GH_ParamAccess.tree);
@@ -72,7 +80,7 @@ namespace ProgesiGrasshopperAssembly.Components
       foreach (var p in idIn.Paths) allPaths.Add(p);
       if (allPaths.Count == 0) allPaths.Add(new GH_Path(0));
 
-      var tVal = new GH_Structure<GH_String>();
+      var tVal = new GH_Structure<IGH_Goo>();
       var tId = new GH_Structure<GH_Integer>();
       var tHash = new GH_Structure<GH_String>();
       var tName = new GH_Structure<GH_String>();
@@ -107,6 +115,7 @@ namespace ProgesiGrasshopperAssembly.Components
           object obj;
           bool ok = MetadataRepositoryCompatExtensions.TryGetVariableByHashThenId(repo, hash, id, out obj, out info);
 
+          object typedValue = null;
           string name = "", value = "", valc = "", by = "-", lm = "";
           int outId = 0, mid = 0;
           bool ass = false;
@@ -119,6 +128,7 @@ namespace ProgesiGrasshopperAssembly.Components
             ReadIf(obj, "Name", ref name);
             ReadIf(obj, "Value", ref value);
             ReadIf(obj, "ValueCanonical", ref valc);
+            typedValue = ReadObject(obj, "TypedValue");
             ReadIf(obj, "By", ref by, "-");
             ReadIf(obj, "LastModified", ref lm);
             ReadIf(obj, "MetaId", ref mid);
@@ -137,7 +147,10 @@ namespace ProgesiGrasshopperAssembly.Components
           }
 
           var path = p;
-          tVal.Append(new GH_String(value ?? ""), path);
+          if (typedValue != null)
+            tVal.Append(new GH_ObjectWrapper(typedValue), path);
+          else
+            tVal.Append(new GH_String(value ?? ""), path);
           tId.Append(new GH_Integer(outId), path);
           tHash.Append(new GH_String(summary), path);
           tName.Append(new GH_String(name ?? ""), path);
@@ -230,6 +243,14 @@ namespace ProgesiGrasshopperAssembly.Components
         if (goo.CastTo(out s) && int.TryParse(s, out n)) return n;
       }
       return 0;
+    }
+
+    private static object ReadObject(object obj, string prop)
+    {
+      if (obj == null) return null;
+      var pi = obj.GetType().GetProperty(prop, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
+      if (pi == null) return null;
+      return pi.GetValue(obj, null);
     }
 
     // -------- reflection helpers --------

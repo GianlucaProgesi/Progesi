@@ -2,6 +2,7 @@
 using ProgesiCore;
 using Rhino;
 using Rhino.DocObjects.Tables;
+using Rhino.Geometry;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -99,6 +100,9 @@ namespace ProgesiRepositories.Rhino
     private static string TypeOf(object? obj)
     {
       if (obj == null) return "null";
+      if (obj is GeometryBase geom)
+        return ProgesiGeometryValueCodec.GetStorageValueType(geom);
+
       return obj switch
       {
         string _ => "string",
@@ -115,6 +119,9 @@ namespace ProgesiRepositories.Rhino
     private static string Stringify(object? obj)
     {
       if (obj == null) return "null";
+      if (obj is GeometryBase geom)
+        return ProgesiGeometryValueCodec.Encode(geom);
+
       return obj switch
       {
         string s => s,
@@ -131,6 +138,14 @@ namespace ProgesiRepositories.Rhino
     private static object? ParseValue(string value, string valueType)
     {
       if (valueType == "null") return null;
+
+      if (ProgesiGeometryValueCodec.IsGeometryValueType(valueType))
+      {
+        if (ProgesiGeometryValueCodec.TryDecode(value, out var geometry))
+          return geometry;
+        return value;
+      }
+
       return valueType switch
       {
         "string" => value,

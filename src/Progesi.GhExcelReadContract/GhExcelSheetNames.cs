@@ -8,5 +8,7 @@ namespace Progesi.GhExcelReadContract
     public const string MetadataAlias = "Metadata";
     public const string Clusters = "ProgesiClusters";
     public const string ClustersAlias = "Clusters";
+    public const string VariableObjects = GhExcelObjectSheet.SheetName;
+    public const string VariableObjectsAlias = GhExcelObjectSheet.SheetAlias;
   }
 }
