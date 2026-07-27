@@ -97,7 +97,7 @@ namespace ProgesiGrasshopperAssembly.Infrastructure
 
     private static int[] ReadMetadataIds(object payload, StringTable table, out string error)
     {
-      error = string.Empty;
+      error = null;
       var fromPayload = ReadMetadataIdsArray(payload);
       if (fromPayload != null)
         return fromPayload;
@@ -521,7 +521,7 @@ namespace ProgesiGrasshopperAssembly.Infrastructure
         }
 
         // resolve metadata ids from payload / mid string (numeric, comma-list, or single hash)
-        if (metaResolveError != null)
+        if (!string.IsNullOrEmpty(metaResolveError))
         {
           info = metaResolveError;
           return false;
