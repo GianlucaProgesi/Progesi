@@ -8,6 +8,9 @@ namespace ProgesiCore
 {
   public static class ProgesiHash
   {
+    /// <summary>Hashtag payload scheme version (v1 = current SHA-256 JSON payloads; hex is not prefixed).</summary>
+    public const int HashtagSchemeVersion = 1;
+
     private static readonly JsonSerializerSettings JsonSettings = new JsonSerializerSettings
     {
       NullValueHandling = NullValueHandling.Include
@@ -145,6 +148,22 @@ namespace ProgesiCore
         AdditionalInfo = m.AdditionalInfo ?? string.Empty,
         References = refs,
         Snips = snips
+      };
+
+      string json = JsonConvert.SerializeObject(payload, JsonSettings) ?? string.Empty;
+      return Sha256Hex(json);
+    }
+
+    // ===== Compute per Snip =====
+    public static string Compute(ProgesiSnip snip)
+    {
+      if (snip == null) throw new ArgumentNullException(nameof(snip));
+
+      var payload = new
+      {
+        ContentHash = Sha256Hex(snip.Content ?? Array.Empty<byte>()),
+        MimeType = snip.MimeType ?? "image/png",
+        Source = snip.Source ?? string.Empty
       };
 
       string json = JsonConvert.SerializeObject(payload, JsonSettings) ?? string.Empty;

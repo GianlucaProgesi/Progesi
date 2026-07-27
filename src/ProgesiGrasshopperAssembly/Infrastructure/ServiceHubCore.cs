@@ -48,6 +48,20 @@ namespace ProgesiGrasshopperAssembly.Infrastructure
         return Task.FromResult<ProgesiMetadata?>(null);
       }
 
+      public Task<ProgesiMetadata?> GetByHashtagAsync(string hashtag, CancellationToken ct)
+      {
+        if (string.IsNullOrWhiteSpace(hashtag))
+          return Task.FromResult<ProgesiMetadata?>(null);
+
+        for (int i = 0; i < _items.Count; i++)
+        {
+          if (string.Equals(_items[i].Hashtag, hashtag, StringComparison.Ordinal))
+            return Task.FromResult<ProgesiMetadata?>(_items[i]);
+        }
+
+        return Task.FromResult<ProgesiMetadata?>(null);
+      }
+
       public Task UpsertAsync(ProgesiMetadata m, CancellationToken ct)
       {
         if (m == null) return Task.CompletedTask;

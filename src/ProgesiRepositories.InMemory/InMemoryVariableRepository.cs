@@ -1,4 +1,5 @@
-﻿using System.Collections.Concurrent;
+﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -21,6 +22,17 @@ namespace ProgesiRepositories.InMemory
     {
       _ = _store.TryGetValue(id, out ProgesiVariable v);
       return Task.FromResult(v);
+    }
+
+    public Task<ProgesiVariable?> GetByHashtagAsync(string hashtag, CancellationToken ct = default)
+    {
+      if (string.IsNullOrWhiteSpace(hashtag))
+        return Task.FromResult<ProgesiVariable?>(null);
+
+      var match = _store.Values.FirstOrDefault(v =>
+        string.Equals(v.Hashtag, hashtag, StringComparison.Ordinal));
+
+      return Task.FromResult<ProgesiVariable?>(match);
     }
 
     public Task<IReadOnlyList<ProgesiVariable>> GetAllAsync(CancellationToken ct = default)

@@ -97,15 +97,15 @@ namespace ProgesiGrasshopperAssembly.Components
           bool ok = MetadataRepositoryCompatExtensions.TryGetByHashThenId(repo, hash, id, out obj, out info);
 
           int outId = 0;
-          string sum = "", by = "-", desc = "", lm = "";
+          string digest = "", summary = "", by = "-", desc = "", lm = "";
           string[] refs = Array.Empty<string>();
           string[] snips = Array.Empty<string>();
 
           if (ok && obj != null)
           {
             ReadIf(obj, "Id", ref outId);
-            ReadIf(obj, "Hash", ref sum);
-            ReadIf(obj, "Summary", ref sum);
+            ReadIf(obj, "Hash", ref digest);
+            ReadIf(obj, "Summary", ref summary);
             ReadIf(obj, "By", ref by, "-");
             ReadIf(obj, "Description", ref desc, "");
             ReadIf(obj, "LastModified", ref lm, "");
@@ -115,7 +115,7 @@ namespace ProgesiGrasshopperAssembly.Components
 
           var path = p;
           tId.Append(new GH_Integer(outId), path);
-          tHash.Append(new GH_String(sum ?? ""), path);
+          tHash.Append(new GH_String(!string.IsNullOrWhiteSpace(digest) ? digest : (summary ?? "")), path);
           tBy.Append(new GH_String(string.IsNullOrWhiteSpace(by) ? "-" : by), path);
           tDesc.Append(new GH_String(desc ?? ""), path);
           tLM.Append(new GH_String(lm ?? ""), path);
@@ -133,7 +133,7 @@ namespace ProgesiGrasshopperAssembly.Components
             tSnip.Append(new GH_String(""), sub);
 
           var pref = ok ? "OK" : (string.IsNullOrWhiteSpace(info) ? "Errore" : info);
-          tInfo.Append(new GH_String(string.IsNullOrWhiteSpace(sum) ? pref : (pref + " | " + sum)), path);
+          tInfo.Append(new GH_String(string.IsNullOrWhiteSpace(summary) ? pref : (pref + " | " + summary)), path);
         }
       }
 

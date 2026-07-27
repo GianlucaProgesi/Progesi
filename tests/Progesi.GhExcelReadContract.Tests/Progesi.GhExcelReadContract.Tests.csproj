@@ -8,6 +8,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\Progesi.GhExcelReadContract\Progesi.GhExcelReadContract.csproj" />
+    <ProjectReference Include="..\..\src\ProgesiCore\ProgesiCore.csproj" />
   </ItemGroup>
 
   <ItemGroup>

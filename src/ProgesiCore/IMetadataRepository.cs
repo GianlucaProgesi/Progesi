@@ -16,6 +16,11 @@ namespace ProgesiCore
     Task<ProgesiMetadata?> GetAsync(int id, CancellationToken ct = default);
 
     /// <summary>
+    /// Restituisce la metadata con Hashtag corrispondente, oppure null se non esiste.
+    /// </summary>
+    Task<ProgesiMetadata?> GetByHashtagAsync(string hashtag, CancellationToken ct = default);
+
+    /// <summary>
     /// Inserisce o aggiorna la metadata.
     /// </summary>
     Task UpsertAsync(ProgesiMetadata metadata, CancellationToken ct = default);

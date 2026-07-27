@@ -59,6 +59,12 @@ CREATE TABLE IF NOT EXISTS Metadata (
       }
 
       EnsureSchemaInfoAndCleanup(conn, "Metadata");
+
+      using (var idx = conn.CreateCommand())
+      {
+        idx.CommandText = "CREATE INDEX IF NOT EXISTS IX_Metadata_ContentHash ON Metadata(ContentHash);";
+        idx.ExecuteNonQuery();
+      }
     }
 
     // ========================= CRUD =========================
@@ -100,6 +106,25 @@ CREATE TABLE IF NOT EXISTS Metadata (
               );
 
         return meta;
+      }, ct: ct);
+    }
+
+    public async Task<ProgesiMetadata?> GetByHashtagAsync(string hashtag, CancellationToken ct = default)
+    {
+      if (string.IsNullOrWhiteSpace(hashtag))
+        return null;
+
+      return await WithRetryAsync(async () =>
+      {
+        using var conn = OpenConnection();
+        var id = await GetIdByHashAsync(conn, hashtag, ct);
+        if (id <= 0)
+        {
+          _log.Debug("[SQLite] Metadata get by hashtag: miss.");
+          return null;
+        }
+
+        return await GetAsync(id, ct);
       }, ct: ct);
     }
 

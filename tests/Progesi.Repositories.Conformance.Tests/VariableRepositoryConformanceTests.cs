@@ -186,5 +186,41 @@ namespace Progesi.Repositories.Conformance.Tests
       saved.Should().NotBeNull();
       saved.Id.Should().Be(20);
     }
+
+    [Theory]
+    [MemberData(nameof(VariableRepositoryConformanceStoreProvider.StoreFactories), MemberType = typeof(VariableRepositoryConformanceStoreProvider))]
+    public async Task GetByHashtagAsync_After_Save_Returns_Same_Variable(string storeName, System.Func<IVariableRepositoryConformanceStore> createStore)
+    {
+      using var store = createStore();
+      var original = new ProgesiVariable(15, "Tagged", 99, metadataIds: new[] { 2 });
+
+      await store.Repository.SaveAsync(original);
+      var loaded = await store.Repository.GetByHashtagAsync(original.Hashtag);
+
+      loaded.Should().NotBeNull();
+      loaded!.Id.Should().Be(15);
+      loaded.Name.Should().Be("Tagged");
+      ProgesiHash.Compute(loaded).Should().Be(original.Hashtag);
+    }
+
+    [Theory]
+    [MemberData(nameof(VariableRepositoryConformanceStoreProvider.StoreFactories), MemberType = typeof(VariableRepositoryConformanceStoreProvider))]
+    public async Task GetByHashtagAsync_Miss_Returns_Null(string storeName, System.Func<IVariableRepositoryConformanceStore> createStore)
+    {
+      using var store = createStore();
+      var loaded = await store.Repository.GetByHashtagAsync("deadbeef");
+
+      loaded.Should().BeNull();
+    }
+
+    [Theory]
+    [MemberData(nameof(VariableRepositoryConformanceStoreProvider.StoreFactories), MemberType = typeof(VariableRepositoryConformanceStoreProvider))]
+    public async Task GetByHashtagAsync_Empty_Hashtag_Returns_Null(string storeName, System.Func<IVariableRepositoryConformanceStore> createStore)
+    {
+      using var store = createStore();
+      var loaded = await store.Repository.GetByHashtagAsync("");
+
+      loaded.Should().BeNull();
+    }
   }
 }

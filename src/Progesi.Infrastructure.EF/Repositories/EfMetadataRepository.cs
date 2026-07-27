@@ -32,6 +32,23 @@ public sealed class EfMetadataRepository : IMetadataRepository
     return MetadataSerialization.FromStoredJson(entity.Json, entity.LastModified, entity.Id);
   }
 
+  public async Task<ProgesiMetadata?> GetByHashtagAsync(string hashtag, CancellationToken ct = default)
+  {
+    if (string.IsNullOrWhiteSpace(hashtag))
+      return null;
+
+    var id = await _context.Metadata
+        .AsNoTracking()
+        .Where(m => m.ContentHash == hashtag)
+        .Select(m => (int?)m.Id)
+        .FirstOrDefaultAsync(ct);
+
+    if (!id.HasValue)
+      return null;
+
+    return await GetAsync(id.Value, ct);
+  }
+
   public async Task UpsertAsync(ProgesiMetadata metadata, CancellationToken ct = default)
   {
     if (metadata is null) throw new ArgumentNullException(nameof(metadata));

@@ -53,9 +53,22 @@ namespace ProgesiRepositories.InMemory
         return Task.FromResult<ProgesiVariableCluster?>(null);
 
       var match = _store.Values
-        .FirstOrDefault(c => string.Equals(c.Hashtag, hashtag, StringComparison.Ordinal));
+        .FirstOrDefault(c => ClusterHashtagMatches(c, hashtag));
 
       return Task.FromResult<ProgesiVariableCluster?>(match);
+    }
+
+    private static bool ClusterHashtagMatches(ProgesiVariableCluster cluster, string hashtag)
+    {
+      if (string.Equals(cluster.Hashtag, hashtag, StringComparison.Ordinal))
+        return true;
+
+      var legacy = ProgesiVariableCluster.BuildLegacyHashtag(
+        cluster.Id,
+        cluster.Name,
+        cluster.ProgesiVariableIds);
+
+      return string.Equals(legacy, hashtag, StringComparison.Ordinal);
     }
 
     /// <summary>

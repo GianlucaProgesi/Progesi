@@ -69,6 +69,12 @@ CREATE TABLE IF NOT EXISTS Variables (
         }
       }
       EnsureContentHash(conn, "Variables");
+
+      using (var idx = conn.CreateCommand())
+      {
+        idx.CommandText = "CREATE INDEX IF NOT EXISTS IX_Variables_ContentHash ON Variables(ContentHash);";
+        idx.ExecuteNonQuery();
+      }
     }
 
     public Task<ProgesiVariable> SaveAsync(ProgesiVariable variable, CancellationToken ct = default)
@@ -140,6 +146,32 @@ ON CONFLICT(Id) DO UPDATE SET
         var back = await GetByIdAsync(v.Id, ct);
 #nullable enable
         return back;
+      }, ct: ct);
+    }
+
+    public async Task<ProgesiVariable?> GetByHashtagAsync(string hashtag, CancellationToken ct = default)
+    {
+      if (string.IsNullOrWhiteSpace(hashtag))
+        return null;
+
+      return await WithRetryAsync(async () =>
+      {
+        using var conn = OpenConnection();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT Id FROM Variables WHERE ContentHash=$h LIMIT 1;";
+        cmd.Parameters.AddWithValue("$h", hashtag);
+
+        var scalar = await cmd.ExecuteScalarAsync(ct);
+        if (scalar is null || scalar is DBNull)
+        {
+          _log.Debug($"[SQLite] Variable get by hashtag: miss.");
+          return null;
+        }
+
+        var id = Convert.ToInt32(scalar);
+#nullable disable
+        return await GetByIdAsync(id, ct);
+#nullable enable
       }, ct: ct);
     }
 

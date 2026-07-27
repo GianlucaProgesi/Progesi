@@ -20,6 +20,9 @@ namespace ProgesiCore
     /// </summary>
     public bool IsAssumption { get; private set; } = false;
 
+    /// <summary>Content-based hashtag (SHA-256 digest; derived, not part of equality).</summary>
+    public string Hashtag => ProgesiHash.Compute(this);
+
     public ProgesiVariable(int id, string name, object? value, IEnumerable<int>? dependsFrom = null, IEnumerable<int>? metadataIds = null, bool isAssumption = false)
     {
       Guard.Against.Negative(id, nameof(id));
