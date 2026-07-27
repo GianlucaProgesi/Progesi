@@ -204,7 +204,7 @@ ON CONFLICT(Id) DO UPDATE SET
 
         var value = ParseValue(valStr, vType);
         _log.Debug($"[SQLite] Variable get Id={id}: hit.");
-        return new ProgesiVariable(vid, name, value, depends, metadataIds);
+        return new ProgesiVariable(vid, name, value ?? "", depends, metadataIds);
       }, ct: ct);
     }
 

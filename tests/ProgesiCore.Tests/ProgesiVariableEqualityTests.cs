@@ -9,8 +9,8 @@ namespace ProgesiCore.Tests
     [Fact]
     public void Equality_Ignores_DependsFrom_Order()
     {
-      var v1 = new ProgesiVariable(id: 1, name: "A", value: null, dependsFrom: new[] { 3, 1, 2 }, metadataIds: new[] { 7 });
-      var v2 = new ProgesiVariable(id: 1, name: "A", value: null, dependsFrom: new[] { 2, 3, 1 }, metadataIds: new[] { 7 });
+      var v1 = new ProgesiVariable(id: 1, name: "A", value: "", dependsFrom: new[] { 3, 1, 2 }, metadataIds: new[] { 7 });
+      var v2 = new ProgesiVariable(id: 1, name: "A", value: "", dependsFrom: new[] { 2, 3, 1 }, metadataIds: new[] { 7 });
 
       _ = v1.Should().Be(v2);
 
