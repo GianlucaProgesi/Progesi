@@ -79,6 +79,29 @@ public sealed class EfVariableRepositoryTests : IDisposable
   }
 
   [Fact]
+  public async Task GetByIdAsync_Legacy_Null_ValueType_Reads_As_Empty_String()
+  {
+    using var ctx = ProgesiDbContextFactory.Create(_connectionString, resetSchema: true);
+    ctx.Variables.Add(new Progesi.Infrastructure.EF.Entities.VariableEntity
+    {
+      Id = 31,
+      Name = "LegacyNull",
+      ValueType = "null",
+      Value = "null",
+      MetadataIdsJson = "[]",
+      DependsJson = "[]",
+      ContentHash = "legacy-null-value"
+    });
+    await ctx.SaveChangesAsync();
+    ctx.Dispose();
+
+    var loaded = await _repo.GetByIdAsync(31);
+
+    loaded.Should().NotBeNull();
+    loaded!.Value.Should().Be("");
+  }
+
+  [Fact]
   public async Task SaveAsync_Empty_MetadataIds_RoundTrips_As_Empty()
   {
     var original = new ProgesiVariable(13, "NoMeta", 0);

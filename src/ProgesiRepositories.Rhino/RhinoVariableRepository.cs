@@ -67,7 +67,7 @@ namespace ProgesiRepositories.Rhino
       var metadataIds = ReadMetadataIds(dto.MetadataIds, dto.MetadataId);
       var isAss = dto.IsAssumption ?? false;
 
-      return Task.FromResult(new ProgesiVariable(dto.Id, dto.Name ?? string.Empty, value, depends, metadataIds, isAss));
+      return Task.FromResult(new ProgesiVariable(dto.Id, dto.Name ?? string.Empty, value ?? "", depends, metadataIds, isAss));
     }
 
     public async Task<ProgesiVariable?> GetByHashtagAsync(string hashtag, CancellationToken ct = default)

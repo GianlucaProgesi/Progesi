@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using FluentAssertions;
+using Microsoft.Data.Sqlite;
 using ProgesiCore;
 using ProgesiRepositories.Sqlite;
 using Xunit;
@@ -51,6 +52,25 @@ namespace ProgesiRepositories.Sqlite.Tests
 
       var all = await _repo.GetAllAsync();
       all.Select(x => x.Id).Should().Contain(1).And.NotContain(2);
+    }
+
+    [Fact]
+    public async Task GetByIdAsync_Legacy_Null_ValueType_Reads_As_Empty_String()
+    {
+      using (var conn = new SqliteConnection($"Data Source={_dbPath}"))
+      {
+        conn.Open();
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = @"
+INSERT INTO Variables (Id, Name, ValueType, Value, MetadataId, MetadataIdsJson, DependsJson, ContentHash)
+VALUES (30, 'LegacyNull', 'null', 'null', NULL, '[]', '[]', 'legacy-null-value');";
+        cmd.ExecuteNonQuery();
+      }
+
+      var loaded = await _repo.GetByIdAsync(30);
+
+      loaded.Should().NotBeNull();
+      loaded!.Value.Should().Be("");
     }
 
     public void Dispose()

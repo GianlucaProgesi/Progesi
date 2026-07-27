@@ -1510,7 +1510,7 @@ CREATE TABLE IF NOT EXISTS ClusterVariables (
         }
 
         var metadataIds = ReadVarDtoMetadataIds(dto);
-        var pv = new ProgesiVariable(id, dto.Name ?? "", typed, deps, metadataIds, ass);
+        var pv = new ProgesiVariable(id, dto.Name ?? "", typed ?? "", deps, metadataIds, ass);
         string hash = ProgesiHash.Compute(pv);
 
         list.Add(new VarRow

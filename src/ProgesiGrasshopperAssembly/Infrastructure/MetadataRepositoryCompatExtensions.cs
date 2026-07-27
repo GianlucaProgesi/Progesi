@@ -604,7 +604,7 @@ namespace ProgesiGrasshopperAssembly.Infrastructure
 
         // dedupe sul content-hash DI DOMINIO
         var depN = (depends ?? Array.Empty<int>()).Distinct().OrderBy(x => x).ToArray();
-        var tmp = new ProgesiVariable(0, name ?? string.Empty, typedValue, depN, metadataIds, isAss);
+        var tmp = new ProgesiVariable(0, name ?? string.Empty, typedValue ?? "", depN, metadataIds, isAss);
         var contentHash = ProgesiHash.Compute(tmp);
 
         if (id <= 0 && TryResolveIdByHash(table, "Progesi.VarHash", contentHash, out var existsId))
@@ -620,7 +620,7 @@ namespace ProgesiGrasshopperAssembly.Infrastructure
           UnindexHash(table, "Progesi.VarHash", oldContent);
         }
 
-        var variableNew = new ProgesiVariable(id, name ?? string.Empty, typedValue,
+        var variableNew = new ProgesiVariable(id, name ?? string.Empty, typedValue ?? "",
                                               dependsFrom: depN,
                                               metadataIds: metadataIds,
                                               isAssumption: isAss);

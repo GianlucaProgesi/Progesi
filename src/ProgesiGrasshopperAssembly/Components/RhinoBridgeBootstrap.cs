@@ -122,7 +122,7 @@ namespace Progesi.GrasshopperAssembly.Components
         }
         if (id <= 0) id = NextVariableId(repo);
 
-        var variable = new ProgesiVariable(id, d.Name ?? string.Empty, d.Value, Array.Empty<int>(), null);
+        var variable = new ProgesiVariable(id, d.Name ?? string.Empty, d.Value ?? "", Array.Empty<int>(), null);
         var _ = repo.SaveAsync(variable).GetAwaiter().GetResult();
         if (current == null) ins++; else upd++;
       }

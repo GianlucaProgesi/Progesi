@@ -9,7 +9,7 @@ namespace ProgesiCore
   {
     public int Id { get; private set; }
     public string Name { get; private set; } = string.Empty;
-    public object? Value { get; private set; }   // può essere null
+    public object Value { get; private set; }   // non-null invariant; empty string allowed
     public int[] DependsFrom { get; private set; } = Array.Empty<int>();
     public int[] MetadataIds { get; private set; } = Array.Empty<int>();
     /// <summary>First linked metadata id, or null when the list is empty (read-only compat).</summary>
@@ -27,10 +27,11 @@ namespace ProgesiCore
     {
       Guard.Against.Negative(id, nameof(id));
       Guard.Against.NullOrWhiteSpace(name, nameof(name));
+      Guard.Against.Null(value, nameof(value));
 
       Id = id;
       Name = name;
-      Value = value; // null ammesso
+      Value = value;
       DependsFrom = (dependsFrom ?? Array.Empty<int>()).ToArray();
       MetadataIds = NormalizeMetadataIds(metadataIds);
       IsAssumption = isAssumption;
@@ -73,8 +74,7 @@ namespace ProgesiCore
     {
       yield return Id;
       yield return Name;
-      // evitare null: convertiamo in string canonicale
-      yield return Value is null ? "<null>" : Value.GetType().FullName!;
+      yield return Value.GetType().FullName!;
       yield return ProgesiHash.CanonicalValue(Value);
       foreach (int d in DependsFrom.OrderBy(x => x))
       {

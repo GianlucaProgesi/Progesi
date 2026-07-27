@@ -88,7 +88,7 @@ public sealed class EfVariableRepository : IVariableRepository
     var depends = JsonConvert.DeserializeObject<int[]>(entity.DependsJson) ?? Array.Empty<int>();
     var metadataIds = ReadMetadataIds(entity.MetadataIdsJson, entity.MetadataId);
     var value = ValueSerialization.ParseValue(entity.Value, entity.ValueType);
-    return new ProgesiVariable(entity.Id, entity.Name, value, depends, metadataIds);
+    return new ProgesiVariable(entity.Id, entity.Name, value ?? "", depends, metadataIds);
   }
 
   private static int[] ReadMetadataIds(string? metadataIdsJson, int? metadataId)
