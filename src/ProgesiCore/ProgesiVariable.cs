@@ -72,7 +72,6 @@ namespace ProgesiCore
     // Nota: il base richiede IEnumerable<object> NON nullable
     protected override IEnumerable<object> GetEqualityComponents()
     {
-      yield return Id;
       yield return Name;
       yield return Value.GetType().FullName!;
       yield return ProgesiHash.CanonicalValue(Value);

@@ -9,23 +9,27 @@ namespace ProgesiCore.Tests
     [Fact]
     public void Metadata_References_OrderInsensitive_And_ContentSensitive()
     {
-      // Stesso set di riferimenti, ordine diverso → hash uguale
-      var a = ProgesiMetadata.Create("user", id: 1);
-      a.AddReference(new Uri("http://example.com/a"));
-      a.AddReference(new Uri("http://example.com/b"));
+      var a = ProgesiMetadata.Create("user", references: new[]
+      {
+        new Uri("http://example.com/a"),
+        new Uri("http://example.com/b")
+      }, id: 1);
 
-      var b = ProgesiMetadata.Create("user", id: 1);
-      b.AddReference(new Uri("http://example.com/b"));
-      b.AddReference(new Uri("http://example.com/a"));
+      var b = ProgesiMetadata.Create("user", references: new[]
+      {
+        new Uri("http://example.com/b"),
+        new Uri("http://example.com/a")
+      }, id: 1);
 
-      _ = ProgesiHash.Compute(a).Should().Be(ProgesiHash.Compute(b));
+      ProgesiHash.Compute(a).Should().Be(ProgesiHash.Compute(b));
 
-      // Set diverso (sostituisco /b con /c) → hash diverso
-      var c = ProgesiMetadata.Create("user", id: 1);
-      c.AddReference(new Uri("http://example.com/a"));
-      c.AddReference(new Uri("http://example.com/c"));
+      var c = ProgesiMetadata.Create("user", references: new[]
+      {
+        new Uri("http://example.com/a"),
+        new Uri("http://example.com/c")
+      }, id: 1);
 
-      _ = ProgesiHash.Compute(a).Should().NotBe(ProgesiHash.Compute(c));
+      ProgesiHash.Compute(a).Should().NotBe(ProgesiHash.Compute(c));
     }
 
     [Fact]
@@ -35,23 +39,20 @@ namespace ProgesiCore.Tests
       byte[] bytes2 = new byte[] { 5, 6, 7, 8 };
       byte[] bytes3 = new byte[] { 9, 9, 9, 9 };
 
-      var a = ProgesiMetadata.Create("user", id: 1);
-      _ = a.AddSnip(bytes1, "application/octet-stream", "x", new Uri("http://src/1"));
-      _ = a.AddSnip(bytes2, "application/octet-stream", "y", new Uri("http://src/2"));
+      var snip1a = ProgesiSnip.Create(bytes1, "application/octet-stream", "x", new Uri("http://src/1"));
+      var snip2a = ProgesiSnip.Create(bytes2, "application/octet-stream", "y", new Uri("http://src/2"));
+      var a = ProgesiMetadata.Create("user", snips: new[] { snip1a, snip2a }, id: 1);
 
-      var b = ProgesiMetadata.Create("user", id: 1);
-      _ = b.AddSnip(bytes2, "application/octet-stream", "y", new Uri("http://src/2"));
-      _ = b.AddSnip(bytes1, "application/octet-stream", "x", new Uri("http://src/1"));
+      var snip2b = ProgesiSnip.Create(bytes2, "application/octet-stream", "y", new Uri("http://src/2"));
+      var snip1b = ProgesiSnip.Create(bytes1, "application/octet-stream", "x", new Uri("http://src/1"));
+      var b = ProgesiMetadata.Create("user", snips: new[] { snip2b, snip1b }, id: 1);
 
-      // Ordine diverso → hash uguale
-      _ = ProgesiHash.Compute(a).Should().Be(ProgesiHash.Compute(b));
+      ProgesiHash.Compute(a).Should().Be(ProgesiHash.Compute(b));
 
-      // Contenuto diverso → hash diverso
-      var c = ProgesiMetadata.Create("user", id: 1);
-      _ = c.AddSnip(bytes1, "application/octet-stream", "x", new Uri("http://src/1"));
-      _ = c.AddSnip(bytes3, "application/octet-stream", "z", new Uri("http://src/3"));
+      var snip3c = ProgesiSnip.Create(bytes3, "application/octet-stream", "z", new Uri("http://src/3"));
+      var c = ProgesiMetadata.Create("user", snips: new[] { snip1a, snip3c }, id: 1);
 
-      _ = ProgesiHash.Compute(a).Should().NotBe(ProgesiHash.Compute(c));
+      ProgesiHash.Compute(a).Should().NotBe(ProgesiHash.Compute(c));
     }
   }
 }
