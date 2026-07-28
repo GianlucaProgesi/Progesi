@@ -353,7 +353,7 @@ namespace ProgesiGrasshopperAssembly.Components
       }
 
       var sink = new RhinoLiveExchangeImportSink(repo, clusterTable);
-      var result = LiveExchangeSqliteImporter.ImportValidated(inDbPath, strict, dryRun, sink);
+      var result = LiveExchangeSqliteImporter.ImportValidated(inDbPath, strict, dryRun, sink, GeometryCodec);
       return MapImportResult(result);
     }
 
