@@ -47,6 +47,8 @@ CREATE TABLE IF NOT EXISTS Variables (
   ValC         TEXT,
   MetaId       INTEGER NULL,
   Assumption   INTEGER NOT NULL DEFAULT 0,
+  ObjectType   TEXT,
+  ObjectPayloadJson TEXT,
   FOREIGN KEY (MetaId) REFERENCES Metadata(Id) ON DELETE SET NULL
 );
 CREATE TABLE IF NOT EXISTS Refs (
@@ -96,7 +98,7 @@ CREATE TABLE IF NOT EXISTS ClusterVariables (
           }
 
           cmd.Parameters.Clear();
-          cmd.CommandText = "INSERT OR REPLACE INTO Variables (Id,Hash,Name,Value,ValC,MetaId,Assumption) VALUES (@id,@hash,@name,@value,@valc,@mid,@ass)";
+          cmd.CommandText = "INSERT OR REPLACE INTO Variables (Id,Hash,Name,Value,ValC,MetaId,Assumption,ObjectType,ObjectPayloadJson) VALUES (@id,@hash,@name,@value,@valc,@mid,@ass,@otype,@opayload)";
           var vId = new SQLiteParameter("@id");
           var vHash = new SQLiteParameter("@hash");
           var vName = new SQLiteParameter("@name");
@@ -104,7 +106,9 @@ CREATE TABLE IF NOT EXISTS ClusterVariables (
           var vValC = new SQLiteParameter("@valc");
           var vMid = new SQLiteParameter("@mid");
           var vAss = new SQLiteParameter("@ass");
-          cmd.Parameters.AddRange(new[] { vId, vHash, vName, vVal, vValC, vMid, vAss });
+          var vObjectType = new SQLiteParameter("@otype");
+          var vObjectPayload = new SQLiteParameter("@opayload");
+          cmd.Parameters.AddRange(new[] { vId, vHash, vName, vVal, vValC, vMid, vAss, vObjectType, vObjectPayload });
 
           foreach (var v in vars)
           {
@@ -115,6 +119,8 @@ CREATE TABLE IF NOT EXISTS ClusterVariables (
             vValC.Value = v.ValC ?? string.Empty;
             vMid.Value = (v.MetaId > 0 && metaIdsPresent.Contains(v.MetaId)) ? (object)v.MetaId : DBNull.Value;
             vAss.Value = v.Assumption ? 1 : 0;
+            vObjectType.Value = v.ObjectType ?? string.Empty;
+            vObjectPayload.Value = v.ObjectPayloadJson ?? string.Empty;
             cmd.ExecuteNonQuery();
           }
 
