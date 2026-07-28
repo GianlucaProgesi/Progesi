@@ -1,4 +1,5 @@
 using System.IO;
+using System.Linq;
 using FluentAssertions;
 using Progesi.LiveDataExchange;
 using Progesi.LiveDataExchange.Tests.Support;
@@ -31,6 +32,7 @@ namespace Progesi.LiveDataExchange.Tests
         sink.Variables.Should().HaveCount(3);
         sink.Clusters.Should().HaveCount(1);
         sink.Clusters[0].VariableIds.Should().BeEquivalentTo(new[] { 1, 2, 3 });
+        sink.Variables.Single(v => v.Name == "Span").Value.Should().Be("12.5");
       }
       finally
       {

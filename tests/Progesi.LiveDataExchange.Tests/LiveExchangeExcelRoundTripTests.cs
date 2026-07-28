@@ -1,4 +1,5 @@
 using System.IO;
+using System.Linq;
 using FluentAssertions;
 using Progesi.LiveDataExchange;
 using Progesi.LiveDataExchange.Tests.Support;
@@ -32,6 +33,7 @@ namespace Progesi.LiveDataExchange.Tests
         sink.Metadata.Should().HaveCount(2);
         sink.Variables.Should().HaveCount(3);
         sink.Clusters.Should().HaveCount(1);
+        sink.Variables.Single(v => v.Name == "Span").Value.Should().Be("12.5");
         sink.Variables.Should().Contain(v => v.Name == "BeamCurve" && !string.IsNullOrEmpty(v.GeometryJson));
       }
       finally

@@ -697,7 +697,7 @@ namespace ProgesiGrasshopperAssembly.Components
         {
           id = payload.Id,
           name = payload.Name,
-          value = payload.GeometryJson ?? payload.Value,
+          value = payload.Value,
           geometryJson = payload.GeometryJson ?? "",
           unit = "",
           by = "",
