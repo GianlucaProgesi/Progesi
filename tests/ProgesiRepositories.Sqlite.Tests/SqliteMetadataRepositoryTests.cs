@@ -29,13 +29,13 @@ namespace ProgesiRepositories.Sqlite.Tests
       var r1 = new Uri("https://example.com/A");
       var r2 = new Uri("https://example.com/B");
 
-      var m1 = ProgesiMetadata.Create("usr", "info", new[] { r1, r2 }, id: 1);
-      m1.AddSnip(new byte[] { 1, 2, 3 }, "image/png", "cap");
+      var snip1 = ProgesiSnip.Create(new byte[] { 1, 2, 3 }, "image/png", "cap");
+      var m1 = ProgesiMetadata.Create("usr", "info", new[] { r1, r2 }, new[] { snip1 }, id: 1);
 
       await _repo.UpsertAsync(m1);
 
-      var m2 = ProgesiMetadata.Create("usr", "info", new[] { r2, r1 }, id: 2);
-      m2.AddSnip(new byte[] { 1, 2, 3 }, "image/png", "caption changes ok");
+      var snip2 = ProgesiSnip.Create(new byte[] { 1, 2, 3 }, "image/png", "caption changes ok");
+      var m2 = ProgesiMetadata.Create("usr", "info", new[] { r2, r1 }, new[] { snip2 }, id: 2);
 
       await _repo.UpsertAsync(m2);
 
@@ -49,8 +49,8 @@ namespace ProgesiRepositories.Sqlite.Tests
     [Fact]
     public async Task Roundtrip_Metadata_With_Snips_And_References()
     {
-      var m = ProgesiMetadata.Create("me", "meta", new[] { new Uri("https://a") }, id: 5);
-      m.AddSnip(new byte[] { 9, 9, 9 }, "image/jpeg", "pic");
+      var snip = ProgesiSnip.Create(new byte[] { 9, 9, 9 }, "image/jpeg", "pic");
+      var m = ProgesiMetadata.Create("me", "meta", new[] { new Uri("https://a") }, new[] { snip }, id: 5);
 
       await _repo.UpsertAsync(m);
       var back = await _repo.GetAsync(5);

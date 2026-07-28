@@ -28,8 +28,8 @@ namespace ProgesiRepositories.Sqlite.Tests
 
       var tasks = Enumerable.Range(0, 8).Select(async i =>
       {
-        var m = ProgesiMetadata.Create("usr", "info", refs, id: i + 1);
-        m.AddSnip(new byte[] { 1, 2, 3 }, "image/png", "cap");
+        var snip = ProgesiSnip.Create(new byte[] { 1, 2, 3 }, "image/png", "cap");
+        var m = ProgesiMetadata.Create("usr", "info", refs, new[] { snip }, id: i + 1);
         await _repo.UpsertAsync(m);
       });
 

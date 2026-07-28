@@ -38,7 +38,11 @@ namespace ProgesiCore
             continue;
           }
 
-          _references.Add(r.ToString());
+          string s = r.ToString();
+          if (!_references.Contains(s))
+          {
+            _references.Add(s);
+          }
         }
       }
 
@@ -89,96 +93,17 @@ namespace ProgesiCore
     /// <summary>Content-based hashtag (SHA-256 digest; derived, not part of equality).</summary>
     public string Hashtag => ProgesiHash.Compute(this);
 
-    public void UpdateAdditionalInfo(string? info)
-    {
-      AdditionalInfo = info ?? string.Empty;
-      Touch();
-    }
+    public ProgesiMetadata WithAdditionalInfo(string? info)
+      => Create(CreatedBy, info, References, Snips, DateTime.UtcNow, Id);
 
-    public void AddReference(Uri reference)
-    {
-      if (reference == null)
-      {
-        return;
-      }
+    public ProgesiMetadata WithReferences(IEnumerable<Uri>? references)
+      => Create(CreatedBy, AdditionalInfo, references, Snips, DateTime.UtcNow, Id);
 
-      string s = reference.ToString();
-      if (!_references.Contains(s))
-      {
-        _references.Add(s);
-      }
-
-      Touch();
-    }
-
-    public void AddReferences(IEnumerable<Uri> references)
-    {
-      if (references == null)
-      {
-        return;
-      }
-
-      foreach (Uri r in references)
-      {
-        if (r == null)
-        {
-          continue;
-        }
-
-        string s = r.ToString();
-        if (!_references.Contains(s))
-        {
-          _references.Add(s);
-        }
-      }
-      Touch();
-    }
-
-    public bool RemoveReference(Uri reference)
-    {
-      if (reference == null)
-      {
-        return false;
-      }
-
-      bool removed = _references.Remove(reference.ToString());
-      if (removed)
-      {
-        Touch();
-      }
-
-      return removed;
-    }
-
-    public ProgesiSnip AddSnip(byte[] content, string mimeType, string? caption = null, Uri? source = null)
-    {
-      var snip = ProgesiSnip.Create(content, mimeType, caption, source);
-      _snips.Add(snip);
-      Touch();
-      return snip;
-    }
-
-    public bool RemoveSnip(Guid snipId)
-    {
-      int idx = _snips.FindIndex(s => s.Id == snipId);
-      if (idx < 0)
-      {
-        return false;
-      }
-
-      _snips.RemoveAt(idx);
-      Touch();
-      return true;
-    }
-
-    public void Touch()
-    {
-      LastModified = DateTime.UtcNow;
-    }
+    public ProgesiMetadata WithSnips(IEnumerable<ProgesiSnip>? snips)
+      => Create(CreatedBy, AdditionalInfo, References, snips, DateTime.UtcNow, Id);
 
     protected override IEnumerable<object> GetEqualityComponents()
     {
-      yield return Id;
       yield return CreatedBy;
       yield return AdditionalInfo;
 
@@ -240,7 +165,6 @@ namespace ProgesiCore
 
     protected override IEnumerable<object> GetEqualityComponents()
     {
-      yield return Id;
       yield return MimeType;
       yield return Caption;
       yield return Source ?? string.Empty;

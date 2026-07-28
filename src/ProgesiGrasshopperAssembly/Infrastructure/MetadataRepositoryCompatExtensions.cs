@@ -351,17 +351,18 @@ namespace ProgesiGrasshopperAssembly.Infrastructure
           UnindexHash(table, "Progesi.MetaHashtag", ProgesiHash.Compute(current));
         }
 
-        // costruisci metadata e **salva i Ref normalizzati**
-        var meta = ProgesiMetadata.Create(by ?? string.Empty, descr ?? string.Empty, null, null, DateTime.UtcNow, id);
+        var refs = new List<Uri>();
         if (!string.IsNullOrWhiteSpace(refsS))
         {
           foreach (var r in refsS.Split('|'))
           {
             var s = r?.Trim(); if (string.IsNullOrEmpty(s)) continue;
             if (Uri.TryCreate(s, UriKind.RelativeOrAbsolute, out var u))
-              meta.AddReference(u);
+              refs.Add(u);
           }
         }
+
+        var meta = ProgesiMetadata.Create(by ?? string.Empty, descr ?? string.Empty, refs, null, DateTime.UtcNow, id);
         repo.UpsertAsync(meta).GetAwaiter().GetResult();
 
         // indicizza BY+INFO (legacy dedupe) e domain hashtag

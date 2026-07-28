@@ -45,26 +45,36 @@ namespace ProgesiRepositories.Rhino
         }
       }
 
-      var meta = ProgesiMetadata.Create(dto.CreatedBy ?? string.Empty,
-                                        dto.AdditionalInfo ?? string.Empty,
-                                        refs,
-                                        lastModifiedUtc: dto.LastModified,
-                                        id: dto.Id);
-
+      var snips = new List<ProgesiSnip>();
       if (dto.Snips != null)
       {
         foreach (var sn in dto.Snips)
         {
+          var content = sn.Content ?? Array.Empty<byte>();
+          if (content.Length == 0)
+            continue;
+
           Uri? src = null;
           if (!string.IsNullOrWhiteSpace(sn.Source) && Uri.TryCreate(sn.Source, UriKind.RelativeOrAbsolute, out var u))
             src = u;
 
-          if (src is null)
-            meta.AddSnip(sn.Content ?? Array.Empty<byte>(), sn.MimeType ?? "image/png", sn.Caption ?? string.Empty);
-          else
-            meta.AddSnip(sn.Content ?? Array.Empty<byte>(), sn.MimeType ?? "image/png", sn.Caption ?? string.Empty, src);
+          try
+          {
+            snips.Add(ProgesiSnip.Create(content, sn.MimeType ?? "image/png", sn.Caption ?? string.Empty, src));
+          }
+          catch
+          {
+            // skip invalid persisted snips (same tolerance as before when AddSnip would throw)
+          }
         }
       }
+
+      var meta = ProgesiMetadata.Create(dto.CreatedBy ?? string.Empty,
+                                        dto.AdditionalInfo ?? string.Empty,
+                                        refs,
+                                        snips,
+                                        lastModifiedUtc: dto.LastModified,
+                                        id: dto.Id);
 
       return Task.FromResult<ProgesiMetadata?>(meta);
     }
