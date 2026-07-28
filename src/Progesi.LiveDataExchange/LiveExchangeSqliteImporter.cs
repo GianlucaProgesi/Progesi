@@ -5,6 +5,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
+using Progesi.GhExcelReadContract;
 using ProgesiCore;
 
 namespace Progesi.LiveDataExchange
@@ -15,9 +16,11 @@ namespace Progesi.LiveDataExchange
       string inDbPath,
       bool strict,
       bool dryRun,
-      ILiveExchangeImportSink sink)
+      ILiveExchangeImportSink sink,
+      IGeometryValueCodec geometryCodec)
     {
       if (sink == null) throw new ArgumentNullException(nameof(sink));
+      if (geometryCodec == null) throw new ArgumentNullException(nameof(geometryCodec));
 
       string db = (inDbPath ?? "").Trim();
       if (string.IsNullOrEmpty(db)) throw new ArgumentException("SQLite path not specified.");
@@ -118,10 +121,15 @@ namespace Progesi.LiveDataExchange
         }
 
         bool hasClusters = HasTable("Clusters") && HasTable("ClusterVariables");
+        bool hasObjectTypeColumn = HasVariablesColumn(cn, "ObjectType");
+        bool hasObjectPayloadColumn = HasVariablesColumn(cn, "ObjectPayloadJson");
+        bool readObjectPayloadColumns = hasObjectTypeColumn && hasObjectPayloadColumn;
 
         using (var cmd = new SQLiteCommand(cn))
         {
-          cmd.CommandText = "SELECT Id, Name, Value, MetaId, Assumption FROM Variables ORDER BY Id";
+          cmd.CommandText = readObjectPayloadColumns
+            ? "SELECT Id, Name, Value, MetaId, Assumption, ObjectType, ObjectPayloadJson FROM Variables ORDER BY Id"
+            : "SELECT Id, Name, Value, MetaId, Assumption FROM Variables ORDER BY Id";
           using (var rd = cmd.ExecuteReader())
           {
             int row = 0;
@@ -133,6 +141,8 @@ namespace Progesi.LiveDataExchange
               string vl = rd.IsDBNull(2) ? "" : rd.GetString(2);
               int mid = rd.IsDBNull(3) ? 0 : rd.GetInt32(3);
               bool ass = !rd.IsDBNull(4) && (rd.GetInt32(4) != 0);
+              string objectType = readObjectPayloadColumns && !rd.IsDBNull(5) ? rd.GetString(5) : "";
+              string objectPayloadJson = readObjectPayloadColumns && !rd.IsDBNull(6) ? rd.GetString(6) : "";
 
               if (nm.Length > NAME_MAX || !IsPrintable(nm))
               { var msg = $"[Var R{row}] NAME invalid (len/charset)"; Report(1, msg); AddErrRC(1, row, 2); if (strict) { varErr++; continue; } else { varWarn++; } }
@@ -155,14 +165,39 @@ namespace Progesi.LiveDataExchange
                 { var msg = $"[Var R{row}] METAID not found: {mid}"; Report(1, msg); AddErrRC(1, row, 4); if (strict) { varErr++; continue; } else { varWarn++; metaIds = Array.Empty<int>(); } }
               }
 
+              string geometryJson = null;
+              if (GhExcelObjectSheet.TryParseObjectMarker(vl, out _))
+              {
+                string payload = objectPayloadJson;
+                if (string.IsNullOrWhiteSpace(payload))
+                {
+                  var msg = $"[Var R{row}] object payload missing/invalid: no ObjectPayloadJson column/value";
+                  if (strict) { ERR(1, msg); AddErrRC(1, row, 2); varErr++; }
+                  else { WARN(1, msg); AddErrRC(1, row, 2); varWarn++; }
+                  varRows++;
+                  continue;
+                }
+
+                if (!geometryCodec.TryDecode(payload, out _))
+                {
+                  var msg = $"[Var R{row}] object decode failed ({objectType})";
+                  if (strict) { ERR(1, msg); AddErrRC(1, row, 2); varErr++; }
+                  else { WARN(1, msg); AddErrRC(1, row, 2); varWarn++; }
+                  varRows++;
+                  continue;
+                }
+
+                geometryJson = payload;
+              }
+
               if (!dryRun)
               {
                 var payload = new LiveExchangeVariableImportPayload
                 {
                   Id = id,
                   Name = nm ?? "",
-                  Value = vl ?? "",
-                  GeometryJson = "",
+                  Value = geometryJson ?? (vl ?? ""),
+                  GeometryJson = geometryJson ?? "",
                   IsAssumption = ass,
                   MetadataIds = metaIds,
                   Depends = dep
@@ -252,6 +287,25 @@ namespace Progesi.LiveDataExchange
                     $"Log: {(string.IsNullOrWhiteSpace(logPath) ? "-" : logPath)}";
 
       return result;
+    }
+
+    private static bool HasVariablesColumn(SQLiteConnection cn, string columnName)
+    {
+      using (var cmd = new SQLiteCommand("PRAGMA table_info(Variables)", cn))
+      using (var rd = cmd.ExecuteReader())
+      {
+        while (rd.Read())
+        {
+          if (rd.IsDBNull(1))
+            continue;
+
+          string name = rd.GetString(1);
+          if (string.Equals(name, columnName, StringComparison.OrdinalIgnoreCase))
+            return true;
+        }
+      }
+
+      return false;
     }
   }
 }
