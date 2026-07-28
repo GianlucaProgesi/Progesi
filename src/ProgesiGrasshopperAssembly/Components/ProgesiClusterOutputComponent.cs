@@ -3,6 +3,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using GH_IO.Serialization;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Parameters;
 using ProgesiGrasshopperAssembly.Infrastructure;
@@ -24,6 +25,10 @@ namespace ProgesiGrasshopperAssembly.Components
   public sealed class ProgesiClusterOutputComponent : GH_Component, IGH_VariableParameterComponent
   {
     private bool _pendingDynamicRebuild = false;
+    private bool _documentLoadingGuard = false;
+    private bool _rebuildQueued = false;
+    private string _queuedSignature = "";
+    private List<ProgesiCore.ProgesiVariable> _queuedVars = null;
 
     private string _lastSignature = "";
 
@@ -71,6 +76,31 @@ namespace ProgesiGrasshopperAssembly.Components
       p.AddParameter(values);
     }
 
+    public override bool Write(GH_IWriter writer)
+    {
+      if (!base.Write(writer))
+        return false;
+
+      writer.SetString("LastSignature", _lastSignature ?? string.Empty);
+      writer.SetBoolean("PendingDynamicRebuild", _pendingDynamicRebuild);
+      return true;
+    }
+
+    public override bool Read(GH_IReader reader)
+    {
+      if (!base.Read(reader))
+        return false;
+
+      _documentLoadingGuard = true;
+      _lastSignature = string.Empty;
+      if (reader.ItemExists("LastSignature"))
+        _lastSignature = reader.GetString("LastSignature") ?? string.Empty;
+      _pendingDynamicRebuild = false;
+      if (reader.ItemExists("PendingDynamicRebuild"))
+        _pendingDynamicRebuild = reader.GetBoolean("PendingDynamicRebuild");
+      return true;
+    }
+
     protected override void SolveInstance(IGH_DataAccess DA)
     {
       bool run = false;
@@ -84,6 +114,7 @@ namespace ProgesiGrasshopperAssembly.Components
 
       if (!run)
       {
+        _documentLoadingGuard = false;
         DA.SetData(0, "Idle");
         DA.SetDataList(1, new int[0]);
         DA.SetDataList(2, new string[0]);
@@ -222,7 +253,11 @@ namespace ProgesiGrasshopperAssembly.Components
         if (Params.Output.Count - 4 < values.Count)
         {
           _lastSignature = "";
-          ExpireSolution(true);
+          if (ShouldDeferParameterMutation())
+            QueueDynamicOutputRebuild(signature, resolved);
+          else
+            RequestSolutionRefresh();
+
           return;
         }
 
@@ -235,6 +270,8 @@ namespace ProgesiGrasshopperAssembly.Components
         {
           DA.SetData(j, null);
         }
+
+        _documentLoadingGuard = false;
       }
       catch (Exception ex)
       {
@@ -319,6 +356,17 @@ namespace ProgesiGrasshopperAssembly.Components
       if (string.Equals(signature, _lastSignature, StringComparison.Ordinal) && existingSlots == vars.Count)
         return false;
 
+      if (ShouldDeferParameterMutation())
+      {
+        QueueDynamicOutputRebuild(signature, vars);
+        return true;
+      }
+
+      return ApplyDynamicOutputRebuild(signature, vars, scheduleRefresh: true);
+    }
+
+    private bool ApplyDynamicOutputRebuild(string signature, List<ProgesiCore.ProgesiVariable> vars, bool scheduleRefresh)
+    {
       _lastSignature = signature;
 
       int required = vars.Count;
@@ -353,14 +401,61 @@ namespace ProgesiGrasshopperAssembly.Components
       if (changedCount)
       {
         Params.OnParametersChanged();
-        _pendingDynamicRebuild = true; // aggiorna nickname nel solve successivo
-        ExpireSolution(true);
+        _pendingDynamicRebuild = true;
+        if (scheduleRefresh)
+          RequestSolutionRefresh();
         return true;
       }
 
-      // Count uguale: non serve ExpireSolution(true), ma nickname può essere diverso
+      // Count uguale: non serve un refresh completo, ma nickname può essere diverso
       _pendingDynamicRebuild = true;
       return false;
+    }
+
+    private bool ShouldDeferParameterMutation()
+    {
+      if (_documentLoadingGuard)
+        return true;
+
+      return OnPingDocument() == null;
+    }
+
+    private void QueueDynamicOutputRebuild(string signature, List<ProgesiCore.ProgesiVariable> vars)
+    {
+      _queuedSignature = signature ?? string.Empty;
+      _queuedVars = vars;
+
+      if (_rebuildQueued)
+        return;
+
+      var doc = OnPingDocument();
+      if (doc == null)
+        return;
+
+      _rebuildQueued = true;
+      doc.ScheduleSolution(1, d =>
+      {
+        _rebuildQueued = false;
+        _documentLoadingGuard = false;
+
+        if (_queuedVars == null)
+          return;
+
+        ApplyDynamicOutputRebuild(_queuedSignature, _queuedVars, scheduleRefresh: false);
+        ExpireSolution(false);
+      });
+    }
+
+    private void RequestSolutionRefresh()
+    {
+      var doc = OnPingDocument();
+      if (doc == null)
+      {
+        ExpireSolution(false);
+        return;
+      }
+
+      doc.ScheduleSolution(1, d => ExpireSolution(false));
     }
 
     private void ClearDynamicOutputs(IGH_DataAccess DA)
