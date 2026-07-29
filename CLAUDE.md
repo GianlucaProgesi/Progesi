@@ -66,7 +66,7 @@ Read-only inspection and documentation are allowed. The freeze lifts only after 
 - Cursor implementation requires: an approved Task Board row, a branch, allowed files, forbidden files, tests, manual validation if Grasshopper is affected, and a rollback plan.
 - Claude reviews Cursor output (diff + test results) before any merge or documentation update.
 - Cursor smoke test passed, but Cursor still requires an explicit task brief and human approval before any implementation.
-- **Tab / lane boundary (recorded 2026-07-29; see the Notion "Ways of Working — 4-Tab Interface" page):** Cursor implements on the branch in **05 Cursor Bridge and then STOPS**. Cursor must **not** run the tab-03 (build/test/commit/PR or merge) or tab-04 (deploy) lanes, and must **not** edit lane or guard scripts. If a lane guard raises a false positive, Cursor **reports it and stops** — Claude (the lane/guard owner) fixes the guard and the human runs the lane. Lane + guard scripts are owned by Claude; all git/PR operations run through prepared lane scripts, not ad-hoc commands.
+- **Tab / lane boundary (recorded 2026-07-29, relaxation adopted same day; canonical detail in the Notion "Ways of Working — 4-Tab Interface" page).** The four tabs are **01 Claude Main/Orchestrator · 02 Cursor Bridge · 03 Build-Test-Git · 04 ManualGH Validation**. Cursor implements on the branch in **02 Cursor Bridge and then STOPS**; Cursor must **not** run the tab-03/tab-04 lanes and must **not** edit lane or guard scripts — if a lane guard false-positives, Cursor **reports it and stops** (Claude, the lane/guard owner, fixes it). **Claude MAY prepare AND run the tab-03 (build/test/PR + merge) and tab-04 (deploy) lanes directly, gated by a lightweight human authorisation (a simple "go" / "move on" / "merge #N"); a full Human-Input decision row is required ONLY for Red decisions (authorising a code change / ADR / schema / branch-or-tag deletion / AxisVar).** Lane + guard scripts are owned by Claude; all git/PR operations run through prepared lane scripts, not ad-hoc commands.
 
 ## 7. Build/test commands
 - Run build/test **only when explicitly instructed**.
@@ -82,10 +82,10 @@ After any action, report:
 - `git status` (and branch/commit when repository interaction occurred)
 
 ## 9. Implementation prompt guard
-If this prompt is running in Claude Code / 00. Controlled Writes, stop immediately. Implementation may run only in 05. Cursor Bridge after Cursor Allowed = true.
+If this prompt is running in Claude Code / 01. Claude Main/Orchestrator, stop immediately. Implementation may run only in 02. Cursor Bridge after Cursor Allowed = true.
 
-- 00. Controlled Writes must never execute implementation prompts.
-- 05. Cursor Bridge must be a plain terminal by default.
+- 01. Claude Main/Orchestrator must never execute implementation prompts.
+- 02. Cursor Bridge must be a plain terminal by default.
 - Cursor Agent implementation requires Cursor Allowed = true, an approved task brief, a branch, allowed files, forbidden files, tests, a rollback plan, and human approval.
 
 ## ProgesiVariableCluster Phase 1 recovery exception
@@ -121,7 +121,7 @@ This section reconciles the standing constraints and mode notes above with the c
    - **DataExchange ADR** — interim: keep DataExchange as the interchange boundary (Options A + E); long-term target is Option D.
    - **EF / SQLite ADR** — EF is the **long-term target**; the SQLite repository remains the **interim canonical** persistence; EF retirement is deferred and there is no near-term SQLite retirement.
    - **ProgesiDomainServices ADR (ADR-009)** — Option C direction accepted; consolidation is planned, not yet implemented.
-   Any implementation flowing from these ADRs still requires an approved Task Board row, a branch, a task brief, tests, and human approval, and must run in 05. Cursor Bridge — never in 00. Controlled Writes.
+   Any implementation flowing from these ADRs still requires an approved Task Board row, a branch, a task brief, tests, and human approval, and must run in 02. Cursor Bridge — never in 01. Claude Main/Orchestrator.
 
 4. **AxisVar.** Remains **frozen and in abeyance** exactly as in §5. Nothing here lifts that freeze.
 
@@ -194,3 +194,13 @@ Records the current operating state after the R2-C line and recent ADR dispositi
 3. **Tab / lane boundary (also added to §6).** Cursor implements in **05 Cursor Bridge and stops**; it does **not** run the tab-03 / tab-04 lanes or edit lane/guard scripts, and **reports guard false-positives rather than fixing-and-proceeding**. Claude owns the lane + guard scripts; git/PR operations run through prepared lanes (now the parameterised `Progesi-tab03-lane.ps1` / `Progesi-tab04-lane.ps1` + the merge lane), not ad-hoc commands. Full detail in the Notion "Ways of Working — 4-Tab Interface" page.
 
 4. **No new authorisation.** State + governance-record only. AxisVar remains frozen.
+
+## Tab renumber + lane-relaxation reconciliation — 2026-07-29
+
+Records Gianluca's 2026-07-29 refinements on the Notion "Ways of Working — 4-Tab Interface" page. **Supersedes the tab numbering used earlier in this file** (§9's `00`/`05`; the `05 Cursor Bridge` mention in point 3 of the section above; and any `00. Controlled Writes`). Does **not** weaken the AxisVar freeze (§5), §2's rules, or the §9 implementation-prompt guard. **Grants no new source-code/ADR/AxisVar authority.**
+
+1. **Canonical tabs:** **01 Claude Main/Orchestrator · 02 Cursor Bridge · 03 Build-Test-Git · 04 ManualGH Validation** (previously 00/05/03/04). §9 and §6 are updated to this scheme.
+
+2. **Lane relaxation (adopted).** Claude MAY prepare **and run** the tab-03 (build/test/PR + merge) and tab-04 (deploy) lanes directly — including performing merges — gated by a **lightweight human authorisation** (a simple "go" / "move on" / "merge #N"). A full **Human-Input decision row remains required ONLY for Red decisions**: authorising a source-code change, an ADR status change, a schema change, a branch/tag deletion, or anything touching AxisVar. **Cursor still must NOT run any lane or edit lane/guard scripts**, and reports guard false-positives + stops. Git/PR operations run through the prepared parameterised lanes (`Progesi-tab03-lane.ps1`, `Progesi-tab04-lane.ps1`, `Progesi-tab03-merge-pr.ps1`), not ad-hoc commands.
+
+3. **Unchanged:** the non-negotiable rules (§2), the AxisVar freeze (§5), the implementation-prompt guard (§9), and all Red gates remain in force. The relaxation concerns only *who may run the already-prepared lanes* and the *weight of authorisation for routine lane runs* — not what may be changed.
