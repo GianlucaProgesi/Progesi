@@ -43,7 +43,7 @@ CREATE TABLE Variables (
     MetadataId   INTEGER NULL,
     MetadataIdsJson TEXT NOT NULL DEFAULT '[]',
     DependsJson  TEXT NOT NULL,
-    ContentHash  TEXT,
+    ContentHash  TEXT NOT NULL DEFAULT '',
     ObjectType   TEXT NOT NULL DEFAULT '',
     ObjectPayloadJson TEXT NOT NULL DEFAULT ''
 );";
@@ -61,24 +61,18 @@ CREATE TABLE IF NOT EXISTS Variables (
     MetadataId   INTEGER NULL,
     MetadataIdsJson TEXT NOT NULL DEFAULT '[]',
     DependsJson  TEXT NOT NULL,
-    ContentHash  TEXT
+    ContentHash  TEXT NOT NULL DEFAULT ''
 );";
           cmd.ExecuteNonQuery();
 
           // per DB legacy che non avessero ContentHash
-          AddColumnIfMissing(conn, "Variables", "ContentHash", "TEXT");
+          AddColumnIfMissing(conn, "Variables", "ContentHash", "TEXT NOT NULL DEFAULT ''");
           AddColumnIfMissing(conn, "Variables", "MetadataIdsJson", "TEXT NOT NULL DEFAULT '[]'");
           AddColumnIfMissing(conn, "Variables", "ObjectType", "TEXT NOT NULL DEFAULT ''");
           AddColumnIfMissing(conn, "Variables", "ObjectPayloadJson", "TEXT NOT NULL DEFAULT ''");
         }
       }
       EnsureContentHash(conn, "Variables");
-
-      using (var idx = conn.CreateCommand())
-      {
-        idx.CommandText = "CREATE INDEX IF NOT EXISTS IX_Variables_ContentHash ON Variables(ContentHash);";
-        idx.ExecuteNonQuery();
-      }
     }
 
     public Task<ProgesiVariable> SaveAsync(ProgesiVariable variable, CancellationToken ct = default)
