@@ -10,4 +10,6 @@ public sealed class VariableEntity
   public string MetadataIdsJson { get; set; } = "[]";
   public string DependsJson { get; set; } = "[]";
   public string ContentHash { get; set; } = string.Empty;
+  public string ObjectType { get; set; } = string.Empty;
+  public string ObjectPayloadJson { get; set; } = string.Empty;
 }

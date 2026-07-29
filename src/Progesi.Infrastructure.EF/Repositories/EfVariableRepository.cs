@@ -49,7 +49,21 @@ public sealed class EfVariableRepository : IVariableRepository
 
     entity.Name = variable.Name ?? string.Empty;
     entity.ValueType = ValueSerialization.TypeOf(variable.Value);
-    entity.Value = ValueSerialization.Stringify(variable.Value);
+
+    if (ValueSerialization.IsGeometryLike(variable.Value))
+    {
+      var objectType = ValueSerialization.GeometryTypeName(variable.Value!);
+      entity.ObjectType = objectType;
+      entity.ObjectPayloadJson = ValueSerialization.Stringify(variable.Value);
+      entity.Value = ValueSerialization.BuildObjectMarker(objectType);
+    }
+    else
+    {
+      entity.ObjectType = string.Empty;
+      entity.ObjectPayloadJson = string.Empty;
+      entity.Value = ValueSerialization.Stringify(variable.Value);
+    }
+
     entity.MetadataId = variable.MetadataId;
     entity.MetadataIdsJson = JsonConvert.SerializeObject(metadataIds);
     entity.DependsJson = JsonConvert.SerializeObject(depends);
@@ -87,7 +101,17 @@ public sealed class EfVariableRepository : IVariableRepository
 
     var depends = JsonConvert.DeserializeObject<int[]>(entity.DependsJson) ?? Array.Empty<int>();
     var metadataIds = ReadMetadataIds(entity.MetadataIdsJson, entity.MetadataId);
-    var value = ValueSerialization.ParseValue(entity.Value, entity.ValueType);
+    object? value;
+    if (ValueSerialization.IsObjectMarker(entity.Value)
+        && !string.IsNullOrEmpty(entity.ObjectPayloadJson))
+    {
+      value = entity.ObjectPayloadJson;
+    }
+    else
+    {
+      value = ValueSerialization.ParseValue(entity.Value, entity.ValueType);
+    }
+
     return new ProgesiVariable(entity.Id, entity.Name, value ?? "", depends, metadataIds);
   }
 

@@ -5,6 +5,29 @@ namespace Progesi.Infrastructure.EF.Internal;
 
 internal static class ValueSerialization
 {
+  public const string ObjectMarkerPrefix = "@OBJECT:";
+
+  public static bool IsGeometryLike(object? value)
+  {
+    var fullName = value?.GetType().FullName;
+    return fullName != null
+        && fullName.StartsWith("Rhino.Geometry.", StringComparison.Ordinal);
+  }
+
+  public static string GeometryTypeName(object value) =>
+      value.GetType().FullName ?? string.Empty;
+
+  public static bool IsObjectMarker(string? value) =>
+      value != null && value.StartsWith(ObjectMarkerPrefix, StringComparison.Ordinal);
+
+  public static string BuildObjectMarker(string objectType)
+  {
+    var type = (objectType ?? string.Empty).Trim();
+    if (type.Length == 0)
+      throw new ArgumentException("objectType is required", nameof(objectType));
+    return ObjectMarkerPrefix + type;
+  }
+
   public static string TypeOf(object? obj)
   {
     if (obj == null) return "null";
