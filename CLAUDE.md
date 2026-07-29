@@ -7,7 +7,7 @@ If anything here conflicts with Notion, **stop and report** before acting.
 - AxisVar remains **frozen** and in abeyance — no modification, deletion, DTO consolidation, persistence move, or Grasshopper wiring.
 - ProgesiVariableCluster: **Phase 1 recovered and closed** for the submitted/manual-validation scenarios (Core model/service, InMemory repository, narrow Rhino support repository, ClusterDef/ClusterOut components, `ProgesiClusters` Excel export, and Cluster tests). **Phase 2 (SQLite) and Phase 3 (EF/DataExchange) are not recovered** and remain blocked. This is not full release validation. See the Phase 1 recovery exception below and the dated reconciliation section at the end of this file.
 - DataExchange is **not** a Core domain object — it is the interchange boundary.
-- Current operating baseline: **main @ `d09130a` — Functional GH Beta v0 complete, 230/230 tests passing, deployment succeeded**. Historical baseline: **88/88 at `6286aec`** (post-Cluster Phase 1 checkpoint). Historical protected source-code checkpoint: **64/64 at `376d81e`** on `feat/axis-variable-core`.
+- Current operating baseline: **main @ `0c2abf1` — 303 tests passing (+19 opt-in stress skipped), 0 failed** (post-R2-C line: DataExchange extracted to `Progesi.LiveDataExchange`, SQLite + EF geometry parity, ClusterOut file-open fix). Historical baselines: **230/230 at `d09130a`** (Functional GH Beta v0), **88/88 at `6286aec`** (post-Cluster Phase 1). Historical protected source-code checkpoint: **64/64 at `376d81e`** on `feat/axis-variable-core` (per **ADR-010 (Superseded)**, `376d81e` is a historical checkpoint *commit*; the branch tip is `6d51987`, merged to main + backed up on origin — see PR #89). See the dated 2026-07-29 reconciliation at the end of this file.
 - **No source-code cleanup is authorised yet** (read-only audits are allowed; destructive cleanup remains gated — see the dated Post-Beta v0 reconciliation at the end of this file).
 
 ## 1. Current mode
@@ -66,10 +66,11 @@ Read-only inspection and documentation are allowed. The freeze lifts only after 
 - Cursor implementation requires: an approved Task Board row, a branch, allowed files, forbidden files, tests, manual validation if Grasshopper is affected, and a rollback plan.
 - Claude reviews Cursor output (diff + test results) before any merge or documentation update.
 - Cursor smoke test passed, but Cursor still requires an explicit task brief and human approval before any implementation.
+- **Tab / lane boundary (recorded 2026-07-29; see the Notion "Ways of Working — 4-Tab Interface" page):** Cursor implements on the branch in **05 Cursor Bridge and then STOPS**. Cursor must **not** run the tab-03 (build/test/commit/PR or merge) or tab-04 (deploy) lanes, and must **not** edit lane or guard scripts. If a lane guard raises a false positive, Cursor **reports it and stops** — Claude (the lane/guard owner) fixes the guard and the human runs the lane. Lane + guard scripts are owned by Claude; all git/PR operations run through prepared lane scripts, not ad-hoc commands.
 
 ## 7. Build/test commands
 - Run build/test **only when explicitly instructed**.
-- Canonical commands: `dotnet build -c Release` then `dotnet test`. Current operating baseline: **230/230 passing on `main` @ `d09130a`** (Functional GH Beta v0). Historical baseline: **88/88 at `6286aec`** (post-Cluster Phase 1). Historical protected source-code checkpoint: **64/64 at `376d81e`**.
+- Canonical commands: `dotnet build -c Release` then `dotnet test`. Current operating baseline: **303 passing (+19 opt-in stress skipped) on `main` @ `0c2abf1`**. Historical: 230/230 at `d09130a` (Beta v0); 88/88 at `6286aec` (post-Cluster Phase 1); 64/64 at `376d81e`.
 - Never run Rhino or Grasshopper from here.
 
 ## 8. Reporting requirements
@@ -181,3 +182,15 @@ This note reconciles the wording that describes the historical protected checkpo
 2. **Fully merged + backed up.** The branch tip `6d51987` is an **ancestor of `main`** (it reached `main` via the Functional GH Beta v0 integration), so `feat/axis-variable-core` is fully merged — nothing on it is unmerged work. On **2026-07-29** the branch was **pushed to `origin`** for backup (non-destructive new remote ref; no force/history-rewrite; **no AxisVar code touched** — freeze intact). The checkpoint is therefore preserved three ways: the named ref on `origin`, within `main`'s history, and as the immutable commit `376d81e`.
 
 3. **No change to the freeze or baselines.** The AxisVar freeze, every recorded baseline/checkpoint, and all authorisation gates remain exactly as written above. This note only clarifies that `feat/axis-variable-core`'s tip is `6d51987`, not `376d81e`.
+
+## Baseline currency + tab/lane boundary reconciliation — 2026-07-29
+
+Records the current operating state after the R2-C line and recent ADR dispositions. Supersedes any earlier "current baseline = `d09130a` / 230" wording (now demoted to a historical baseline). Does **not** weaken the AxisVar freeze (§5), §2's non-negotiable rules, the implementation prompt guard (§9), or any gate. **Grants no new authorisation.**
+
+1. **Current operating baseline: `main @ 0c2abf1` — 303 tests passing (+19 opt-in stress skipped), 0 failed.** Reached via the R2-C line: R2-C.1 DataExchange extracted into the Rhino-free `Progesi.LiveDataExchange` (#86); SQLite geometry round-trip (#87); ClusterOut file-open fix (#88); EF geometry parity (#90); plus the docs correction (#89). Historical baselines retained: **230/230 at `d09130a`** (Functional GH Beta v0), **88/88 at `6286aec`** (post-Cluster Phase 1), **64/64 at `376d81e`** (protected source-code checkpoint). The canonical live baseline of record is the Notion **Progesi Current State** page + the **ChatGPT Sync — Change Log**.
+
+2. **ADR dispositions (2026-07-29, by Gianluca).** **ADR-010 (canonical checkpoint = `376d81e`) → Superseded** — superseded by live operating-baseline tracking (above); `376d81e` is retained only as a historical checkpoint commit. **ADR-012 (ProgesiVariableCluster missing capability) → Superseded** — the premise is closed by the merged Cluster Phase 1 recovery (Phase 2/3 remain deferred). **ADR-014 (legacy removal requires documentation, validation and rollback) → Accepted** — now the governance policy of record; **any future legacy/dead-code removal must follow its doc + validation + rollback process** (e.g. R2-C.3 retirement of the dead `ProgesiDataExchange`).
+
+3. **Tab / lane boundary (also added to §6).** Cursor implements in **05 Cursor Bridge and stops**; it does **not** run the tab-03 / tab-04 lanes or edit lane/guard scripts, and **reports guard false-positives rather than fixing-and-proceeding**. Claude owns the lane + guard scripts; git/PR operations run through prepared lanes (now the parameterised `Progesi-tab03-lane.ps1` / `Progesi-tab04-lane.ps1` + the merge lane), not ad-hoc commands. Full detail in the Notion "Ways of Working — 4-Tab Interface" page.
+
+4. **No new authorisation.** State + governance-record only. AxisVar remains frozen.
