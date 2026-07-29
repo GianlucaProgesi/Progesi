@@ -126,7 +126,8 @@ namespace Progesi.Core.Tests.Services
 
       var affected = await service.CascadeRemoveVariableFromClustersAsync(9);
 
-      Assert.Equal(1, affected);
+      Assert.Equal(1, affected.Applied);
+      Assert.True(affected.IsFullySuccessful);
       var reloaded = await service.GetByIdAsync(c.Id);
       Assert.NotNull(reloaded);
       Assert.True(reloaded!.ProgesiVariableIds.SequenceEqual(new[] { 2 }));
@@ -141,11 +142,116 @@ namespace Progesi.Core.Tests.Services
 
       var affected = await service.CascadeRemoveVariableFromClustersAsync(9);
 
-      Assert.Equal(1, affected);
+      Assert.Equal(1, affected.Applied);
+      Assert.True(affected.IsFullySuccessful);
       var reloaded = await service.GetByIdAsync(c.Id);
       Assert.Null(reloaded);
       var all = await service.GetAllAsync();
       Assert.Empty(all);
+    }
+
+    [Fact]
+    public async Task CascadeRemove_Continues_After_Partial_Failure_And_Reports_Failed_Clusters()
+    {
+      var clusterRepo = new ThrowingOnNthCascadeMutationRepository(failOnNthMutation: 2, removedVariableId: 9);
+      var service = new ClusterService(clusterRepo);
+
+      await service.CreateOrGetClusterAsync("C1", new[] { 9, 1 }, "d");
+      var failing = await service.CreateOrGetClusterAsync("C2", new[] { 9, 2 }, "d");
+      await service.CreateOrGetClusterAsync("C3", new[] { 9, 3 }, "d");
+
+      var result = await service.CascadeRemoveVariableFromClustersAsync(9);
+
+      Assert.Equal(2, result.Applied);
+      Assert.False(result.IsFullySuccessful);
+      Assert.Equal(new[] { failing.Id }, result.FailedClusterIds);
+
+      var c1 = await service.GetByIdAsync(1);
+      var c2 = await service.GetByIdAsync(failing.Id);
+      var c3 = await service.GetByIdAsync(3);
+      Assert.NotNull(c1);
+      Assert.NotNull(c2);
+      Assert.NotNull(c3);
+      Assert.True(c1!.ProgesiVariableIds.SequenceEqual(new[] { 1 }));
+      Assert.True(c2!.ProgesiVariableIds.SequenceEqual(new[] { 2, 9 }));
+      Assert.True(c3!.ProgesiVariableIds.SequenceEqual(new[] { 3 }));
+    }
+
+    [Fact]
+    public async Task SimulatedDeleteVariable_Skips_Variable_Delete_On_Partial_Cascade_Failure()
+    {
+      var varRepo = new InMemoryVariableRepository();
+      await varRepo.SaveAsync(new ProgesiVariable(9, "v9", 2.0));
+
+      var clusterRepo = new ThrowingOnNthCascadeMutationRepository(failOnNthMutation: 2, removedVariableId: 9);
+      var clusterService = new ClusterService(clusterRepo);
+      await clusterService.CreateOrGetClusterAsync("C1", new[] { 9, 1 }, "d");
+      await clusterService.CreateOrGetClusterAsync("C2", new[] { 9, 2 }, "d");
+
+      var cascade = await clusterService.CascadeRemoveVariableFromClustersAsync(9);
+
+      var deleteVariable = cascade.IsFullySuccessful;
+      if (deleteVariable)
+        await varRepo.DeleteAsync(9);
+
+      Assert.False(deleteVariable);
+      Assert.NotNull(await varRepo.GetByIdAsync(9));
+    }
+
+    private sealed class ThrowingOnNthCascadeMutationRepository : IProgesiVariableClusterRepository
+    {
+      private readonly InMemoryVariableClusterRepository _inner = new InMemoryVariableClusterRepository();
+      private readonly int _failOnNthMutation;
+      private readonly int _removedVariableId;
+      private int _cascadeMutationCount;
+
+      public ThrowingOnNthCascadeMutationRepository(int failOnNthMutation, int removedVariableId)
+      {
+        _failOnNthMutation = failOnNthMutation;
+        _removedVariableId = removedVariableId;
+      }
+
+      public async Task<ProgesiVariableCluster> SaveAsync(ProgesiVariableCluster cluster, System.Threading.CancellationToken ct = default)
+      {
+        var existing = await _inner.GetByIdAsync(cluster.Id, ct).ConfigureAwait(false);
+        if (existing != null
+            && existing.ProgesiVariableIds.Contains(_removedVariableId)
+            && !cluster.ProgesiVariableIds.Contains(_removedVariableId))
+        {
+          _cascadeMutationCount++;
+          if (_cascadeMutationCount == _failOnNthMutation)
+            throw new System.InvalidOperationException($"Simulated cascade failure on cluster {cluster.Id}");
+        }
+
+        return await _inner.SaveAsync(cluster, ct).ConfigureAwait(false);
+      }
+
+      public Task<ProgesiVariableCluster?> GetByIdAsync(int id, System.Threading.CancellationToken ct = default)
+        => _inner.GetByIdAsync(id, ct);
+
+      public Task<ProgesiVariableCluster?> GetByHashtagAsync(string hashtag, System.Threading.CancellationToken ct = default)
+        => _inner.GetByHashtagAsync(hashtag, ct);
+
+      public Task<System.Collections.Generic.IReadOnlyList<ProgesiVariableCluster>> GetAllAsync(System.Threading.CancellationToken ct = default)
+        => _inner.GetAllAsync(ct);
+
+      public async Task<bool> DeleteAsync(int id, System.Threading.CancellationToken ct = default)
+      {
+        var existing = await _inner.GetByIdAsync(id, ct).ConfigureAwait(false);
+        if (existing != null
+            && existing.ProgesiVariableIds.Count == 1
+            && existing.ProgesiVariableIds.Contains(_removedVariableId))
+        {
+          _cascadeMutationCount++;
+          if (_cascadeMutationCount == _failOnNthMutation)
+            throw new System.InvalidOperationException($"Simulated cascade failure on cluster {id}");
+        }
+
+        return await _inner.DeleteAsync(id, ct).ConfigureAwait(false);
+      }
+
+      public Task<int> DeleteManyAsync(System.Collections.Generic.IEnumerable<int> ids, System.Threading.CancellationToken ct = default)
+        => _inner.DeleteManyAsync(ids, ct);
     }
   }
 }

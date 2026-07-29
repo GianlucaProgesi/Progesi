@@ -686,7 +686,13 @@ namespace ProgesiGrasshopperAssembly.Infrastructure
         {
           var clusterRepo = new RhinoVariableClusterRepository(doc);
           var clusterSvc = new ProgesiCore.Services.ClusterService(clusterRepo);
-          clusterSvc.CascadeRemoveVariableFromClustersAsync(id).GetAwaiter().GetResult();
+          var cascade = clusterSvc.CascadeRemoveVariableFromClustersAsync(id).GetAwaiter().GetResult();
+          if (!cascade.IsFullySuccessful)
+          {
+            info = "Cluster cascade cleanup failed: could not update cluster(s) "
+                   + string.Join(", ", cascade.FailedClusterIds);
+            return false;
+          }
         }
         catch (Exception cex)
         {

@@ -42,9 +42,9 @@ namespace ProgesiCore.Services
     /// <summary>
     /// Rimuove la ProgesiVariable indicata da tutti i cluster che la referenziano.
     /// Se un cluster resta senza variabili viene eliminato.
-    /// Ritorna il numero di cluster modificati o eliminati.
+    /// Ritorna il numero di cluster applicati con successo e gli Id dei cluster falliti.
     /// </summary>
-    Task<int> CascadeRemoveVariableFromClustersAsync(
+    Task<CascadeResult> CascadeRemoveVariableFromClustersAsync(
       int variableId,
       CancellationToken ct = default);
   }
