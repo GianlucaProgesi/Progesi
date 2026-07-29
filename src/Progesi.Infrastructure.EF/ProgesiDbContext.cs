@@ -12,6 +12,7 @@ public sealed class ProgesiDbContext : DbContext
 
   public DbSet<VariableEntity> Variables => Set<VariableEntity>();
   public DbSet<MetadataEntity> Metadata => Set<MetadataEntity>();
+  public DbSet<ClusterEntity> Clusters => Set<ClusterEntity>();
 
   protected override void OnModelCreating(ModelBuilder modelBuilder)
   {
@@ -38,6 +39,19 @@ public sealed class ProgesiDbContext : DbContext
       entity.Property(e => e.LastModified).IsRequired();
       entity.Property(e => e.ContentHash).IsRequired();
       entity.HasIndex(e => e.ContentHash).IsUnique();
+    });
+
+    modelBuilder.Entity<ClusterEntity>(entity =>
+    {
+      entity.ToTable("Clusters");
+      entity.HasKey(e => e.Id);
+      entity.Property(e => e.Name).IsRequired();
+      entity.Property(e => e.Description).HasDefaultValue(string.Empty);
+      entity.Property(e => e.VariableIdsJson).IsRequired();
+      entity.Property(e => e.ContentHash).IsRequired();
+      entity.Property(e => e.Hashtag).IsRequired();
+      entity.HasIndex(e => e.ContentHash).IsUnique();
+      entity.HasIndex(e => e.Hashtag);
     });
   }
 }

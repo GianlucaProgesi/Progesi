@@ -20,6 +20,24 @@ internal static class ParityAssertions
     sqlite.Hashtag.Should().Be(ef.Hashtag);
   }
 
+  public static void ClustersShouldMatch(
+      ProgesiVariableCluster sqlite,
+      ProgesiVariableCluster ef,
+      ProgesiVariableCluster original)
+  {
+    sqlite.Should().NotBeNull();
+    ef.Should().NotBeNull();
+
+    sqlite!.Id.Should().Be(ef!.Id);
+    sqlite.Name.Should().Be(ef.Name);
+    sqlite.Description.Should().Be(ef.Description);
+    sqlite.ProgesiVariableIds.Should().Equal(ef.ProgesiVariableIds);
+    sqlite.Hashtag.Should().Be(ef.Hashtag);
+
+    ProgesiHash.Compute(sqlite).Should().Be(ProgesiHash.Compute(ef));
+    ProgesiHash.Compute(sqlite).Should().Be(ProgesiHash.Compute(original));
+  }
+
   public static void MetadataShouldMatch(ProgesiMetadata? sqlite, ProgesiMetadata? ef, ProgesiMetadata original)
   {
     sqlite.Should().NotBeNull();
