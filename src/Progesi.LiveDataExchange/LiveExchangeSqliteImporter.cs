@@ -5,6 +5,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
+using Newtonsoft.Json;
 using Progesi.GhExcelReadContract;
 using ProgesiCore;
 
@@ -123,13 +124,18 @@ namespace Progesi.LiveDataExchange
         bool hasClusters = HasTable("Clusters") && HasTable("ClusterVariables");
         bool hasObjectTypeColumn = HasVariablesColumn(cn, "ObjectType");
         bool hasObjectPayloadColumn = HasVariablesColumn(cn, "ObjectPayloadJson");
+        bool hasMetadataIdsJsonColumn = HasVariablesColumn(cn, "MetadataIdsJson");
         bool readObjectPayloadColumns = hasObjectTypeColumn && hasObjectPayloadColumn;
 
         using (var cmd = new SQLiteCommand(cn))
         {
           cmd.CommandText = readObjectPayloadColumns
-            ? "SELECT Id, Name, Value, MetaId, Assumption, ObjectType, ObjectPayloadJson FROM Variables ORDER BY Id"
-            : "SELECT Id, Name, Value, MetaId, Assumption FROM Variables ORDER BY Id";
+            ? hasMetadataIdsJsonColumn
+              ? "SELECT Id, Name, Value, MetaId, Assumption, ObjectType, ObjectPayloadJson, MetadataIdsJson FROM Variables ORDER BY Id"
+              : "SELECT Id, Name, Value, MetaId, Assumption, ObjectType, ObjectPayloadJson FROM Variables ORDER BY Id"
+            : hasMetadataIdsJsonColumn
+              ? "SELECT Id, Name, Value, MetaId, Assumption, MetadataIdsJson FROM Variables ORDER BY Id"
+              : "SELECT Id, Name, Value, MetaId, Assumption FROM Variables ORDER BY Id";
           using (var rd = cmd.ExecuteReader())
           {
             int row = 0;
@@ -143,6 +149,12 @@ namespace Progesi.LiveDataExchange
               bool ass = !rd.IsDBNull(4) && (rd.GetInt32(4) != 0);
               string objectType = readObjectPayloadColumns && !rd.IsDBNull(5) ? rd.GetString(5) : "";
               string objectPayloadJson = readObjectPayloadColumns && !rd.IsDBNull(6) ? rd.GetString(6) : "";
+              string metadataIdsJson = "";
+              if (hasMetadataIdsJsonColumn)
+              {
+                int metadataIdsJsonColumn = readObjectPayloadColumns ? 7 : 5;
+                metadataIdsJson = rd.IsDBNull(metadataIdsJsonColumn) ? "" : rd.GetString(metadataIdsJsonColumn);
+              }
 
               if (nm.Length > NAME_MAX || !IsPrintable(nm))
               { var msg = $"[Var R{row}] NAME invalid (len/charset)"; Report(1, msg); AddErrRC(1, row, 2); if (strict) { varErr++; continue; } else { varWarn++; } }
@@ -158,11 +170,51 @@ namespace Progesi.LiveDataExchange
                 }
               }
 
-              int[] metaIds = mid > 0 ? new[] { mid } : Array.Empty<int>();
-              if (mid > 0)
+              int[] metaIds = ParseVariableMetadataIds(metadataIdsJson, mid);
+              if (metaIds.Length > 0)
               {
-                if (!sink.TryGetMetadataById(mid, out _))
-                { var msg = $"[Var R{row}] METAID not found: {mid}"; Report(1, msg); AddErrRC(1, row, 4); if (strict) { varErr++; continue; } else { varWarn++; metaIds = Array.Empty<int>(); } }
+                var resolvedMetaIds = new List<int>();
+                var droppedMetaIds = new List<int>();
+
+                foreach (var metaId in metaIds)
+                {
+                  if (!sink.TryGetMetadataById(metaId, out _))
+                  {
+                    var msg = $"[Var R{row}] METAID not found: {metaId}";
+                    if (strict)
+                    {
+                      Report(1, msg);
+                      AddErrRC(1, row, 4);
+                      varErr++;
+                      metaIds = Array.Empty<int>();
+                      break;
+                    }
+
+                    Report(1, msg);
+                    AddErrRC(1, row, 4);
+                    varWarn++;
+                    droppedMetaIds.Add(metaId);
+                  }
+                  else
+                  {
+                    resolvedMetaIds.Add(metaId);
+                  }
+                }
+
+                if (strict)
+                {
+                  if (metaIds.Length == 0) { continue; }
+                }
+                else
+                {
+                  metaIds = resolvedMetaIds.ToArray();
+                  if (droppedMetaIds.Count > 0)
+                  {
+                    var keptText = metaIds.Length > 0 ? string.Join(",", metaIds) : "(none)";
+                    var droppedText = string.Join(",", droppedMetaIds);
+                    WARN(1, $"[Var R{row}] METAID partial resolve: kept [{keptText}], dropped unresolved [{droppedText}]");
+                  }
+                }
               }
 
               string geometryJson = null;
@@ -306,6 +358,25 @@ namespace Progesi.LiveDataExchange
       }
 
       return false;
+    }
+
+    private static int[] ParseVariableMetadataIds(string metadataIdsJson, int legacyMetaId)
+    {
+      if (!string.IsNullOrWhiteSpace(metadataIdsJson))
+      {
+        try
+        {
+          var parsed = JsonConvert.DeserializeObject<int[]>(metadataIdsJson);
+          if (parsed != null && parsed.Length > 0)
+            return parsed.Where(id => id > 0).Distinct().ToArray();
+        }
+        catch
+        {
+          // fall back to legacy scalar MetaId
+        }
+      }
+
+      return legacyMetaId > 0 ? new[] { legacyMetaId } : Array.Empty<int>();
     }
   }
 }
