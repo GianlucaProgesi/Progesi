@@ -171,6 +171,31 @@ SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM __SchemaInfo);";
       EnsureContentHash(conn, table);
     }
 
+    // ---------- Geometry helpers (Rhino-free; parity with EF store) ----------
+
+    protected const string ObjectMarkerPrefix = "@OBJECT:";
+
+    protected static bool IsGeometryLike(object? value)
+    {
+      var fullName = value?.GetType().FullName;
+      return fullName != null
+          && fullName.StartsWith("Rhino.Geometry.", StringComparison.Ordinal);
+    }
+
+    protected static string GeometryTypeName(object value) =>
+        value.GetType().FullName ?? string.Empty;
+
+    protected static bool IsObjectMarker(string? value) =>
+        value != null && value.StartsWith(ObjectMarkerPrefix, StringComparison.Ordinal);
+
+    protected static string BuildObjectMarker(string objectType)
+    {
+      var type = (objectType ?? string.Empty).Trim();
+      if (type.Length == 0)
+        throw new ArgumentException("objectType is required", nameof(objectType));
+      return ObjectMarkerPrefix + type;
+    }
+
     // ---------- Value helpers (null-safe) ----------
 
     protected static string TypeOf(object? obj)

@@ -9,7 +9,7 @@ $ErrorActionPreference = "Stop"
 
 # 1) percorsi di origine
 $RepoRoot    = Split-Path -Parent $MyInvocation.MyCommand.Path
-$AsmDir      = Join-Path $RepoRoot "src\ProgesiGrasshopperAssembly\bin\$Config\$Tf"
+$AsmDir      = Join-Path $RepoRoot "src\ProgesiGrasshopperAssembly\bin\$Config\$Tf\win-x64"
 
 if (-not (Test-Path $AsmDir)) {
   throw "Cartella di build non trovata: $AsmDir (hai fatto 'dotnet build -c $Config'?)"
