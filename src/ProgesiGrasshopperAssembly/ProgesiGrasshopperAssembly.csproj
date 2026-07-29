@@ -5,6 +5,9 @@
     <LangVersion>8.0</LangVersion>
     <Nullable>disable</Nullable>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <PlatformTarget>x64</PlatformTarget>
+    <Prefer32Bit>false</Prefer32Bit>
     <MSBuildWarningsAsMessages>$(MSBuildWarningsAsMessages);MSB3277</MSBuildWarningsAsMessages>
   </PropertyGroup>
 
@@ -23,6 +26,10 @@
     <PackageReference Include="System.Data.SQLite.Core" Version="1.0.118.0" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="ClosedXML" Version="0.104.0" />
+    <PackageReference Include="SQLitePCLRaw.bundle_e_sqlite3" Version="3.0.5" />
+    <PackageReference Include="SQLitePCLRaw.core" Version="3.0.5" />
+    <PackageReference Include="SQLitePCLRaw.lib.e_sqlite3" Version="3.53.3" />
+    <PackageReference Include="SQLitePCLRaw.provider.e_sqlite3" Version="3.0.5" />
   </ItemGroup>
 
   <!-- Librerie Progesi usate dal plugin -->
@@ -49,6 +56,23 @@
       <BuiltDll Include="$(OutDir)$(AssemblyName).dll" />
     </ItemGroup>
     <Copy SourceFiles="@(BuiltDll)" DestinationFiles="$(OutDir)$(AssemblyName).gha" SkipUnchangedFiles="true" />
+  </Target>
+
+  <!-- Ensure patched x64 e_sqlite3 (3.53.3) wins over transitive 2.1.11 from ProgesiRepositories.Sqlite -->
+  <Target Name="CopyPatchedESqlite3Native" AfterTargets="Build">
+    <PropertyGroup>
+      <PatchedESqlite3Source>$(NuGetPackageRoot)sqlitepclraw.lib.e_sqlite3\3.53.3\runtimes\win-x64\native\e_sqlite3.dll</PatchedESqlite3Source>
+    </PropertyGroup>
+    <Error Condition="!Exists('$(PatchedESqlite3Source)')"
+           Text="Patched e_sqlite3 native not found at $(PatchedESqlite3Source)" />
+    <MakeDir Directories="$(OutDir)runtimes\win-x64\native" />
+    <Copy SourceFiles="$(PatchedESqlite3Source)"
+          DestinationFiles="$(OutDir)runtimes\win-x64\native\e_sqlite3.dll"
+          SkipUnchangedFiles="false" />
+    <RemoveDir Directories="$(OutDir)runtimes\win-arm;$(OutDir)runtimes\win-x86" Condition="Exists('$(OutDir)runtimes\win-arm')" />
+    <Copy SourceFiles="$(PatchedESqlite3Source)"
+          DestinationFiles="$(OutDir)e_sqlite3.dll"
+          SkipUnchangedFiles="false" />
   </Target>
 
 </Project>
