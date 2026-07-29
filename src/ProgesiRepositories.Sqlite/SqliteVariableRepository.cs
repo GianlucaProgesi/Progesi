@@ -43,7 +43,9 @@ CREATE TABLE Variables (
     MetadataId   INTEGER NULL,
     MetadataIdsJson TEXT NOT NULL DEFAULT '[]',
     DependsJson  TEXT NOT NULL,
-    ContentHash  TEXT
+    ContentHash  TEXT,
+    ObjectType   TEXT NOT NULL DEFAULT '',
+    ObjectPayloadJson TEXT NOT NULL DEFAULT ''
 );";
           cmd.ExecuteNonQuery();
           _log.Info("[SQLite] Recreated table 'Variables' due to resetSchema=true.");
@@ -66,6 +68,8 @@ CREATE TABLE IF NOT EXISTS Variables (
           // per DB legacy che non avessero ContentHash
           AddColumnIfMissing(conn, "Variables", "ContentHash", "TEXT");
           AddColumnIfMissing(conn, "Variables", "MetadataIdsJson", "TEXT NOT NULL DEFAULT '[]'");
+          AddColumnIfMissing(conn, "Variables", "ObjectType", "TEXT NOT NULL DEFAULT ''");
+          AddColumnIfMissing(conn, "Variables", "ObjectPayloadJson", "TEXT NOT NULL DEFAULT ''");
         }
       }
       EnsureContentHash(conn, "Variables");
@@ -114,12 +118,28 @@ CREATE TABLE IF NOT EXISTS Variables (
         var metadataIds = v.MetadataIds ?? Array.Empty<int>();
         var payloadMetadataIds = JsonConvert.SerializeObject(metadataIds);
 
+        string valueType = TypeOf(v.Value);
+        string storedValue;
+        string objectType = string.Empty;
+        string objectPayloadJson = string.Empty;
+
+        if (IsGeometryLike(v.Value))
+        {
+          objectType = GeometryTypeName(v.Value!);
+          objectPayloadJson = Stringify(v.Value);
+          storedValue = BuildObjectMarker(objectType);
+        }
+        else
+        {
+          storedValue = Stringify(v.Value);
+        }
+
         using (var cmd = conn.CreateCommand())
         {
           cmd.Transaction = tx;
           cmd.CommandText = @"
-INSERT INTO Variables (Id, Name, ValueType, Value, MetadataId, MetadataIdsJson, DependsJson, ContentHash)
-VALUES ($id, $name, $vt, $val, $mid, $mids, $dep, $h)
+INSERT INTO Variables (Id, Name, ValueType, Value, MetadataId, MetadataIdsJson, DependsJson, ContentHash, ObjectType, ObjectPayloadJson)
+VALUES ($id, $name, $vt, $val, $mid, $mids, $dep, $h, $otype, $opayload)
 ON CONFLICT(Id) DO UPDATE SET
   Name=excluded.Name,
   ValueType=excluded.ValueType,
@@ -127,16 +147,20 @@ ON CONFLICT(Id) DO UPDATE SET
   MetadataId=excluded.MetadataId,
   MetadataIdsJson=excluded.MetadataIdsJson,
   DependsJson=excluded.DependsJson,
-  ContentHash=excluded.ContentHash;";
+  ContentHash=excluded.ContentHash,
+  ObjectType=excluded.ObjectType,
+  ObjectPayloadJson=excluded.ObjectPayloadJson;";
           cmd.Parameters.AddWithValue("$id", v.Id);
           cmd.Parameters.AddWithValue("$name", v.Name ?? string.Empty);
-          cmd.Parameters.AddWithValue("$vt", TypeOf(v.Value));
-          cmd.Parameters.AddWithValue("$val", Stringify(v.Value));
+          cmd.Parameters.AddWithValue("$vt", valueType);
+          cmd.Parameters.AddWithValue("$val", storedValue);
           if (v.MetadataId.HasValue) cmd.Parameters.AddWithValue("$mid", v.MetadataId.Value);
           else cmd.Parameters.AddWithValue("$mid", DBNull.Value);
           cmd.Parameters.AddWithValue("$mids", payloadMetadataIds);
           cmd.Parameters.AddWithValue("$dep", payloadDepends);
           cmd.Parameters.AddWithValue("$h", hash);
+          cmd.Parameters.AddWithValue("$otype", objectType);
+          cmd.Parameters.AddWithValue("$opayload", objectPayloadJson);
           var n = await cmd.ExecuteNonQueryAsync(ct);
           _log.Debug($"[SQLite] Variable upsert insert/update: Id={v.Id}, rows affected={n}.");
         }
@@ -182,7 +206,7 @@ ON CONFLICT(Id) DO UPDATE SET
       {
         using var conn = OpenConnection();
         using var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT Id, Name, ValueType, Value, MetadataId, MetadataIdsJson, DependsJson FROM Variables WHERE Id=$id;";
+        cmd.CommandText = "SELECT Id, Name, ValueType, Value, MetadataId, MetadataIdsJson, DependsJson, ObjectType, ObjectPayloadJson FROM Variables WHERE Id=$id;";
         cmd.Parameters.AddWithValue("$id", id);
 
         using var r = await cmd.ExecuteReaderAsync(ct);
@@ -199,10 +223,16 @@ ON CONFLICT(Id) DO UPDATE SET
         int? mid = r.IsDBNull(4) ? (int?)null : r.GetInt32(4);
         var metadataIdsJson = r.IsDBNull(5) ? "[]" : r.GetString(5);
         var depJs = r.IsDBNull(6) ? "[]" : r.GetString(6);
+        _ = r.IsDBNull(7) ? string.Empty : r.GetString(7);
+        var objectPayloadJson = r.IsDBNull(8) ? string.Empty : r.GetString(8);
         var depends = JsonConvert.DeserializeObject<int[]>(depJs) ?? Array.Empty<int>();
         var metadataIds = ReadMetadataIds(metadataIdsJson, mid);
 
-        var value = ParseValue(valStr, vType);
+        object? value;
+        if (IsObjectMarker(valStr) && !string.IsNullOrEmpty(objectPayloadJson))
+          value = objectPayloadJson;
+        else
+          value = ParseValue(valStr, vType);
         _log.Debug($"[SQLite] Variable get Id={id}: hit.");
         return new ProgesiVariable(vid, name, value ?? "", depends, metadataIds);
       }, ct: ct);
