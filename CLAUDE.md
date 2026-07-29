@@ -171,3 +171,13 @@ This section reconciles these operating rules with the **Autonomous Operating Ch
 6. **Preserved.** Everything above this section remains in force exactly as written.
 
 7. **No new authorisation.** State and governance-model record only.
+
+## feat/axis-variable-core checkpoint currency — 2026-07-29
+
+This note reconciles the wording that describes the historical protected checkpoint as branch **`feat/axis-variable-core`** being *at* commit **`376d81e`** (see §1 line "Historical protected checkpoint: branch `feat/axis-variable-core` at commit `376d81e`", and the "64/64 at `376d81e` on `feat/axis-variable-core`" references in Standing constraints, §7, and the 2026-07-15 / Post-Beta v0 sections). It **does not** weaken the AxisVar freeze (§5), §2's non-negotiable rules, the implementation prompt guard (§9), or any gate, and grants **no new authorisation**. It corrects only the branch-tip wording.
+
+1. **Checkpoint commit vs branch tip.** `376d81e` (clean tree, release build passing, 64/64 tests) is a historical **checkpoint commit** and remains valid. It is **not** the current tip of `feat/axis-variable-core`: the branch has since advanced to **`6d51987`** ("fix: guard Rhino-object Excel value round-trip"), with `376d81e` preserved as an ancestor in its history. Wherever earlier text implies "branch `feat/axis-variable-core` = `376d81e`", read it as **"checkpoint commit `376d81e`, within the history of `feat/axis-variable-core` (tip `6d51987`)"**.
+
+2. **Fully merged + backed up.** The branch tip `6d51987` is an **ancestor of `main`** (it reached `main` via the Functional GH Beta v0 integration), so `feat/axis-variable-core` is fully merged — nothing on it is unmerged work. On **2026-07-29** the branch was **pushed to `origin`** for backup (non-destructive new remote ref; no force/history-rewrite; **no AxisVar code touched** — freeze intact). The checkpoint is therefore preserved three ways: the named ref on `origin`, within `main`'s history, and as the immutable commit `376d81e`.
+
+3. **No change to the freeze or baselines.** The AxisVar freeze, every recorded baseline/checkpoint, and all authorisation gates remain exactly as written above. This note only clarifies that `feat/axis-variable-core`'s tip is `6d51987`, not `376d81e`.
