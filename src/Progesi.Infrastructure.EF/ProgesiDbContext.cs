@@ -25,6 +25,8 @@ public sealed class ProgesiDbContext : DbContext
       entity.Property(e => e.DependsJson).IsRequired();
       entity.Property(e => e.MetadataIdsJson).IsRequired();
       entity.Property(e => e.ContentHash).IsRequired();
+      entity.Property(e => e.ObjectType).HasDefaultValue(string.Empty);
+      entity.Property(e => e.ObjectPayloadJson).HasDefaultValue(string.Empty);
       entity.HasIndex(e => e.ContentHash).IsUnique();
     });
 
