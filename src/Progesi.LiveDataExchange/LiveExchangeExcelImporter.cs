@@ -204,16 +204,49 @@ namespace Progesi.LiveDataExchange
 
         if (metaIds.Length > 0)
         {
+          var resolvedMetaIds = new List<int>();
+          var droppedMetaIds = new List<int>();
+          mapV.TryGetValue("METAID", out var metaIdCol);
+
           foreach (var mid in metaIds)
           {
             if (!sink.TryGetMetadataById(mid, out var lookupInfo))
             {
               var msg = $"[Var R{r}] METAID not found: {mid}";
-              if (strict) { err(1, msg); addErrRc(1, r, mapV.TryGetValue("METAID", out var c) ? c : 0); varErr++; metaIds = Array.Empty<int>(); break; }
-              else { warn(1, msg); addErrRc(1, r, mapV.TryGetValue("METAID", out var c) ? c : 0); varWarn++; metaIds = Array.Empty<int>(); break; }
+              if (strict)
+              {
+                err(1, msg);
+                addErrRc(1, r, metaIdCol);
+                varErr++;
+                metaIds = Array.Empty<int>();
+                break;
+              }
+
+              warn(1, msg);
+              addErrRc(1, r, metaIdCol);
+              varWarn++;
+              droppedMetaIds.Add(mid);
+            }
+            else
+            {
+              resolvedMetaIds.Add(mid);
             }
           }
-          if (metaIds.Length == 0 && strict) { varRows++; continue; }
+
+          if (strict)
+          {
+            if (metaIds.Length == 0) { varRows++; continue; }
+          }
+          else
+          {
+            metaIds = resolvedMetaIds.ToArray();
+            if (droppedMetaIds.Count > 0)
+            {
+              var keptText = metaIds.Length > 0 ? string.Join(",", metaIds) : "(none)";
+              var droppedText = string.Join(",", droppedMetaIds);
+              warn(1, $"[Var R{r}] METAID partial resolve: kept [{keptText}], dropped unresolved [{droppedText}]");
+            }
+          }
         }
 
         int[] depArr = GhExcelValueParsing.ParseDepends(deps);
