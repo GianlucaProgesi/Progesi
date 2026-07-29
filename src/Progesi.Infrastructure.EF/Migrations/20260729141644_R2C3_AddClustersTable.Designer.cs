@@ -2,6 +2,7 @@
 using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Progesi.Infrastructure.EF;
 
@@ -10,9 +11,11 @@ using Progesi.Infrastructure.EF;
 namespace Progesi.Infrastructure.EF.Migrations
 {
     [DbContext(typeof(ProgesiDbContext))]
-    partial class ProgesiDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260729141644_R2C3_AddClustersTable")]
+    partial class R2C3_AddClustersTable
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "8.0.11");
