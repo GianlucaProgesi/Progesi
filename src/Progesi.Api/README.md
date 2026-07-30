@@ -45,8 +45,9 @@ Open Swagger UI: [https://localhost:7xxx/swagger](https://localhost:5001/swagger
 | Variables | `GET/POST /api/variables`, `GET/PUT/DELETE /api/variables/{id}` |
 | Metadata | `GET/POST /api/metadata`, `GET/PUT/DELETE /api/metadata/{id}` |
 | Clusters | `GET/POST /api/clusters`, `GET/PUT/DELETE /api/clusters/{id}` |
+| Summary | `GET /api/summary`, `GET /api/summary/value-types` (reader; project-scoped) |
 
-Pass **`X-Project-Id`** on CRUD requests to target a specific project database.
+Pass **`X-Project-Id`** on CRUD and summary requests to target a specific project database.
 
 All responses use API DTOs only (no Core types on the wire).
 
@@ -56,6 +57,15 @@ All responses use API DTOs only (no Core types on the wire).
 - `POST /api/projects` (writer) provisions a new per-project DB and registers it in `projects.json`.
 - Dev/CI uses one SQLite file per project; production swaps `Progesi:DbProvider` to `SqlServer` and supplies `SqlServerProjectTemplate` at deploy time.
 - **Deploy-time (not CI):** Azure SQL provisioning and running provider-specific migrations against live cloud DBs.
+
+## Dashboard summary (A4.1)
+
+Read-only, project-scoped statistics for dashboards (Power BI or other consumers):
+
+- `GET /api/summary` — counts, metadata coverage, cluster membership stats, value-type breakdown
+- `GET /api/summary/value-types` — value-type breakdown only
+
+Both require the **reader** policy and honour **`X-Project-Id`**.
 
 ## Authentication (ADR-018)
 

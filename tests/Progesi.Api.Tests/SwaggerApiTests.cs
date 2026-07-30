@@ -25,6 +25,7 @@ public sealed class SwaggerApiTests
     body.Should().Contain("/api/metadata");
     body.Should().Contain("/api/clusters");
     body.Should().Contain("/api/projects");
+    body.Should().Contain("/api/summary");
     body.Should().Contain("\"Bearer\"");
     body.Should().Contain("securitySchemes");
   }

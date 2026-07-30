@@ -4,6 +4,7 @@ using Microsoft.OpenApi.Models;
 using Progesi.Api.Auth;
 using Progesi.Api.Infrastructure;
 using Progesi.Api.Projects;
+using Progesi.Api.Services;
 using Progesi.Infrastructure.EF;
 using Progesi.Infrastructure.EF.Repositories;
 using ProgesiCore;
@@ -76,6 +77,7 @@ builder.Services.AddScoped<IMetadataRepository>(sp =>
     new EfMetadataRepository(sp.GetRequiredService<ProgesiDbContext>(), ownsContext: false));
 builder.Services.AddScoped<IProgesiVariableClusterRepository>(sp =>
     new EfClusterRepository(sp.GetRequiredService<ProgesiDbContext>(), ownsContext: false));
+builder.Services.AddScoped<IProjectSummaryService, ProjectSummaryService>();
 
 var app = builder.Build();
 
