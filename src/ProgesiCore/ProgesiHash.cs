@@ -169,5 +169,84 @@ namespace ProgesiCore
       string json = JsonConvert.SerializeObject(payload, JsonSettings) ?? string.Empty;
       return Sha256Hex(json);
     }
+
+    // ===== Compute per ProgesiFunction =====
+    public static string Compute(ProgesiFunction function)
+    {
+      if (function == null) throw new ArgumentNullException(nameof(function));
+
+      var segments = function.Segments
+        .OrderBy(s => s.Start)
+        .ThenBy(s => s.End)
+        .Select(s => new
+        {
+          s.Start,
+          s.End,
+          Kind = s.Kind.ToString(),
+          Constant = s.ConstantValue.HasValue ? s.ConstantValue.Value.ToString(System.Globalization.CultureInfo.InvariantCulture) : string.Empty,
+          Expression = s.Expression ?? string.Empty
+        })
+        .ToArray();
+
+      var payload = new
+      {
+        function.Name,
+        Segments = segments
+      };
+
+      string json = JsonConvert.SerializeObject(payload, JsonSettings) ?? string.Empty;
+      return Sha256Hex(json);
+    }
+
+    // ===== Compute per ProgesiAxisVariable =====
+    public static string Compute(ProgesiAxisVariable axis)
+    {
+      if (axis == null) throw new ArgumentNullException(nameof(axis));
+
+      var entries = axis.EnumerateAll()
+        .OrderBy(t => t.positionNormalized)
+        .ThenBy(t => t.variableId)
+        .Select(t => new { Position = t.positionNormalized, t.variableId })
+        .ToArray();
+
+      var keyPoints = (axis.KeyPoints ?? Array.Empty<double>()).OrderBy(x => x).ToArray();
+
+      object? functionRef = null;
+      if (!axis.FunctionRef.IsEmpty)
+      {
+        if (axis.FunctionRef.Embedded != null)
+        {
+          functionRef = new
+          {
+            EmbeddedHash = Compute(axis.FunctionRef.Embedded)
+          };
+        }
+        else
+        {
+          functionRef = new
+          {
+            axis.FunctionRef.FunctionId,
+            axis.FunctionRef.FunctionHashtag
+          };
+        }
+      }
+
+      var payload = new
+      {
+        axis.AxisName,
+        AxisLength = axis.AxisLength.HasValue ? axis.AxisLength.Value.ToString(System.Globalization.CultureInfo.InvariantCulture) : string.Empty,
+        axis.CurvePayload,
+        Mode = axis.Mode.ToString(),
+        KeyPoints = keyPoints,
+        axis.Name,
+        axis.ValueTypeKey,
+        axis.RuleId,
+        FunctionRef = functionRef,
+        Entries = entries
+      };
+
+      string json = JsonConvert.SerializeObject(payload, JsonSettings) ?? string.Empty;
+      return Sha256Hex(json);
+    }
   }
 }
