@@ -9,17 +9,14 @@ ASP.NET Core Web API for the Progesi web tier (ADR-016). EF-backed CRUD over Var
 
 ## Configuration
 
-Connection string key: `ConnectionStrings:ProgesiDb`.
+Per-project databases are resolved via the **`X-Project-Id`** request header (falls back to `Progesi:DefaultProjectId`, default `"default"`).
 
-Default (local dev SQLite file):
-
-```json
-"ConnectionStrings": {
-  "ProgesiDb": "Data Source=progesi-api.sqlite"
-}
-```
-
-The provider is selected via EF configuration; swap the connection string later for Azure SQL or Postgres without changing controllers.
+| Key | Purpose |
+|---|---|
+| `Progesi:DbProvider` | `Sqlite` (dev/CI default) or `SqlServer` (prod-ready seam) |
+| `Progesi:DefaultProjectId` | Project used when `X-Project-Id` is absent |
+| `Progesi:ProjectsDirectory` | Folder for SQLite project DBs + `projects.json` registry |
+| `ConnectionStrings:SqlServerProjectTemplate` | SqlServer template with `{ProjectId}` placeholder (deploy only) |
 
 Optional test/bootstrap flag:
 
@@ -29,7 +26,7 @@ Optional test/bootstrap flag:
 }
 ```
 
-When `true`, deletes and re-migrates the database on startup (integration tests only).
+When `true`, deletes and re-migrates the **default** project database on startup (integration tests only).
 
 ## Run locally
 
@@ -44,11 +41,21 @@ Open Swagger UI: [https://localhost:7xxx/swagger](https://localhost:5001/swagger
 
 | Resource | Routes |
 |---|---|
+| Projects | `GET/POST /api/projects`, `GET /api/projects/{id}` (writer only) |
 | Variables | `GET/POST /api/variables`, `GET/PUT/DELETE /api/variables/{id}` |
 | Metadata | `GET/POST /api/metadata`, `GET/PUT/DELETE /api/metadata/{id}` |
 | Clusters | `GET/POST /api/clusters`, `GET/PUT/DELETE /api/clusters/{id}` |
 
+Pass **`X-Project-Id`** on CRUD requests to target a specific project database.
+
 All responses use API DTOs only (no Core types on the wire).
+
+## Multi-project provisioning (A3.3)
+
+- **Template clone = Migrate()** on a fresh empty database (EF migrations are the schema template).
+- `POST /api/projects` (writer) provisions a new per-project DB and registers it in `projects.json`.
+- Dev/CI uses one SQLite file per project; production swaps `Progesi:DbProvider` to `SqlServer` and supplies `SqlServerProjectTemplate` at deploy time.
+- **Deploy-time (not CI):** Azure SQL provisioning and running provider-specific migrations against live cloud DBs.
 
 ## Authentication (ADR-018)
 
@@ -76,6 +83,6 @@ Swagger UI exposes a **Bearer** token field for interactive testing once a token
 
 ## Architecture notes
 
-- `ProgesiDbContext` and EF repositories are **scoped per request** (see `Progesi.Infrastructure.EF/README.md`).
-- Schema is applied via `Database.Migrate()` on startup.
-- Cloud DB provisioning and Rhino sync are out of scope for this MVP.
+- `ProgesiDbContext` and EF repositories are **scoped per request per project** (see `Progesi.Infrastructure.EF/README.md`).
+- Schema is applied via `Database.Migrate()` when a project is provisioned.
+- Auth↔project membership mapping and Rhino sync are out of scope for this MVP.

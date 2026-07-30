@@ -1,15 +1,19 @@
 using Microsoft.AspNetCore.Authentication.JwtBearer;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Identity.Web;
 using Microsoft.OpenApi.Models;
 using Progesi.Api.Auth;
+using Progesi.Api.Infrastructure;
+using Progesi.Api.Projects;
 using Progesi.Infrastructure.EF;
 using Progesi.Infrastructure.EF.Repositories;
 using ProgesiCore;
 
 var builder = WebApplication.CreateBuilder(args);
 
-builder.Services.AddControllers();
+builder.Services.AddControllers(options =>
+{
+  options.Filters.Add<ProjectNotFoundExceptionFilter>();
+});
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(options =>
 {
@@ -39,7 +43,8 @@ builder.Services.AddSwaggerGen(options =>
   });
 });
 
-var useTestAuth = builder.Configuration.GetValue<bool>("Progesi:UseTestAuthentication");
+var useTestAuth = builder.Environment.IsDevelopment()
+    && builder.Configuration.GetValue<bool>("Progesi:UseTestAuthentication");
 if (useTestAuth)
 {
   // Integration tests register TestAuthHandler via WebApplicationFactory.ConfigureTestServices.
@@ -59,16 +64,11 @@ builder.Services.AddAuthorization(options =>
       policy.RequireRole(AuthRoles.Writer));
 });
 
-var connectionString = builder.Configuration.GetConnectionString("ProgesiDb")
-    ?? throw new InvalidOperationException("Connection string 'ProgesiDb' is not configured.");
-
-builder.Services.AddDbContext<ProgesiDbContext>(options =>
-{
-  var normalized = ProgesiDbContextFactory.NormalizeConnectionString(connectionString);
-  options.UseSqlite(
-      normalized,
-      sqlite => sqlite.ExecutionStrategy(deps => new Progesi.Infrastructure.EF.Internal.SqliteBusyRetryExecutionStrategy(deps)));
-});
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddSingleton<IProjectRegistry, JsonFileProjectRegistry>();
+builder.Services.AddScoped<IProjectProvisioningService, ProjectProvisioningService>();
+builder.Services.AddScoped<IProjectContext, ProjectContext>();
+builder.Services.AddScoped(sp => sp.GetRequiredService<IProjectContext>().DbContext);
 
 builder.Services.AddScoped<IVariableRepository>(sp =>
     new EfVariableRepository(sp.GetRequiredService<ProgesiDbContext>(), ownsContext: false));
@@ -81,9 +81,19 @@ var app = builder.Build();
 
 using (var scope = app.Services.CreateScope())
 {
-  var db = scope.ServiceProvider.GetRequiredService<ProgesiDbContext>();
-  var resetSchema = app.Configuration.GetValue<bool>("Progesi:ResetSchemaOnStartup");
-  ProgesiDbContextFactory.EnsureSchema(db, resetSchema);
+  var registry = scope.ServiceProvider.GetRequiredService<IProjectRegistry>();
+  registry.EnsureDefaultProject();
+
+  if (app.Configuration.GetValue<bool>("Progesi:ResetSchemaOnStartup"))
+  {
+    var defaultProjectId = app.Configuration["Progesi:DefaultProjectId"] ?? "default";
+    var defaultEntry = registry.GetById(defaultProjectId)
+        ?? throw new InvalidOperationException($"Default project '{defaultProjectId}' is not registered.");
+
+    var options = ProgesiDbContextOptionsBuilder.Build(defaultEntry.ConnectionString, app.Configuration);
+    using var db = new ProgesiDbContext(options);
+    ProgesiDbContextFactory.EnsureSchema(db, resetSchema: true);
+  }
 }
 
 if (app.Environment.IsDevelopment())

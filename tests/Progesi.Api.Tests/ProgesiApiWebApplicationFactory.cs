@@ -3,17 +3,23 @@ using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.DependencyInjection;
+using Progesi.Api.Projects;
 
 namespace Progesi.Api.Tests;
 
 public sealed class ProgesiApiWebApplicationFactory : WebApplicationFactory<Program>
 {
-  private readonly string _dbPath = Path.Combine(Path.GetTempPath(), $"progesi_api_{Guid.NewGuid():N}.sqlite");
+  private readonly string _projectsDirectory = Path.Combine(
+      Path.GetTempPath(),
+      $"progesi_projects_{Guid.NewGuid():N}");
+
+  public string DefaultProjectId => "default";
 
   protected override void ConfigureWebHost(IWebHostBuilder builder)
   {
     builder.UseEnvironment("Development");
-    builder.UseSetting("ConnectionStrings:ProgesiDb", $"Data Source={_dbPath}");
+    builder.UseSetting("Progesi:ProjectsDirectory", _projectsDirectory);
+    builder.UseSetting("Progesi:DefaultProjectId", DefaultProjectId);
     builder.UseSetting("Progesi:ResetSchemaOnStartup", "true");
     builder.UseSetting("Progesi:UseTestAuthentication", "true");
 
@@ -33,10 +39,15 @@ public sealed class ProgesiApiWebApplicationFactory : WebApplicationFactory<Prog
     if (!disposing)
       return;
 
+    TryDeleteDirectory(_projectsDirectory);
+  }
+
+  private static void TryDeleteDirectory(string path)
+  {
     try
     {
-      if (File.Exists(_dbPath))
-        File.Delete(_dbPath);
+      if (Directory.Exists(path))
+        Directory.Delete(path, recursive: true);
     }
     catch
     {

@@ -12,7 +12,7 @@ public sealed class ClustersApiTests
 
   public ClustersApiTests(ProgesiApiWebApplicationFactory factory)
   {
-    _client = factory.CreateClient().AsWriter();
+    _client = factory.CreateClient().AsWriterForProject(factory.DefaultProjectId);
   }
 
   [Fact]
