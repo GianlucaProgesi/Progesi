@@ -26,6 +26,15 @@ namespace ProgesiCore
     /// </summary>
     public double? AxisLength { get; private set; }
 
+    /// <summary>Opaque serialized curve geometry (Rhino-free round-trip payload for adapters).</summary>
+    public string CurvePayload { get; private set; } = string.Empty;
+
+    /// <summary>Canonical curve interpretation mode.</summary>
+    public AxisCurveMode Mode { get; private set; } = AxisCurveMode.Curve3d;
+
+    /// <summary>Normalized [0,1] positions where variables are always defined/interpolated.</summary>
+    public IReadOnlyList<double> KeyPoints { get; private set; } = Array.Empty<double>();
+
     /// <summary>Nome della ProgesiVariable mappata (UNICO per l'intero oggetto).</summary>
     public string Name { get; private set; } = string.Empty;
 
@@ -36,9 +45,18 @@ namespace ProgesiCore
     public string ValueTypeKey { get; private set; } = string.Empty;
 
     /// <summary>
-    /// Placeholder per futuri modelli di legge/segmenti (oggi resta per compatibilità roadmap).
+    /// Legacy placeholder retained for back-compat; prefer <see cref="FunctionRef"/>.
     /// </summary>
     public int? RuleId { get; private set; }
+
+    /// <summary>Reference to or embedded copy of the governing ProgesiFunction.</summary>
+    public ProgesiFunctionRef FunctionRef { get; private set; } = ProgesiFunctionRef.Empty;
+
+    /// <summary>Content-based hashtag (SHA-256 digest; derived, not part of equality).</summary>
+    public string Hashtag => ProgesiHash.Compute(this);
+
+    /// <summary>Alias aligned with Cluster/Metadata naming.</summary>
+    public string ContentHash => Hashtag;
 
     // Single-series map: PositionKey -> set of variable ids
     private readonly SortedDictionary<PositionKey, HashSet<int>> _map
@@ -50,7 +68,11 @@ namespace ProgesiCore
       string name,
       string valueTypeKey,
       double? axisLength = null,
-      int? ruleId = null)
+      int? ruleId = null,
+      string? curvePayload = null,
+      AxisCurveMode mode = AxisCurveMode.Curve3d,
+      IEnumerable<double>? keyPoints = null,
+      ProgesiFunctionRef? functionRef = null)
     {
       Guard.Against.Negative(id, nameof(id));
       Guard.Against.NullOrWhiteSpace(axisName, nameof(axisName));
@@ -65,6 +87,10 @@ namespace ProgesiCore
       ValueTypeKey = valueTypeKey.Trim();
       AxisLength = axisLength;
       RuleId = ruleId;
+      CurvePayload = curvePayload ?? string.Empty;
+      Mode = mode;
+      FunctionRef = functionRef ?? ProgesiFunctionRef.Empty;
+      KeyPoints = NormalizeKeyPoints(keyPoints);
     }
 
     /// <summary>
@@ -90,12 +116,9 @@ namespace ProgesiCore
 
     public IReadOnlyDictionary<double, int[]> GetMap(double tol = DefaultTolerance)
     {
-      // tol is only used for consistency with callers; keys already bucketed.
       var result = new Dictionary<double, int[]>();
       foreach (var kv in _map)
-      {
         result[kv.Key.Value] = kv.Value.OrderBy(x => x).ToArray();
-      }
       return result;
     }
 
@@ -112,14 +135,11 @@ namespace ProgesiCore
       {
         var posKey = inner.Key;
         var ids = inner.Value;
-        foreach (int id in ids.OrderBy(x => x))
-          yield return (posKey.Value, id);
+        foreach (int vid in ids.OrderBy(x => x))
+          yield return (posKey.Value, vid);
       }
     }
 
-    /// <summary>
-    /// Aggiunge una variabile alla stazione (posizione normalizzata). Valida Name e ValueTypeKey.
-    /// </summary>
     public void Add(ProgesiVariableSignature signature, double positionNormalized, double tol = DefaultTolerance)
     {
       if (!StringComparer.Ordinal.Equals(signature.Name, Name))
@@ -131,9 +151,6 @@ namespace ProgesiCore
       AddUnsafe(positionNormalized, signature.Id, tol);
     }
 
-    /// <summary>
-    /// Aggiunge un id senza poter verificare Name/ValueTypeKey. Usare solo in contesti controllati (DTO/repo).
-    /// </summary>
     internal void AddUnsafe(double positionNormalized, int variableId, double tol = DefaultTolerance)
     {
       Guard.Against.Negative(variableId, nameof(variableId));
@@ -229,7 +246,26 @@ namespace ProgesiCore
       AxisLength = axisLength;
     }
 
-    /// <summary>Converte una stazione reale (lunghezza lungo curva) in normalizzata [0,1].</summary>
+    public void SetCurvePayload(string? curvePayload)
+    {
+      CurvePayload = curvePayload ?? string.Empty;
+    }
+
+    public void SetMode(AxisCurveMode mode)
+    {
+      Mode = mode;
+    }
+
+    public void SetKeyPoints(IEnumerable<double>? keyPoints)
+    {
+      KeyPoints = NormalizeKeyPoints(keyPoints);
+    }
+
+    public void SetFunctionRef(ProgesiFunctionRef? functionRef)
+    {
+      FunctionRef = functionRef ?? ProgesiFunctionRef.Empty;
+    }
+
     public double ToNormalizedFromReal(double realStation)
     {
       if (!AxisLength.HasValue)
@@ -239,13 +275,27 @@ namespace ProgesiCore
       return realStation / AxisLength.Value;
     }
 
-    /// <summary>Converte una stazione normalizzata [0,1] in reale (lunghezza lungo curva).</summary>
     public double ToRealFromNormalized(double normalizedStation)
     {
       if (!AxisLength.HasValue)
         throw new InvalidOperationException("AxisLength is required to convert from normalized to real.");
       ValidateNormalizedPosition(normalizedStation);
       return normalizedStation * AxisLength.Value;
+    }
+
+    private static IReadOnlyList<double> NormalizeKeyPoints(IEnumerable<double>? keyPoints)
+    {
+      if (keyPoints == null)
+        return Array.Empty<double>();
+
+      var list = new List<double>();
+      foreach (var point in keyPoints)
+      {
+        ValidateNormalizedPosition(point);
+        list.Add(point);
+      }
+
+      return list.OrderBy(x => x).Distinct().ToArray();
     }
 
     private static void ValidateNormalizedPosition(double positionNormalized)
@@ -263,9 +313,15 @@ namespace ProgesiCore
       yield return Id;
       yield return AxisName;
       yield return AxisLength.HasValue ? AxisLength.Value : double.NaN;
+      yield return CurvePayload;
+      yield return Mode;
+      foreach (double kp in KeyPoints)
+        yield return kp;
       yield return Name;
       yield return ValueTypeKey;
       yield return RuleId.HasValue ? RuleId.Value : int.MinValue;
+      if (!FunctionRef.IsEmpty)
+        yield return FunctionRef;
 
       foreach (var kv in _map)
       {

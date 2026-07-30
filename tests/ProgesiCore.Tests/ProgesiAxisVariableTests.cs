@@ -158,5 +158,66 @@ namespace ProgesiCore.Tests
       Assert.True(sut.RemoveAt(0.2, 1));
       Assert.Empty(sut.GetAt(0.2));
     }
+
+    [Fact]
+    public void NewFields_Default_And_Mutators_Work()
+    {
+      var sut = Make();
+      Assert.Equal(string.Empty, sut.CurvePayload);
+      Assert.Equal(AxisCurveMode.Curve3d, sut.Mode);
+      Assert.Empty(sut.KeyPoints);
+      Assert.True(sut.FunctionRef.IsEmpty);
+
+      sut.SetCurvePayload("curve-json-v1");
+      sut.SetMode(AxisCurveMode.PlanXY);
+      sut.SetKeyPoints(new[] { 0.0, 0.5, 1.0 });
+      sut.SetFunctionRef(ProgesiFunctionRef.ById(42));
+
+      Assert.Equal("curve-json-v1", sut.CurvePayload);
+      Assert.Equal(AxisCurveMode.PlanXY, sut.Mode);
+      Assert.Equal(new[] { 0.0, 0.5, 1.0 }, sut.KeyPoints);
+      Assert.Equal(42, sut.FunctionRef.FunctionId);
+    }
+
+    [Theory]
+    [InlineData(-0.1)]
+    [InlineData(1.1)]
+    public void KeyPoints_AreValidated_InNormalizedRange(double keyPoint)
+    {
+      var sut = Make();
+      Assert.Throws<ArgumentOutOfRangeException>(() => sut.SetKeyPoints(new[] { keyPoint }));
+    }
+
+    [Fact]
+    public void ContentHash_Is_Deterministic_And_Changes_With_NewEqualityFields()
+    {
+      var baseline = Make();
+      var sig = new ProgesiAxisVariable.ProgesiVariableSignature(1, "Thickness", "System.Double");
+      baseline.Add(sig, 0.5);
+
+      var withPayload = Make();
+      withPayload.SetCurvePayload("payload-a");
+      withPayload.Add(sig, 0.5);
+
+      // B1: ContentHash now includes axis metadata beyond the legacy station map.
+      Assert.False(string.IsNullOrWhiteSpace(baseline.ContentHash));
+      Assert.Equal(baseline.ContentHash, baseline.Hashtag);
+      Assert.NotEqual(baseline.ContentHash, withPayload.ContentHash);
+    }
+
+    [Fact]
+    public void EmbeddedFunctionRef_Affects_ContentHash()
+    {
+      var fn = new ProgesiFunction(1, "law", new[]
+      {
+        new ProgesiFunctionSegment(0.0, 1.0, ProgesiFunctionSegmentKind.Constant, constantValue: 1.0)
+      });
+
+      var withoutFn = Make();
+      var withFn = Make();
+      withFn.SetFunctionRef(ProgesiFunctionRef.Embed(fn));
+
+      Assert.NotEqual(withoutFn.ContentHash, withFn.ContentHash);
+    }
   }
 }

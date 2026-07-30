@@ -39,8 +39,35 @@ namespace ProgesiCore.Tests
       var dto = ProgesiAxisVariableDto.FromDomain(original);
       var rebuilt = ProgesiAxisVariableDto.ToDomain(dto);
 
+      // B1: equality now includes CurvePayload/Mode/KeyPoints/FunctionRef when set.
       Assert.True(original.Equals(rebuilt));
       Assert.Equal(original.GetHashCode(), rebuilt.GetHashCode());
+    }
+
+    [Fact]
+    public void FromDomain_ToDomain_RoundTrip_With_B1_Fields()
+    {
+      var axis = MakeAxis();
+      axis.SetCurvePayload("curve-payload-v1");
+      axis.SetMode(AxisCurveMode.Profile);
+      axis.SetKeyPoints(new[] { 0.0, 0.5, 1.0 });
+
+      var fn = new ProgesiFunction(9, "axis-law", new[]
+      {
+        new ProgesiFunctionSegment(0.0, 1.0, ProgesiFunctionSegmentKind.Expression, expression: "x")
+      });
+      axis.SetFunctionRef(ProgesiFunctionRef.Embed(fn));
+
+      var dto = ProgesiAxisVariableDto.FromDomain(axis);
+      Assert.Equal("curve-payload-v1", dto.CurvePayload);
+      Assert.Equal(AxisCurveMode.Profile, dto.Mode);
+      Assert.Equal(new[] { 0.0, 0.5, 1.0 }, dto.KeyPoints.OrderBy(x => x));
+      Assert.NotNull(dto.FunctionPayload);
+      Assert.Equal(axis.ContentHash, dto.ContentHash);
+
+      var rebuilt = ProgesiAxisVariableDto.ToDomain(dto);
+      Assert.True(axis.Equals(rebuilt));
+      Assert.Equal(axis.ContentHash, rebuilt.ContentHash);
     }
 
     [Fact]
