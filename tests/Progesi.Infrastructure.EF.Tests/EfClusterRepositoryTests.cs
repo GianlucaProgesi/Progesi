@@ -127,6 +127,7 @@ public sealed class EfClusterRepositoryTests : IDisposable
 
   public void Dispose()
   {
+    _repo.Dispose();
     var path = _connectionString.Replace("Data Source=", string.Empty);
     try
     {

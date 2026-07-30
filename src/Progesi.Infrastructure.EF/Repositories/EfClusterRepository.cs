@@ -5,7 +5,11 @@ using Progesi.Infrastructure.EF.Entities;
 
 namespace Progesi.Infrastructure.EF.Repositories;
 
-public sealed class EfClusterRepository : IProgesiVariableClusterRepository
+/// <summary>
+/// EF Core implementation of <see cref="IProgesiVariableClusterRepository"/> for the web tier.
+/// Not thread-safe — scope one instance (and its DbContext) per request/unit-of-work.
+/// </summary>
+public sealed class EfClusterRepository : IProgesiVariableClusterRepository, IDisposable, IAsyncDisposable
 {
   private readonly ProgesiDbContext _context;
   private readonly bool _ownsContext;
@@ -157,5 +161,17 @@ public sealed class EfClusterRepository : IProgesiVariableClusterRepository
     _context.Clusters.RemoveRange(entities);
     await _context.SaveChangesAsync(ct);
     return entities.Count;
+  }
+
+  public void Dispose()
+  {
+    if (_ownsContext)
+      _context.Dispose();
+  }
+
+  public async ValueTask DisposeAsync()
+  {
+    if (_ownsContext)
+      await _context.DisposeAsync().ConfigureAwait(false);
   }
 }
