@@ -12,7 +12,7 @@ public sealed class MetadataApiTests
 
   public MetadataApiTests(ProgesiApiWebApplicationFactory factory)
   {
-    _client = factory.CreateClient();
+    _client = factory.CreateClient().AsWriter();
   }
 
   [Fact]

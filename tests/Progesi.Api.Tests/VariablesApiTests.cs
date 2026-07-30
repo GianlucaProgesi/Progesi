@@ -12,7 +12,7 @@ public sealed class VariablesApiTests
 
   public VariablesApiTests(ProgesiApiWebApplicationFactory factory)
   {
-    _client = factory.CreateClient();
+    _client = factory.CreateClient().AsWriter();
   }
 
   [Fact]
