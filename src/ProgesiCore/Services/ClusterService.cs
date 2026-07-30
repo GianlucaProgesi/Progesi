@@ -45,21 +45,7 @@ namespace ProgesiCore.Services
       if (ids.Count == 0)
         throw new ArgumentException("Cluster must contain at least one variable id.", nameof(progesiVariableIds));
 
-      // R2-G: referential integrity — reject a cluster that references non-existent ProgesiVariable(s).
-      // Only enforced when a variable repository is supplied (create path); read paths pass null.
-      if (_variableRepository != null)
-      {
-        var missing = new List<int>();
-        foreach (var vid in ids)
-        {
-          var existingVar = await _variableRepository.GetByIdAsync(vid, ct).ConfigureAwait(false);
-          if (existingVar == null) missing.Add(vid);
-        }
-        if (missing.Count > 0)
-          throw new ArgumentException(
-            $"Cluster references non-existent ProgesiVariable id(s): {string.Join(", ", missing)}.",
-            nameof(progesiVariableIds));
-      }
+      await ValidateReferencedVariablesExistAsync(ids, nameof(progesiVariableIds), ct).ConfigureAwait(false);
 
       // Candidate "logico" (Id=0) solo per confronto con i cluster esistenti
       var candidate = ProgesiVariableCluster.CreateNew(name, ids, description);
@@ -84,6 +70,37 @@ namespace ProgesiCore.Services
       // Salviamo sul repository (che può avere ulteriore dedup via ContentHash, come in SQLite)
       var saved = await _clusterRepository.SaveAsync(newCluster, ct).ConfigureAwait(false);
       return saved;
+    }
+
+    public async Task<ProgesiVariableCluster> UpdateClusterAsync(
+      int id,
+      string name,
+      IEnumerable<int> progesiVariableIds,
+      string? description = null,
+      CancellationToken ct = default)
+    {
+      if (id <= 0)
+        throw new ArgumentException("Cluster id must be positive.", nameof(id));
+
+      if (string.IsNullOrWhiteSpace(name))
+        throw new ArgumentException("Cluster name is required.", nameof(name));
+
+      if (progesiVariableIds is null)
+        throw new ArgumentNullException(nameof(progesiVariableIds));
+
+      var ids = progesiVariableIds
+        .Where(variableId => variableId > 0)
+        .Distinct()
+        .OrderBy(variableId => variableId)
+        .ToList();
+
+      if (ids.Count == 0)
+        throw new ArgumentException("Cluster must contain at least one variable id.", nameof(progesiVariableIds));
+
+      await ValidateReferencedVariablesExistAsync(ids, nameof(progesiVariableIds), ct).ConfigureAwait(false);
+
+      var updated = ProgesiVariableCluster.Rehydrate(id, name, ids, description, null);
+      return await _clusterRepository.SaveAsync(updated, ct).ConfigureAwait(false);
     }
 
     public Task<ProgesiVariableCluster?> GetByIdAsync(
@@ -151,6 +168,26 @@ namespace ProgesiCore.Services
       }
 
       return new CascadeResult(applied, failedClusterIds);
+    }
+
+    private async Task ValidateReferencedVariablesExistAsync(
+      IReadOnlyList<int> ids,
+      string paramName,
+      CancellationToken ct)
+    {
+      if (_variableRepository == null) return;
+
+      var missing = new List<int>();
+      foreach (var vid in ids)
+      {
+        var existingVar = await _variableRepository.GetByIdAsync(vid, ct).ConfigureAwait(false);
+        if (existingVar == null) missing.Add(vid);
+      }
+
+      if (missing.Count > 0)
+        throw new ArgumentException(
+          $"Cluster references non-existent ProgesiVariable id(s): {string.Join(", ", missing)}.",
+          paramName);
     }
   }
 }
