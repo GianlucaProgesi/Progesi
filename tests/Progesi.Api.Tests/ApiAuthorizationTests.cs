@@ -19,6 +19,7 @@ public sealed class ApiAuthorizationTests
   [InlineData("/api/variables")]
   [InlineData("/api/metadata")]
   [InlineData("/api/clusters")]
+  [InlineData("/api/summary")]
   public async Task Unauthenticated_Get_Returns_401(string route)
   {
     using var client = _factory.CreateClient().AsUnauthenticated();
@@ -30,6 +31,7 @@ public sealed class ApiAuthorizationTests
   [InlineData("/api/variables")]
   [InlineData("/api/metadata")]
   [InlineData("/api/clusters")]
+  [InlineData("/api/summary")]
   public async Task Reader_Get_Returns_200(string route)
   {
     using var client = _factory.CreateClient().AsReaderForProject(_factory.DefaultProjectId);
