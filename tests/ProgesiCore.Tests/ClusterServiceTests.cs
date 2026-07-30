@@ -118,6 +118,43 @@ namespace Progesi.Core.Tests.Services
     }
 
     [Fact]
+    public async Task UpdateCluster_StrictReject_When_VariableId_Missing()
+    {
+      var clusterRepo = new InMemoryVariableClusterRepository();
+      var varRepo = new InMemoryVariableRepository();
+      await varRepo.SaveAsync(new ProgesiVariable(2, "v2", 1.0));
+      var service = new ClusterService(clusterRepo, varRepo);
+
+      var created = await service.CreateOrGetClusterAsync("C", new[] { 2 }, "d");
+
+      await Assert.ThrowsAsync<System.ArgumentException>(
+        () => service.UpdateClusterAsync(created.Id, "C", new[] { 2, 9 }, "d"));
+
+      var reloaded = await service.GetByIdAsync(created.Id);
+      Assert.NotNull(reloaded);
+      Assert.True(reloaded!.ProgesiVariableIds.SequenceEqual(new[] { 2 }));
+    }
+
+    [Fact]
+    public async Task UpdateCluster_Succeeds_When_All_Variables_Exist()
+    {
+      var clusterRepo = new InMemoryVariableClusterRepository();
+      var varRepo = new InMemoryVariableRepository();
+      await varRepo.SaveAsync(new ProgesiVariable(2, "v2", 1.0));
+      await varRepo.SaveAsync(new ProgesiVariable(9, "v9", 2.0));
+      var service = new ClusterService(clusterRepo, varRepo);
+
+      var created = await service.CreateOrGetClusterAsync("C", new[] { 2 }, "d");
+
+      var updated = await service.UpdateClusterAsync(created.Id, "C2", new[] { 2, 9 }, "d2");
+
+      Assert.Equal(created.Id, updated.Id);
+      Assert.Equal("C2", updated.Name);
+      Assert.True(updated.ProgesiVariableIds.SequenceEqual(new[] { 2, 9 }));
+      Assert.Equal("d2", updated.Description);
+    }
+
+    [Fact]
     public async Task CascadeRemove_Removes_Variable_And_Keeps_NonEmpty_Cluster()
     {
       var clusterRepo = new InMemoryVariableClusterRepository();

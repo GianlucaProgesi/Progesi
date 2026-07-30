@@ -20,6 +20,17 @@ namespace ProgesiCore.Services
       string? description = null,
       CancellationToken ct = default);
 
+    /// <summary>
+    /// Updates an existing cluster in place (same Id, no dedup).
+    /// Validates that referenced variable Ids exist when a variable repository is supplied.
+    /// </summary>
+    Task<ProgesiVariableCluster> UpdateClusterAsync(
+      int id,
+      string name,
+      IEnumerable<int> progesiVariableIds,
+      string? description = null,
+      CancellationToken ct = default);
+
     Task<ProgesiVariableCluster?> GetByIdAsync(
       int id,
       CancellationToken ct = default);

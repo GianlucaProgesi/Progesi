@@ -232,24 +232,29 @@ namespace ProgesiGrasshopperAssembly.Components
             return;
           }
 
-          // Manteniamo lo stesso Id: UPDATE vero (non dedup tramite service!)
-          var updated = ProgesiVariableCluster.Rehydrate(
-            existing.Id,
-            name,
-            ids,
-            desc,
-            null);
+          var service = new ClusterService(clusterRepo, varRepo);
+          try
+          {
+            var saved = service.UpdateClusterAsync(existing.Id, name, ids, desc).GetAwaiter().GetResult();
 
-          var saved = clusterRepo.SaveAsync(updated, default).GetAwaiter().GetResult();
+            outId = saved.Id;
+            outHash = saved.Hashtag ?? string.Empty;
+            outInfo = $"OK (Updated Cluster Id={saved.Id}, Vars={saved.ProgesiVariableIds.Count})";
 
-          outId = saved.Id;
-          outHash = saved.Hashtag ?? string.Empty;
-          outInfo = $"OK (Updated Cluster Id={saved.Id}, Vars={saved.ProgesiVariableIds.Count})";
-
-          DA.SetData(0, outId);
-          DA.SetData(1, outHash);
-          DA.SetData(2, outInfo);
-          return;
+            DA.SetData(0, outId);
+            DA.SetData(1, outHash);
+            DA.SetData(2, outInfo);
+            return;
+          }
+          catch (ArgumentException ex)
+          {
+            AddRuntimeMessage(GH_RuntimeMessageLevel.Error, ex.Message);
+            outInfo = "Errore: " + ex.Message;
+            DA.SetData(0, 0);
+            DA.SetData(1, "");
+            DA.SetData(2, outInfo);
+            return;
+          }
         }
 
         // CREATE (default)
