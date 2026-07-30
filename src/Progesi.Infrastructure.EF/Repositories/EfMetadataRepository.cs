@@ -5,7 +5,11 @@ using Progesi.Infrastructure.EF.Internal;
 
 namespace Progesi.Infrastructure.EF.Repositories;
 
-public sealed class EfMetadataRepository : IMetadataRepository
+/// <summary>
+/// EF Core implementation of <see cref="IMetadataRepository"/> for the web tier.
+/// Not thread-safe — scope one instance (and its DbContext) per request/unit-of-work.
+/// </summary>
+public sealed class EfMetadataRepository : IMetadataRepository, IDisposable, IAsyncDisposable
 {
   private readonly ProgesiDbContext _context;
   private readonly bool _ownsContext;
@@ -136,5 +140,17 @@ public sealed class EfMetadataRepository : IMetadataRepository
         .FirstOrDefaultAsync(ct);
 
     return id ?? 0;
+  }
+
+  public void Dispose()
+  {
+    if (_ownsContext)
+      _context.Dispose();
+  }
+
+  public async ValueTask DisposeAsync()
+  {
+    if (_ownsContext)
+      await _context.DisposeAsync().ConfigureAwait(false);
   }
 }

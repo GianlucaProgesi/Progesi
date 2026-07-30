@@ -6,7 +6,11 @@ using Progesi.Infrastructure.EF.Internal;
 
 namespace Progesi.Infrastructure.EF.Repositories;
 
-public sealed class EfVariableRepository : IVariableRepository
+/// <summary>
+/// EF Core implementation of <see cref="IVariableRepository"/> for the web tier.
+/// Not thread-safe — scope one instance (and its DbContext) per request/unit-of-work.
+/// </summary>
+public sealed class EfVariableRepository : IVariableRepository, IDisposable, IAsyncDisposable
 {
   private readonly ProgesiDbContext _context;
   private readonly bool _ownsContext;
@@ -174,5 +178,17 @@ public sealed class EfVariableRepository : IVariableRepository
     _context.Variables.RemoveRange(entities);
     await _context.SaveChangesAsync(ct);
     return entities.Count;
+  }
+
+  public void Dispose()
+  {
+    if (_ownsContext)
+      _context.Dispose();
+  }
+
+  public async ValueTask DisposeAsync()
+  {
+    if (_ownsContext)
+      await _context.DisposeAsync().ConfigureAwait(false);
   }
 }

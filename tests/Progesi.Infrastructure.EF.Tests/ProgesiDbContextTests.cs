@@ -14,14 +14,16 @@ public sealed class ProgesiDbContextTests : IDisposable
   }
 
   [Fact]
-  public void EnsureCreated_Creates_Variable_And_Metadata_Tables()
+  public void Migrate_Creates_Core_Tables()
   {
     _context.Variables.Should().NotBeNull();
     _context.Metadata.Should().NotBeNull();
+    _context.Clusters.Should().NotBeNull();
 
     _context.Database.CanConnect().Should().BeTrue();
     _context.Variables.Count().Should().Be(0);
     _context.Metadata.Count().Should().Be(0);
+    _context.Clusters.Count().Should().Be(0);
   }
 
   public void Dispose()
