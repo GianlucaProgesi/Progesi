@@ -1,4 +1,6 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Progesi.Api.Auth;
 using Progesi.Api.Dtos;
 using Progesi.Api.Mapping;
 using ProgesiCore;
@@ -16,6 +18,7 @@ public sealed class MetadataController : ControllerBase
     _repository = repository;
   }
 
+  [Authorize(Policy = AuthPolicies.Reader)]
   [HttpGet]
   public async Task<ActionResult<IReadOnlyList<MetadataDto>>> GetAll(
     [FromQuery] int skip = 0,
@@ -29,6 +32,7 @@ public sealed class MetadataController : ControllerBase
     return Ok(items.Select(DomainMapping.ToDto).ToList());
   }
 
+  [Authorize(Policy = AuthPolicies.Reader)]
   [HttpGet("{id:int}")]
   public async Task<ActionResult<MetadataDto>> GetById(int id, CancellationToken ct)
   {
@@ -39,6 +43,7 @@ public sealed class MetadataController : ControllerBase
     return Ok(DomainMapping.ToDto(metadata));
   }
 
+  [Authorize(Policy = AuthPolicies.Writer)]
   [HttpPost]
   public async Task<ActionResult<MetadataDto>> Create([FromBody] MetadataUpsertDto dto, CancellationToken ct)
   {
@@ -61,6 +66,7 @@ public sealed class MetadataController : ControllerBase
     return CreatedAtAction(nameof(GetById), new { id = saved.Id }, DomainMapping.ToDto(saved));
   }
 
+  [Authorize(Policy = AuthPolicies.Writer)]
   [HttpPut("{id:int}")]
   public async Task<ActionResult<MetadataDto>> Update(int id, [FromBody] MetadataUpsertDto dto, CancellationToken ct)
   {
@@ -82,6 +88,7 @@ public sealed class MetadataController : ControllerBase
     return Ok(DomainMapping.ToDto(saved!));
   }
 
+  [Authorize(Policy = AuthPolicies.Writer)]
   [HttpDelete("{id:int}")]
   public async Task<IActionResult> Delete(int id, CancellationToken ct)
   {

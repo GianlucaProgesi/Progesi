@@ -50,8 +50,32 @@ Open Swagger UI: [https://localhost:7xxx/swagger](https://localhost:5001/swagger
 
 All responses use API DTOs only (no Core types on the wire).
 
+## Authentication (ADR-018)
+
+The API uses **Entra External ID** (Azure AD) JWT bearer tokens via `Microsoft.Identity.Web`.
+
+Configuration section: `AzureAd` in `appsettings.json` (placeholders only — inject real values at deploy via environment variables or user-secrets):
+
+| Key | Purpose |
+|---|---|
+| `Instance` | Entra authority URL (e.g. `https://login.microsoftonline.com/` or CIAM tenant URL) |
+| `TenantId` | Directory / tenant ID |
+| `ClientId` | App registration client ID |
+| `Audience` | API audience (app ID URI) |
+
+**App roles** (assign in Entra app registration):
+
+| Role | Access |
+|---|---|
+| `reader` | `GET` on Variables, Metadata, Clusters |
+| `writer` | `POST` / `PUT` / `DELETE` (writers also satisfy reader policy) |
+
+Swagger UI exposes a **Bearer** token field for interactive testing once a token is available.
+
+**Deploy-time step (not CI):** provision the Entra External ID tenant, register the API app, define `reader`/`writer` app roles, and configure the deployed `AzureAd` settings. CI validates auth behaviour with a test scheme — no live tenant required.
+
 ## Architecture notes
 
 - `ProgesiDbContext` and EF repositories are **scoped per request** (see `Progesi.Infrastructure.EF/README.md`).
 - Schema is applied via `Database.Migrate()` on startup.
-- Authentication, cloud DB provisioning, and Rhino sync are out of scope for this MVP.
+- Cloud DB provisioning and Rhino sync are out of scope for this MVP.

@@ -1,4 +1,8 @@
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Identity.Web;
+using Microsoft.OpenApi.Models;
+using Progesi.Api.Auth;
 using Progesi.Infrastructure.EF;
 using Progesi.Infrastructure.EF.Repositories;
 using ProgesiCore;
@@ -7,7 +11,53 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(options =>
+{
+  options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+  {
+    Description = "JWT Authorization header using the Bearer scheme. Example: \"Bearer {token}\"",
+    Name = "Authorization",
+    In = ParameterLocation.Header,
+    Type = SecuritySchemeType.Http,
+    Scheme = "bearer",
+    BearerFormat = "JWT"
+  });
+
+  options.AddSecurityRequirement(new OpenApiSecurityRequirement
+  {
+    {
+      new OpenApiSecurityScheme
+      {
+        Reference = new OpenApiReference
+        {
+          Type = ReferenceType.SecurityScheme,
+          Id = "Bearer"
+        }
+      },
+      Array.Empty<string>()
+    }
+  });
+});
+
+var useTestAuth = builder.Configuration.GetValue<bool>("Progesi:UseTestAuthentication");
+if (useTestAuth)
+{
+  // Integration tests register TestAuthHandler via WebApplicationFactory.ConfigureTestServices.
+  builder.Services.AddAuthentication();
+}
+else
+{
+  builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+      .AddMicrosoftIdentityWebApi(builder.Configuration.GetSection("AzureAd"));
+}
+
+builder.Services.AddAuthorization(options =>
+{
+  options.AddPolicy(AuthPolicies.Reader, policy =>
+      policy.RequireRole(AuthRoles.Reader, AuthRoles.Writer));
+  options.AddPolicy(AuthPolicies.Writer, policy =>
+      policy.RequireRole(AuthRoles.Writer));
+});
 
 var connectionString = builder.Configuration.GetConnectionString("ProgesiDb")
     ?? throw new InvalidOperationException("Connection string 'ProgesiDb' is not configured.");
@@ -43,6 +93,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+app.UseAuthentication();
+app.UseAuthorization();
 app.MapControllers();
 
 app.Run();

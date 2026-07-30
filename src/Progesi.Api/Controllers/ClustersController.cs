@@ -1,4 +1,6 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Progesi.Api.Auth;
 using Progesi.Api.Dtos;
 using Progesi.Api.Mapping;
 using ProgesiCore;
@@ -16,6 +18,7 @@ public sealed class ClustersController : ControllerBase
     _repository = repository;
   }
 
+  [Authorize(Policy = AuthPolicies.Reader)]
   [HttpGet]
   public async Task<ActionResult<IReadOnlyList<ClusterDto>>> GetAll(CancellationToken ct)
   {
@@ -23,6 +26,7 @@ public sealed class ClustersController : ControllerBase
     return Ok(clusters.Select(DomainMapping.ToDto).ToList());
   }
 
+  [Authorize(Policy = AuthPolicies.Reader)]
   [HttpGet("{id:int}")]
   public async Task<ActionResult<ClusterDto>> GetById(int id, CancellationToken ct)
   {
@@ -33,6 +37,7 @@ public sealed class ClustersController : ControllerBase
     return Ok(DomainMapping.ToDto(cluster));
   }
 
+  [Authorize(Policy = AuthPolicies.Writer)]
   [HttpPost]
   public async Task<ActionResult<ClusterDto>> Create([FromBody] ClusterUpsertDto dto, CancellationToken ct)
   {
@@ -48,6 +53,7 @@ public sealed class ClustersController : ControllerBase
     return CreatedAtAction(nameof(GetById), new { id = saved.Id }, DomainMapping.ToDto(saved));
   }
 
+  [Authorize(Policy = AuthPolicies.Writer)]
   [HttpPut("{id:int}")]
   public async Task<ActionResult<ClusterDto>> Update(int id, [FromBody] ClusterUpsertDto dto, CancellationToken ct)
   {
@@ -66,6 +72,7 @@ public sealed class ClustersController : ControllerBase
     return Ok(DomainMapping.ToDto(saved));
   }
 
+  [Authorize(Policy = AuthPolicies.Writer)]
   [HttpDelete("{id:int}")]
   public async Task<IActionResult> Delete(int id, CancellationToken ct)
   {
