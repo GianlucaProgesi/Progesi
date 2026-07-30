@@ -112,37 +112,45 @@ namespace ProgesiCore.Services
 
     // R2-G: when a ProgesiVariable is deleted, strip it from every cluster that references it.
     // A cluster left with no variables is deleted (cluster invariant is >= 1 variable).
-    public async Task<int> CascadeRemoveVariableFromClustersAsync(
+    public async Task<CascadeResult> CascadeRemoveVariableFromClustersAsync(
       int variableId,
       CancellationToken ct = default)
     {
-      if (variableId <= 0) return 0;
+      if (variableId <= 0) return new CascadeResult(0, Array.Empty<int>());
 
       var all = await _clusterRepository.GetAllAsync(ct).ConfigureAwait(false);
-      int affected = 0;
+      int applied = 0;
+      var failedClusterIds = new List<int>();
 
       foreach (var cluster in all)
       {
         if (cluster.ProgesiVariableIds == null || !cluster.ProgesiVariableIds.Contains(variableId))
           continue;
 
-        var remaining = cluster.ProgesiVariableIds.Where(v => v != variableId).ToList();
-
-        if (remaining.Count == 0)
+        try
         {
-          await _clusterRepository.DeleteAsync(cluster.Id, ct).ConfigureAwait(false);
-        }
-        else
-        {
-          var updated = ProgesiVariableCluster.Rehydrate(
-            cluster.Id, cluster.Name, remaining, cluster.Description, null);
-          await _clusterRepository.SaveAsync(updated, ct).ConfigureAwait(false);
-        }
+          var remaining = cluster.ProgesiVariableIds.Where(v => v != variableId).ToList();
 
-        affected++;
+          if (remaining.Count == 0)
+          {
+            await _clusterRepository.DeleteAsync(cluster.Id, ct).ConfigureAwait(false);
+          }
+          else
+          {
+            var updated = ProgesiVariableCluster.Rehydrate(
+              cluster.Id, cluster.Name, remaining, cluster.Description, null);
+            await _clusterRepository.SaveAsync(updated, ct).ConfigureAwait(false);
+          }
+
+          applied++;
+        }
+        catch
+        {
+          failedClusterIds.Add(cluster.Id);
+        }
       }
 
-      return affected;
+      return new CascadeResult(applied, failedClusterIds);
     }
   }
 }

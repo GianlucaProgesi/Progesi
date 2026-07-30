@@ -53,7 +53,8 @@ public sealed class ClusterScaleStressTests
     sw.Stop();
     StressTestGate.LogTiming(_output, "Cluster cascade-remove", sw, 1);
 
-    affected.Should().Be(1);
+    affected.Applied.Should().Be(1);
+    affected.IsFullySuccessful.Should().BeTrue();
     var reloaded = await service.GetByIdAsync(first.Id);
     reloaded.Should().NotBeNull();
     reloaded!.ProgesiVariableIds.Should().NotContain(removeId);
