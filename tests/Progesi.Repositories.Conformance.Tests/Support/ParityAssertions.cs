@@ -38,6 +38,56 @@ internal static class ParityAssertions
     ProgesiHash.Compute(sqlite).Should().Be(ProgesiHash.Compute(original));
   }
 
+  public static void AxisShouldMatch(
+      ProgesiAxisVariable sqlite,
+      ProgesiAxisVariable ef,
+      ProgesiAxisVariable original)
+  {
+    sqlite.Should().NotBeNull();
+    ef.Should().NotBeNull();
+
+    sqlite!.Id.Should().Be(ef!.Id);
+    sqlite.AxisName.Should().Be(ef.AxisName);
+    sqlite.Name.Should().Be(ef.Name);
+    sqlite.ValueTypeKey.Should().Be(ef.ValueTypeKey);
+    sqlite.AxisLength.Should().Be(ef.AxisLength);
+    sqlite.CurvePayload.Should().Be(ef.CurvePayload);
+    sqlite.Mode.Should().Be(ef.Mode);
+    sqlite.KeyPoints.Should().Equal(ef.KeyPoints);
+    sqlite.RuleId.Should().Be(ef.RuleId);
+    sqlite.Hashtag.Should().Be(ef.Hashtag);
+
+    AssertFunctionRefEquivalent(sqlite.FunctionRef, ef.FunctionRef);
+
+    var sqliteStations = sqlite.EnumerateAll()
+        .OrderBy(t => t.positionNormalized)
+        .ThenBy(t => t.variableId)
+        .Select(t => (t.positionNormalized, t.variableId))
+        .ToArray();
+    var efStations = ef.EnumerateAll()
+        .OrderBy(t => t.positionNormalized)
+        .ThenBy(t => t.variableId)
+        .Select(t => (t.positionNormalized, t.variableId))
+        .ToArray();
+    sqliteStations.Should().Equal(efStations);
+
+    ProgesiHash.Compute(sqlite).Should().Be(ProgesiHash.Compute(ef));
+    ProgesiHash.Compute(sqlite).Should().Be(ProgesiHash.Compute(original));
+  }
+
+  private static void AssertFunctionRefEquivalent(ProgesiFunctionRef sqlite, ProgesiFunctionRef ef)
+  {
+    sqlite.FunctionId.Should().Be(ef.FunctionId);
+    sqlite.FunctionHashtag.Should().Be(ef.FunctionHashtag);
+
+    if (sqlite.Embedded == null && ef.Embedded == null)
+      return;
+
+    sqlite.Embedded.Should().NotBeNull();
+    ef.Embedded.Should().NotBeNull();
+    ProgesiHash.Compute(sqlite.Embedded!).Should().Be(ProgesiHash.Compute(ef.Embedded!));
+  }
+
   public static void MetadataShouldMatch(ProgesiMetadata? sqlite, ProgesiMetadata? ef, ProgesiMetadata original)
   {
     sqlite.Should().NotBeNull();

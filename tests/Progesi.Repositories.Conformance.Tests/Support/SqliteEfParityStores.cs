@@ -114,3 +114,40 @@ internal sealed class SqliteEfClusterParityStores : IDisposable
     }
   }
 }
+
+internal sealed class SqliteEfAxisParityStores : IDisposable
+{
+  private readonly string _sqlitePath;
+  private readonly string _efConnectionString;
+
+  public IProgesiVariableAxisRepository Sqlite { get; }
+  public IProgesiVariableAxisRepository Ef { get; }
+
+  public SqliteEfAxisParityStores()
+  {
+    SqliteTestBootstrap.EnsureInitialized();
+    _sqlitePath = Path.Combine(Path.GetTempPath(), $"progesi_parity_axis_sqlite_{Guid.NewGuid():N}.sqlite");
+    _efConnectionString = $"Data Source={Path.Combine(Path.GetTempPath(), $"progesi_parity_axis_ef_{Guid.NewGuid():N}.sqlite")}";
+
+    Sqlite = new SqliteAxisVariableRepository(_sqlitePath, resetSchema: true);
+    Ef = new EfAxisVariableRepository(_efConnectionString, resetSchema: true);
+  }
+
+  public void Dispose()
+  {
+    TryDelete(_sqlitePath);
+    TryDelete(_efConnectionString.Replace("Data Source=", string.Empty));
+  }
+
+  private static void TryDelete(string path)
+  {
+    try
+    {
+      if (File.Exists(path)) File.Delete(path);
+    }
+    catch
+    {
+      // best-effort cleanup
+    }
+  }
+}

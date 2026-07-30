@@ -23,6 +23,7 @@ public sealed class SqliteEfSchemaParityTests : IDisposable
     _ = new SqliteVariableRepository(_sqlitePath, resetSchema: true);
     _ = new SqliteMetadataRepository(_sqlitePath, resetSchema: false);
     _ = new SqliteClusterRepository(_sqlitePath, resetSchema: false);
+    _ = new SqliteAxisVariableRepository(_sqlitePath, resetSchema: false);
 
     using var efContext = ProgesiDbContextFactory.Create($"Data Source={_efPath}", resetSchema: true);
   }
@@ -31,6 +32,7 @@ public sealed class SqliteEfSchemaParityTests : IDisposable
   [InlineData("Variables")]
   [InlineData("Metadata")]
   [InlineData("Clusters")]
+  [InlineData("Axis")]
   public void Sqlite_And_Ef_Schemas_Agree_On_Columns_ContentHash_NotNull_And_Unique_Index(string table)
   {
     var sqliteColumns = ReadColumns(_sqlitePath, table);
