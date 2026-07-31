@@ -28,10 +28,10 @@ Ok ("PR #{0} → state={1}, mergeState={2}, review={3}, head={4}, base={5}" -f `
 if ($pr.state -ne "OPEN") { Fail "La PR non è OPEN."; exit 1 }
 
 # 2) Merge (squash)
-$flags = @("--repo", $Repo, $PRNumber.ToString(), "--squash", "-y")
+$flags = @("--repo", $Repo, $PRNumber.ToString(), "--squash")
 if ($DeleteBranch.IsPresent) { $flags += "--delete-branch" }
 
-Info ("Eseguo: gh pr merge #{0} --squash {1}" -f $PRNumber, (if ($DeleteBranch) {"--delete-branch"} else {""}))
+Info ("Eseguo: gh pr merge #{0} --squash {1}" -f $PRNumber, $(if ($DeleteBranch) {"--delete-branch"} else {""}))
 $out = gh pr merge @flags 2>&1
 $out | ForEach-Object { $_ | Write-Host }
 
