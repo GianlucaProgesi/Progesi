@@ -13,6 +13,12 @@ using Rhino;
 
 namespace ProgesiGrasshopperAssembly.Components
 {
+  /// <summary>
+  /// Push/Pull Rhino store ↔ Progesi cloud API.
+  /// The optional <c>TestRole</c> input is dev-only: it sets the <c>X-Test-Roles</c> header
+  /// for local Development APIs with <c>UseTestAuthentication=true</c> (A3.2/A3.3 hardening).
+  /// Leave empty in production; use <c>Token</c> (Bearer) for real Entra auth instead.
+  /// </summary>
   public sealed class ProgesiCloudSyncComponent : GH_Component
   {
     public ProgesiCloudSyncComponent()
@@ -32,6 +38,7 @@ namespace ProgesiGrasshopperAssembly.Components
       p.AddTextParameter("ApiBaseUrl", "Url", "Base URL of Progesi.Api (e.g. https://localhost:5001).", GH_ParamAccess.item, "https://localhost:5001");
       p.AddTextParameter("ProjectId", "Proj", "Cloud project id (X-Project-Id).", GH_ParamAccess.item, "default");
       p.AddTextParameter("Token", "Token", "Bearer token for cloud auth.", GH_ParamAccess.item, "");
+      p.AddTextParameter("TestRole", "TestRole", "Dev-only: X-Test-Roles value, e.g. writer. Leave empty in production.", GH_ParamAccess.item, "");
       for (int i = 1; i < Params.Input.Count; i++)
         Params.Input[i].Optional = true;
     }
@@ -50,12 +57,14 @@ namespace ProgesiGrasshopperAssembly.Components
       string apiBaseUrl = "https://localhost:5001";
       string projectId = "default";
       string token = string.Empty;
+      string testRole = string.Empty;
 
       da.GetData(0, ref run);
       da.GetData(1, ref directionText);
       da.GetData(2, ref apiBaseUrl);
       da.GetData(3, ref projectId);
       da.GetData(4, ref token);
+      da.GetData(5, ref testRole);
 
       if (!run)
       {
@@ -101,7 +110,8 @@ namespace ProgesiGrasshopperAssembly.Components
         {
           BaseUrl = apiBaseUrl.Trim(),
           ProjectId = projectId.Trim(),
-          BearerToken = token ?? string.Empty
+          BearerToken = token ?? string.Empty,
+          TestRoles = testRole ?? string.Empty
         }))
         {
           var cloud = client.GetCloudSnapshotAsync(CancellationToken.None).GetAwaiter().GetResult();
