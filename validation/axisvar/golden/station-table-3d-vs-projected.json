@@ -1,0 +1,28 @@
+{
+  "description": "Worked 3D-vs-projected station table — line from (0,0,0) to (3,4,12). Curve3d arc length differs from PlanXY/Profile plan projection.",
+  "tolerance": 0.0001,
+  "curve": {
+    "type": "line",
+    "start": [0, 0, 0],
+    "end": [3, 4, 12]
+  },
+  "realStations": [0, 2.5, 5.0],
+  "modes": [
+    {
+      "mode": "Curve3d",
+      "totalLength": 13.0,
+      "expectedNormalized": [0.0, 0.1923076923, 0.3846153846]
+    },
+    {
+      "mode": "PlanXY",
+      "totalLength": 5.0,
+      "expectedNormalized": [0.0, 0.5, 1.0]
+    },
+    {
+      "mode": "Profile",
+      "totalLength": 5.0,
+      "expectedNormalized": [0.0, 0.5, 1.0],
+      "expectedElevationsAtNormalized": [0.0, 6.0, 12.0]
+    }
+  ]
+}
