@@ -98,8 +98,20 @@ namespace Progesi.GrasshopperAssembly.Components
       }).ToList();
     }
 
+    private static int NextAxisId(RhinoAxisVariableRepository repo)
+    {
+      var all = repo.GetAllAsync().GetAwaiter().GetResult() ?? Array.Empty<ProgesiAxisVariable>();
+      return all.Count == 0 ? 1 : all.Max(a => a.Id) + 1;
+    }
+
     private static IReadOnlyList<ProgesiAxisVariableDto> GetAllAxisVariables()
-      => new List<ProgesiAxisVariableDto>(); // nessun repo Axis lato Rhino per ora
+    {
+      var doc = RhinoDoc.ActiveDoc ?? throw new InvalidOperationException("RhinoDoc.ActiveDoc is null.");
+      var repo = new RhinoAxisVariableRepository(doc);
+      var varRepo = new RhinoVariableRepository(doc);
+      var list = repo.GetAllAsync().GetAwaiter().GetResult() ?? Array.Empty<ProgesiAxisVariable>();
+      return list.Select(a => RhinoBridgeAxisMapping.ToExchangeDto(a, varRepo)).ToList();
+    }
 
     // ========== UPSERT ==========
     private static (int ins, int upd, int skip) UpsertVariables(IEnumerable<ProgesiVariableDto> dtos)
@@ -165,8 +177,35 @@ namespace Progesi.GrasshopperAssembly.Components
 
     private static (int ins, int upd, int skip) UpsertAxisVariables(IEnumerable<ProgesiAxisVariableDto> dtos)
     {
-      int count = dtos is ICollection<ProgesiAxisVariableDto> c ? c.Count : dtos.Count();
-      return (0, 0, count); // niente repo Axis lato Rhino → tutto skip
+      var doc = RhinoDoc.ActiveDoc ?? throw new InvalidOperationException("RhinoDoc.ActiveDoc is null.");
+      var repo = new RhinoAxisVariableRepository(doc);
+      var varRepo = new RhinoVariableRepository(doc);
+
+      int ins = 0, upd = 0, skip = 0;
+      foreach (var d in dtos)
+      {
+        int id = 0;
+        int.TryParse(d.Id, NumberStyles.Integer, CultureInfo.InvariantCulture, out id);
+        ProgesiAxisVariable? current = id > 0 ? repo.GetByIdAsync(id).GetAwaiter().GetResult() : null;
+
+        if (current != null)
+        {
+          var curHash = ProgesiHash.Compute(current);
+          if (string.Equals(curHash, d.Hash ?? "", StringComparison.OrdinalIgnoreCase))
+          {
+            skip++;
+            continue;
+          }
+          id = 0;
+        }
+
+        if (id <= 0) id = NextAxisId(repo);
+
+        var axis = RhinoBridgeAxisMapping.ToDomain(d, id, varRepo, current);
+        repo.SaveAsync(axis).GetAwaiter().GetResult();
+        if (current == null) ins++; else upd++;
+      }
+      return (ins, upd, skip);
     }
   }
 }
