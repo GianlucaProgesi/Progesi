@@ -85,9 +85,24 @@ namespace ProgesiRepositories.Rhino
 
     public async Task<IReadOnlyList<ProgesiVariable>> GetAllAsync(CancellationToken ct = default)
     {
-      var list = new List<ProgesiVariable>();
-      // Rhino StringTable non espone enumerazione: ritorno lista vuota (comportamento definito)
-      return await Task.FromResult(list);
+      var result = new List<ProgesiVariable>();
+      string[] names = _table.GetEntryNames(VarSection) ?? Array.Empty<string>();
+
+      foreach (var entry in names)
+      {
+        if (string.Equals(entry, "__next__", StringComparison.Ordinal))
+          continue;
+
+        if (!TryParseVariableKey(entry, out var id))
+          continue;
+
+        var variable = await GetByIdAsync(id, ct).ConfigureAwait(false);
+        if (variable != null)
+          result.Add(variable);
+      }
+
+      result.Sort((a, b) => a.Id.CompareTo(b.Id));
+      return result;
     }
 
     public Task<bool> DeleteAsync(int id, CancellationToken ct = default)
@@ -113,6 +128,16 @@ namespace ProgesiRepositories.Rhino
     }
 
     private static string KeyOf(int id) => $"var:{id}";
+
+    private static bool TryParseVariableKey(string key, out int id)
+    {
+      id = 0;
+      const string prefix = "var:";
+      if (!key.StartsWith(prefix, StringComparison.Ordinal))
+        return false;
+
+      return int.TryParse(key.Substring(prefix.Length), out id) && id > 0;
+    }
 
     private void IndexHashtag(string hashtag, int id)
     {
