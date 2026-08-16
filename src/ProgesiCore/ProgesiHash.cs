@@ -184,7 +184,19 @@ namespace ProgesiCore
           s.End,
           Kind = s.Kind.ToString(),
           Constant = s.ConstantValue.HasValue ? s.ConstantValue.Value.ToString(System.Globalization.CultureInfo.InvariantCulture) : string.Empty,
-          Expression = s.Expression ?? string.Empty
+          Expression = s.Expression ?? string.Empty,
+          NurbsDegree = s.Nurbs?.Degree ?? -1,
+          NurbsControlPoints = s.Nurbs == null
+            ? string.Empty
+            : string.Join("|", s.Nurbs.ControlPoints.Select(cp =>
+                cp.X.ToString(System.Globalization.CultureInfo.InvariantCulture) + "," +
+                cp.Value.ToString(System.Globalization.CultureInfo.InvariantCulture))),
+          NurbsWeights = s.Nurbs == null
+            ? string.Empty
+            : string.Join(",", s.Nurbs.Weights.Select(w => w.ToString(System.Globalization.CultureInfo.InvariantCulture))),
+          NurbsKnots = s.Nurbs == null
+            ? string.Empty
+            : string.Join(",", s.Nurbs.Knots.Select(k => k.ToString(System.Globalization.CultureInfo.InvariantCulture)))
         })
         .ToArray();
 
@@ -205,8 +217,14 @@ namespace ProgesiCore
 
       var entries = axis.EnumerateAll()
         .OrderBy(t => t.positionNormalized)
+        .ThenBy(t => t.side)
         .ThenBy(t => t.variableId)
-        .Select(t => new { Position = t.positionNormalized, t.variableId })
+        .Select(t => new { Position = t.positionNormalized, t.variableId, Side = t.side.ToString() })
+        .ToArray();
+
+      var labels = axis.GetLabels()
+        .OrderBy(kv => kv.Key)
+        .Select(kv => new { Position = kv.Key, Label = kv.Value })
         .ToArray();
 
       var keyPoints = (axis.KeyPoints ?? Array.Empty<double>()).OrderBy(x => x).ToArray();
@@ -242,7 +260,8 @@ namespace ProgesiCore
         axis.ValueTypeKey,
         axis.RuleId,
         FunctionRef = functionRef,
-        Entries = entries
+        Entries = entries,
+        Labels = labels
       };
 
       string json = JsonConvert.SerializeObject(payload, JsonSettings) ?? string.Empty;

@@ -39,11 +39,20 @@ namespace ProgesiCore.Serialization
 
     public List<Entry> Entries { get; set; } = new List<Entry>();
 
+    public List<LabelEntry> Labels { get; set; } = new List<LabelEntry>();
+
     public sealed class Entry
     {
       /// <summary>Posizione normalizzata in [0,1].</summary>
       public double Position { get; set; }
       public int VariableId { get; set; }
+      public ProgesiAxisStationSide Side { get; set; } = ProgesiAxisStationSide.None;
+    }
+
+    public sealed class LabelEntry
+    {
+      public double Position { get; set; }
+      public string Label { get; set; } = string.Empty;
     }
 
     public static ProgesiAxisVariableDto FromDomain(ProgesiAxisVariable axis)
@@ -78,7 +87,17 @@ namespace ProgesiCore.Serialization
         dto.Entries.Add(new Entry
         {
           Position = t.positionNormalized,
-          VariableId = t.variableId
+          VariableId = t.variableId,
+          Side = t.side
+        });
+      }
+
+      foreach (var kv in axis.GetLabels())
+      {
+        dto.Labels.Add(new LabelEntry
+        {
+          Position = kv.Key,
+          Label = kv.Value
         });
       }
 
@@ -117,7 +136,16 @@ namespace ProgesiCore.Serialization
           if (double.IsNaN(e.Position) || double.IsInfinity(e.Position))
             throw new ArgumentOutOfRangeException(nameof(e.Position), "Position must be finite.");
           Guard.Against.Negative(e.VariableId, nameof(e.VariableId));
-          axis.AddUnsafe(e.Position, e.VariableId, tol);
+          axis.AddUnsafe(e.Position, e.VariableId, e.Side, tol);
+        }
+      }
+
+      if (dto.Labels != null)
+      {
+        foreach (var label in dto.Labels)
+        {
+          Guard.Against.Null(label, nameof(dto.Labels));
+          axis.SetLabel(label.Position, label.Label, tol);
         }
       }
 
@@ -138,10 +166,10 @@ namespace ProgesiCore.Serialization
       return ProgesiFunctionRef.Empty;
     }
 
-    public IEnumerable<(int AxisId, double Position, int VariableId)> EnumerateFlat()
+    public IEnumerable<(int AxisId, double Position, int VariableId, ProgesiAxisStationSide Side)> EnumerateFlat()
     {
       foreach (var e in Entries)
-        yield return (AxisId, e.Position, e.VariableId);
+        yield return (AxisId, e.Position, e.VariableId, e.Side);
     }
   }
 }

@@ -15,6 +15,7 @@ public sealed class AxisEntity
   public string? FunctionHashtag { get; set; }
   public string FunctionPayload { get; set; } = string.Empty;
   public string StationsJson { get; set; } = "[]";
+  public string LabelsJson { get; set; } = "[]";
   public string ContentHash { get; set; } = string.Empty;
   public string Hashtag { get; set; } = string.Empty;
 }

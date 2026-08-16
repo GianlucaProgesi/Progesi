@@ -61,15 +61,19 @@ internal static class ParityAssertions
 
     var sqliteStations = sqlite.EnumerateAll()
         .OrderBy(t => t.positionNormalized)
+        .ThenBy(t => t.side)
         .ThenBy(t => t.variableId)
-        .Select(t => (t.positionNormalized, t.variableId))
+        .Select(t => (t.positionNormalized, t.variableId, t.side))
         .ToArray();
     var efStations = ef.EnumerateAll()
         .OrderBy(t => t.positionNormalized)
+        .ThenBy(t => t.side)
         .ThenBy(t => t.variableId)
-        .Select(t => (t.positionNormalized, t.variableId))
+        .Select(t => (t.positionNormalized, t.variableId, t.side))
         .ToArray();
     sqliteStations.Should().Equal(efStations);
+
+    sqlite.GetLabels().Should().Equal(ef.GetLabels());
 
     ProgesiHash.Compute(sqlite).Should().Be(ProgesiHash.Compute(ef));
     ProgesiHash.Compute(sqlite).Should().Be(ProgesiHash.Compute(original));

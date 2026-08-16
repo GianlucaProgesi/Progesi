@@ -66,6 +66,7 @@ public sealed class ProgesiDbContext : DbContext
       entity.Property(e => e.KeyPointsJson).IsRequired();
       entity.Property(e => e.FunctionPayload).HasDefaultValue(string.Empty);
       entity.Property(e => e.StationsJson).IsRequired();
+      entity.Property(e => e.LabelsJson).IsRequired().HasDefaultValue("[]");
       entity.Property(e => e.ContentHash).IsRequired();
       entity.Property(e => e.Hashtag).IsRequired();
       entity.HasIndex(e => e.ContentHash).IsUnique();
