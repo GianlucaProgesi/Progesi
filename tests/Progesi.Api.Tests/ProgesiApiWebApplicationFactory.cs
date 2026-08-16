@@ -1,8 +1,5 @@
-using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
-using Microsoft.AspNetCore.TestHost;
-using Microsoft.Extensions.DependencyInjection;
 using Progesi.Api.Projects;
 
 namespace Progesi.Api.Tests;
@@ -22,14 +19,6 @@ public sealed class ProgesiApiWebApplicationFactory : WebApplicationFactory<Prog
     builder.UseSetting("Progesi:DefaultProjectId", DefaultProjectId);
     builder.UseSetting("Progesi:ResetSchemaOnStartup", "true");
     builder.UseSetting("Progesi:UseTestAuthentication", "true");
-
-    builder.ConfigureTestServices(services =>
-    {
-      services.AddAuthentication(TestAuthHandler.SchemeName)
-          .AddScheme<AuthenticationSchemeOptions, TestAuthHandler>(
-              TestAuthHandler.SchemeName,
-              _ => { });
-    });
   }
 
   protected override void Dispose(bool disposing)

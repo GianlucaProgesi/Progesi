@@ -1,6 +1,8 @@
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.Identity.Web;
 using Microsoft.OpenApi.Models;
+using Progesi.Api.Authentication;
 using Progesi.Api.Auth;
 using Progesi.Api.Infrastructure;
 using Progesi.Api.Projects;
@@ -48,8 +50,10 @@ var useTestAuth = builder.Environment.IsDevelopment()
     && builder.Configuration.GetValue<bool>("Progesi:UseTestAuthentication");
 if (useTestAuth)
 {
-  // Integration tests register TestAuthHandler via WebApplicationFactory.ConfigureTestServices.
-  builder.Services.AddAuthentication();
+  builder.Services.AddAuthentication(DevTestAuthHandler.SchemeName)
+      .AddScheme<AuthenticationSchemeOptions, DevTestAuthHandler>(
+          DevTestAuthHandler.SchemeName,
+          _ => { });
 }
 else
 {
