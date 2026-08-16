@@ -134,13 +134,46 @@ namespace ProgesiRepositories.Rhino
       return Task.FromResult(true);
     }
 
-    public Task<IReadOnlyList<ProgesiMetadata>> ListAsync(int skip = 0, int take = 100, CancellationToken ct = default)
+    public async Task<IReadOnlyList<ProgesiMetadata>> ListAsync(int skip = 0, int take = 100, CancellationToken ct = default)
     {
-      IReadOnlyList<ProgesiMetadata> empty = Array.Empty<ProgesiMetadata>();
-      return Task.FromResult(empty);
+      var result = new List<ProgesiMetadata>();
+      string[] names = _table.GetEntryNames(MetaSection) ?? Array.Empty<string>();
+
+      foreach (var entry in names)
+      {
+        if (string.Equals(entry, "__next__", StringComparison.Ordinal))
+          continue;
+
+        if (!TryParseMetadataKey(entry, out var id))
+          continue;
+
+        var meta = await GetAsync(id, ct).ConfigureAwait(false);
+        if (meta != null)
+          result.Add(meta);
+      }
+
+      result.Sort((a, b) => a.Id.CompareTo(b.Id));
+
+      IEnumerable<ProgesiMetadata> page = result;
+      if (skip > 0)
+        page = page.Skip(skip);
+      if (take >= 0)
+        page = page.Take(take);
+
+      return page.ToList();
     }
 
     private static string KeyOf(int id) => $"meta:{id}";
+
+    private static bool TryParseMetadataKey(string key, out int id)
+    {
+      id = 0;
+      const string prefix = "meta:";
+      if (!key.StartsWith(prefix, StringComparison.Ordinal))
+        return false;
+
+      return int.TryParse(key.Substring(prefix.Length), out id) && id > 0;
+    }
 
     private void IndexHashtag(string hashtag, int id)
     {
