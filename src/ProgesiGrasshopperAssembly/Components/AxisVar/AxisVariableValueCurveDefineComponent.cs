@@ -18,7 +18,7 @@ namespace ProgesiGrasshopperAssembly.Components.AxisVar
         "Progesi", "AxisVar")
     { }
 
-    public override Guid ComponentGuid => new Guid("c9d0e1f2-3041-5678-9abc-def012345678");
+    public override Guid ComponentGuid => new Guid("3cc7099d-64e5-478d-9c62-70674b39524f");
     protected override System.Drawing.Bitmap Icon => ProgesiIcons.DataEx;
 
     protected override void RegisterInputParams(GH_InputParamManager p)
