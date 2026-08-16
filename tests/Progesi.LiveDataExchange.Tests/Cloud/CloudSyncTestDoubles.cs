@@ -12,6 +12,9 @@ namespace Progesi.LiveDataExchange.Tests.Cloud
     public IList<CloudVariableRecord> UpsertedVariables { get; } = new List<CloudVariableRecord>();
     public IList<CloudMetadataRecord> UpsertedMetadata { get; } = new List<CloudMetadataRecord>();
     public IList<CloudClusterRecord> UpsertedClusters { get; } = new List<CloudClusterRecord>();
+    public IList<int> DeletedVariables { get; } = new List<int>();
+    public IList<int> DeletedMetadata { get; } = new List<int>();
+    public IList<int> DeletedClusters { get; } = new List<int>();
 
     public Task<CloudSnapshot> GetCloudSnapshotAsync(CancellationToken ct = default)
         => Task.FromResult(CloneSnapshot(Snapshot));
@@ -35,6 +38,49 @@ namespace Progesi.LiveDataExchange.Tests.Cloud
       UpsertedClusters.Add(record);
       UpsertIntoSnapshot(record);
       return Task.CompletedTask;
+    }
+
+    public Task DeleteVariableAsync(int id, CancellationToken ct = default)
+    {
+      DeletedVariables.Add(id);
+      RemoveFromSnapshot(Snapshot.Variables, id);
+      return Task.CompletedTask;
+    }
+
+    public Task DeleteMetadataAsync(int id, CancellationToken ct = default)
+    {
+      DeletedMetadata.Add(id);
+      RemoveFromSnapshot(Snapshot.Metadata, id);
+      return Task.CompletedTask;
+    }
+
+    public Task DeleteClusterAsync(int id, CancellationToken ct = default)
+    {
+      DeletedClusters.Add(id);
+      RemoveFromSnapshot(Snapshot.Clusters, id);
+      return Task.CompletedTask;
+    }
+
+    private static void RemoveFromSnapshot<T>(IList<T> list, int id) where T : class
+    {
+      var existing = list.FirstOrDefault(v => GetId(v) == id);
+      if (existing != null)
+        list.Remove(existing);
+    }
+
+    private static int GetId(object record)
+    {
+      switch (record)
+      {
+        case CloudVariableRecord variable:
+          return variable.Id;
+        case CloudMetadataRecord metadata:
+          return metadata.Id;
+        case CloudClusterRecord cluster:
+          return cluster.Id;
+        default:
+          return 0;
+      }
     }
 
     private void UpsertIntoSnapshot(CloudVariableRecord record)
@@ -89,6 +135,9 @@ namespace Progesi.LiveDataExchange.Tests.Cloud
   {
     public CloudSnapshot Snapshot { get; } = new CloudSnapshot();
     public IList<CloudVariableRecord> AppliedVariables { get; } = new List<CloudVariableRecord>();
+    public IList<int> DeletedVariables { get; } = new List<int>();
+    public IList<int> DeletedMetadata { get; } = new List<int>();
+    public IList<int> DeletedClusters { get; } = new List<int>();
 
     public Task ApplyVariableAsync(CloudVariableRecord record, CancellationToken ct = default)
     {
@@ -123,6 +172,33 @@ namespace Progesi.LiveDataExchange.Tests.Cloud
         Snapshot.Clusters.Add(record);
       else
         existing.ContentHash = record.ContentHash;
+      return Task.CompletedTask;
+    }
+
+    public Task DeleteVariableAsync(int id, CancellationToken ct = default)
+    {
+      DeletedVariables.Add(id);
+      var existing = Snapshot.Variables.FirstOrDefault(v => v.Id == id);
+      if (existing != null)
+        Snapshot.Variables.Remove(existing);
+      return Task.CompletedTask;
+    }
+
+    public Task DeleteMetadataAsync(int id, CancellationToken ct = default)
+    {
+      DeletedMetadata.Add(id);
+      var existing = Snapshot.Metadata.FirstOrDefault(v => v.Id == id);
+      if (existing != null)
+        Snapshot.Metadata.Remove(existing);
+      return Task.CompletedTask;
+    }
+
+    public Task DeleteClusterAsync(int id, CancellationToken ct = default)
+    {
+      DeletedClusters.Add(id);
+      var existing = Snapshot.Clusters.FirstOrDefault(v => v.Id == id);
+      if (existing != null)
+        Snapshot.Clusters.Remove(existing);
       return Task.CompletedTask;
     }
   }

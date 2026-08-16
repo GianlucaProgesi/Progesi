@@ -9,6 +9,9 @@ namespace Progesi.LiveDataExchange.Cloud
     Task UpsertVariableAsync(CloudVariableRecord record, CancellationToken ct = default);
     Task UpsertMetadataAsync(CloudMetadataRecord record, CancellationToken ct = default);
     Task UpsertClusterAsync(CloudClusterRecord record, CancellationToken ct = default);
+    Task DeleteVariableAsync(int id, CancellationToken ct = default);
+    Task DeleteMetadataAsync(int id, CancellationToken ct = default);
+    Task DeleteClusterAsync(int id, CancellationToken ct = default);
   }
 
   public interface ICloudSyncLocalApplier
@@ -16,5 +19,8 @@ namespace Progesi.LiveDataExchange.Cloud
     Task ApplyVariableAsync(CloudVariableRecord record, CancellationToken ct = default);
     Task ApplyMetadataAsync(CloudMetadataRecord record, CancellationToken ct = default);
     Task ApplyClusterAsync(CloudClusterRecord record, CancellationToken ct = default);
+    Task DeleteVariableAsync(int id, CancellationToken ct = default);
+    Task DeleteMetadataAsync(int id, CancellationToken ct = default);
+    Task DeleteClusterAsync(int id, CancellationToken ct = default);
   }
 }
