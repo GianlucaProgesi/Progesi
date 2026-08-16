@@ -15,6 +15,7 @@ namespace Progesi.LiveDataExchange.Cloud
         ISyncStateStore syncState,
         IProgesiCloudClient cloudClient,
         ICloudSyncLocalApplier localApplier,
+        bool propagateDeletions = false,
         CancellationToken ct = default)
     {
       if (local == null) throw new ArgumentNullException(nameof(local));
@@ -31,6 +32,7 @@ namespace Progesi.LiveDataExchange.Cloud
           cloud.Variables.ToDictionary(v => v.Id),
           syncState,
           direction,
+          propagateDeletions,
           result,
           async record =>
           {
@@ -41,6 +43,16 @@ namespace Progesi.LiveDataExchange.Cloud
           {
             await localApplier.ApplyVariableAsync(record, ct).ConfigureAwait(false);
             result.VariablesApplied++;
+          },
+          async id =>
+          {
+            await cloudClient.DeleteVariableAsync(id, ct).ConfigureAwait(false);
+            result.VariablesDeleted++;
+          },
+          async id =>
+          {
+            await localApplier.DeleteVariableAsync(id, ct).ConfigureAwait(false);
+            result.VariablesDeleted++;
           }).ConfigureAwait(false);
 
       await ProcessTypeAsync(
@@ -49,6 +61,7 @@ namespace Progesi.LiveDataExchange.Cloud
           cloud.Metadata.ToDictionary(m => m.Id),
           syncState,
           direction,
+          propagateDeletions,
           result,
           async record =>
           {
@@ -59,6 +72,16 @@ namespace Progesi.LiveDataExchange.Cloud
           {
             await localApplier.ApplyMetadataAsync(record, ct).ConfigureAwait(false);
             result.MetadataApplied++;
+          },
+          async id =>
+          {
+            await cloudClient.DeleteMetadataAsync(id, ct).ConfigureAwait(false);
+            result.MetadataDeleted++;
+          },
+          async id =>
+          {
+            await localApplier.DeleteMetadataAsync(id, ct).ConfigureAwait(false);
+            result.MetadataDeleted++;
           }).ConfigureAwait(false);
 
       await ProcessTypeAsync(
@@ -67,6 +90,7 @@ namespace Progesi.LiveDataExchange.Cloud
           cloud.Clusters.ToDictionary(c => c.Id),
           syncState,
           direction,
+          propagateDeletions,
           result,
           async record =>
           {
@@ -77,6 +101,16 @@ namespace Progesi.LiveDataExchange.Cloud
           {
             await localApplier.ApplyClusterAsync(record, ct).ConfigureAwait(false);
             result.ClustersApplied++;
+          },
+          async id =>
+          {
+            await cloudClient.DeleteClusterAsync(id, ct).ConfigureAwait(false);
+            result.ClustersDeleted++;
+          },
+          async id =>
+          {
+            await localApplier.DeleteClusterAsync(id, ct).ConfigureAwait(false);
+            result.ClustersDeleted++;
           }).ConfigureAwait(false);
 
       return result;
@@ -88,13 +122,21 @@ namespace Progesi.LiveDataExchange.Cloud
         IReadOnlyDictionary<int, TRecord> cloudMap,
         ISyncStateStore syncState,
         CloudSyncDirection direction,
+        bool propagateDeletions,
         CloudSyncResult result,
         Func<TRecord, Task> applyToCloud,
-        Func<TRecord, Task> applyToLocal)
+        Func<TRecord, Task> applyToLocal,
+        Func<int, Task> deleteFromCloud,
+        Func<int, Task> deleteFromLocal)
         where TRecord : class
     {
       var ids = new HashSet<int>(localMap.Keys);
       ids.UnionWith(cloudMap.Keys);
+      if (propagateDeletions)
+      {
+        foreach (var trackedId in syncState.GetTrackedIds(objectType))
+          ids.Add(trackedId);
+      }
 
       foreach (var id in ids.OrderBy(x => x))
       {
@@ -107,9 +149,86 @@ namespace Progesi.LiveDataExchange.Cloud
 
         var localExists = localRecord != null;
         var cloudExists = cloudRecord != null;
+        var baseExisted = !string.IsNullOrEmpty(baseHash);
 
         if (!localExists && !cloudExists)
+        {
+          if (propagateDeletions && baseExisted)
+          {
+            syncState.RemoveLastSyncedHash(objectType, id);
+            result.Skipped++;
+            result.Log.Add(SkipMessage(objectType, id, "converged-deletion"));
+          }
+
           continue;
+        }
+
+        if (propagateDeletions && baseExisted)
+        {
+          if (!localExists && cloudExists)
+          {
+            if (string.Equals(cloudHash, baseHash, StringComparison.Ordinal))
+            {
+              if (direction == CloudSyncDirection.Push)
+              {
+                await deleteFromCloud(id).ConfigureAwait(false);
+                syncState.RemoveLastSyncedHash(objectType, id);
+                result.Log.Add(DeletedMessage(objectType, id, "push"));
+              }
+              else
+              {
+                result.Skipped++;
+                result.Log.Add(SkipMessage(objectType, id, "other-side-only-deletion"));
+              }
+            }
+            else
+            {
+              result.Conflicts.Add(new CloudSyncConflict
+              {
+                ObjectType = objectType,
+                Id = id,
+                LocalHash = string.Empty,
+                CloudHash = cloudHash ?? string.Empty,
+                Kind = CloudSyncConflictKind.DeleteEdit
+              });
+              result.Log.Add(DeleteConflictMessage(objectType, id, localHash, cloudHash));
+            }
+
+            continue;
+          }
+
+          if (localExists && !cloudExists)
+          {
+            if (string.Equals(localHash, baseHash, StringComparison.Ordinal))
+            {
+              if (direction == CloudSyncDirection.Pull)
+              {
+                await deleteFromLocal(id).ConfigureAwait(false);
+                syncState.RemoveLastSyncedHash(objectType, id);
+                result.Log.Add(DeletedMessage(objectType, id, "pull"));
+              }
+              else
+              {
+                result.Skipped++;
+                result.Log.Add(SkipMessage(objectType, id, "other-side-only-deletion"));
+              }
+            }
+            else
+            {
+              result.Conflicts.Add(new CloudSyncConflict
+              {
+                ObjectType = objectType,
+                Id = id,
+                LocalHash = localHash ?? string.Empty,
+                CloudHash = string.Empty,
+                Kind = CloudSyncConflictKind.DeleteEdit
+              });
+              result.Log.Add(DeleteConflictMessage(objectType, id, localHash, cloudHash));
+            }
+
+            continue;
+          }
+        }
 
         var localChanged = localExists && !string.Equals(localHash, baseHash, StringComparison.Ordinal);
         var cloudChanged = cloudExists && !string.Equals(cloudHash, baseHash, StringComparison.Ordinal);
@@ -136,7 +255,8 @@ namespace Progesi.LiveDataExchange.Cloud
             ObjectType = objectType,
             Id = id,
             LocalHash = localHash ?? string.Empty,
-            CloudHash = cloudHash ?? string.Empty
+            CloudHash = cloudHash ?? string.Empty,
+            Kind = CloudSyncConflictKind.EditEdit
           });
           result.Log.Add(ConflictMessage(objectType, id, localHash, cloudHash));
           continue;
@@ -187,7 +307,13 @@ namespace Progesi.LiveDataExchange.Cloud
     private static string AppliedMessage(CloudSyncObjectType type, int id, string direction)
         => type + " " + id + ": applied (" + direction + ").";
 
+    private static string DeletedMessage(CloudSyncObjectType type, int id, string direction)
+        => type + " " + id + ": deleted (" + direction + ").";
+
     private static string ConflictMessage(CloudSyncObjectType type, int id, string localHash, string cloudHash)
         => type + " " + id + ": CONFLICT local=" + localHash + " cloud=" + cloudHash + ".";
+
+    private static string DeleteConflictMessage(CloudSyncObjectType type, int id, string localHash, string cloudHash)
+        => type + " " + id + ": CONFLICT delete-vs-edit local=" + (localHash ?? string.Empty) + " cloud=" + (cloudHash ?? string.Empty) + ".";
   }
 }

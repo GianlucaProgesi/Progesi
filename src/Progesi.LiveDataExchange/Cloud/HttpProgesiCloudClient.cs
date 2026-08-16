@@ -101,6 +101,15 @@ namespace Progesi.LiveDataExchange.Cloud
       return UpsertAsync("/api/clusters", record.Id, payload, ct);
     }
 
+    public Task DeleteVariableAsync(int id, CancellationToken ct = default)
+      => DeleteAsync("/api/variables", id, ct);
+
+    public Task DeleteMetadataAsync(int id, CancellationToken ct = default)
+      => DeleteAsync("/api/metadata", id, ct);
+
+    public Task DeleteClusterAsync(int id, CancellationToken ct = default)
+      => DeleteAsync("/api/clusters", id, ct);
+
     public void Dispose()
     {
       if (_ownsHttpClient)
@@ -118,6 +127,17 @@ namespace Progesi.LiveDataExchange.Cloud
       }
 
       EnsureSuccess(put);
+    }
+
+    private async Task DeleteAsync(string collectionPath, int id, CancellationToken ct)
+    {
+      using (var response = await SendAsync(HttpMethod.Delete, collectionPath + "/" + id, null, ct).ConfigureAwait(false))
+      {
+        if (response.StatusCode == HttpStatusCode.NotFound)
+          return;
+
+        EnsureSuccess(response);
+      }
     }
 
     private async Task<T> GetAsync<T>(string path, CancellationToken ct)

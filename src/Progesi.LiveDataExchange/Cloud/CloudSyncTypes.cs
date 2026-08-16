@@ -12,4 +12,10 @@ namespace Progesi.LiveDataExchange.Cloud
     Metadata = 1,
     Cluster = 2
   }
+
+  public enum CloudSyncConflictKind
+  {
+    EditEdit = 0,
+    DeleteEdit = 1
+  }
 }

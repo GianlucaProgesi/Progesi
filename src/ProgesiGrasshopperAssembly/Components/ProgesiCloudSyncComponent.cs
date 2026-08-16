@@ -39,6 +39,7 @@ namespace ProgesiGrasshopperAssembly.Components
       p.AddTextParameter("ProjectId", "Proj", "Cloud project id (X-Project-Id).", GH_ParamAccess.item, "default");
       p.AddTextParameter("Token", "Token", "Bearer token for cloud auth.", GH_ParamAccess.item, "");
       p.AddTextParameter("TestRole", "TestRole", "Dev-only: X-Test-Roles value, e.g. writer. Leave empty in production.", GH_ParamAccess.item, "");
+      p.AddBooleanParameter("PropagateDeletions", "DelSync", "When true, propagate deletions with three-way safety (default false).", GH_ParamAccess.item, false);
       for (int i = 1; i < Params.Input.Count; i++)
         Params.Input[i].Optional = true;
     }
@@ -58,6 +59,7 @@ namespace ProgesiGrasshopperAssembly.Components
       string projectId = "default";
       string token = string.Empty;
       string testRole = string.Empty;
+      bool propagateDeletions = false;
 
       da.GetData(0, ref run);
       da.GetData(1, ref directionText);
@@ -65,6 +67,7 @@ namespace ProgesiGrasshopperAssembly.Components
       da.GetData(3, ref projectId);
       da.GetData(4, ref token);
       da.GetData(5, ref testRole);
+      da.GetData(6, ref propagateDeletions);
 
       if (!run)
       {
@@ -122,6 +125,7 @@ namespace ProgesiGrasshopperAssembly.Components
               syncState,
               client,
               localApplier,
+              propagateDeletions,
               CancellationToken.None).GetAwaiter().GetResult();
 
           if (result.Conflicts.Count > 0)
@@ -167,6 +171,7 @@ namespace ProgesiGrasshopperAssembly.Components
       return "vars=" + result.VariablesApplied
           + ", meta=" + result.MetadataApplied
           + ", clusters=" + result.ClustersApplied
+          + ", deleted=" + result.TotalDeleted
           + ", skipped=" + result.Skipped
           + ", conflicts=" + result.Conflicts.Count;
     }
@@ -182,6 +187,8 @@ namespace ProgesiGrasshopperAssembly.Components
         sb.Append(conflict.ObjectType)
           .Append(' ')
           .Append(conflict.Id)
+          .Append(' ')
+          .Append(conflict.Kind)
           .Append(": local=")
           .Append(conflict.LocalHash)
           .Append(" cloud=")

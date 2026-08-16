@@ -29,6 +29,24 @@ namespace ProgesiGrasshopperAssembly.Infrastructure.Cloud
       _table.SetString(Section, Key(objectType, id), contentHash ?? string.Empty);
     }
 
+    public void RemoveLastSyncedHash(CloudSyncObjectType objectType, int id)
+    {
+      _table.Delete(Section, Key(objectType, id));
+    }
+
+    public System.Collections.Generic.IEnumerable<int> GetTrackedIds(CloudSyncObjectType objectType)
+    {
+      var prefix = objectType + ":";
+      foreach (var entry in _table.GetEntryNames(Section) ?? System.Array.Empty<string>())
+      {
+        if (!entry.StartsWith(prefix, System.StringComparison.Ordinal))
+          continue;
+
+        if (int.TryParse(entry.Substring(prefix.Length), out var id))
+          yield return id;
+      }
+    }
+
     private static string Key(CloudSyncObjectType objectType, int id)
         => objectType + ":" + id;
   }
@@ -58,6 +76,24 @@ namespace ProgesiGrasshopperAssembly.Infrastructure.Cloud
     {
       var repo = new RhinoVariableClusterRepository(_doc);
       return repo.SaveAsync(CloudSnapshotMapper.ToCluster(record), ct);
+    }
+
+    public Task DeleteVariableAsync(int id, CancellationToken ct = default)
+    {
+      var repo = new RhinoVariableRepository(_doc);
+      return repo.DeleteAsync(id, ct);
+    }
+
+    public Task DeleteMetadataAsync(int id, CancellationToken ct = default)
+    {
+      var repo = new RhinoMetadataRepository(_doc);
+      return repo.DeleteAsync(id, ct);
+    }
+
+    public Task DeleteClusterAsync(int id, CancellationToken ct = default)
+    {
+      var repo = new RhinoVariableClusterRepository(_doc);
+      return repo.DeleteAsync(id, ct);
     }
   }
 }
