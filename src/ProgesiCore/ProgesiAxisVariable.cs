@@ -58,9 +58,13 @@ namespace ProgesiCore
     /// <summary>Alias aligned with Cluster/Metadata naming.</summary>
     public string ContentHash => Hashtag;
 
-    // Single-series map: PositionKey -> set of variable ids
-    private readonly SortedDictionary<PositionKey, HashSet<int>> _map
-      = new SortedDictionary<PositionKey, HashSet<int>>();
+    // Single-series map: (PositionKey, Side) -> set of variable ids
+    private readonly SortedDictionary<StationKey, HashSet<int>> _map
+      = new SortedDictionary<StationKey, HashSet<int>>();
+
+    // Per-station labels (attach to the axis, not the deduped ProgesiVariable)
+    private readonly SortedDictionary<PositionKey, string> _labels
+      = new SortedDictionary<PositionKey, string>();
 
     public ProgesiAxisVariable(
       int id,
@@ -117,30 +121,71 @@ namespace ProgesiCore
     public IReadOnlyDictionary<double, int[]> GetMap(double tol = DefaultTolerance)
     {
       var result = new Dictionary<double, int[]>();
-      foreach (var kv in _map)
-        result[kv.Key.Value] = kv.Value.OrderBy(x => x).ToArray();
+      foreach (var kv in _map.Where(kv => kv.Key.Side == ProgesiAxisStationSide.None))
+        result[kv.Key.Position.Value] = kv.Value.OrderBy(x => x).ToArray();
       return result;
     }
 
-    public IReadOnlyCollection<int> GetAt(double positionNormalized, double tol = DefaultTolerance)
+    public IReadOnlyCollection<int> GetAt(
+      double positionNormalized,
+      ProgesiAxisStationSide side = ProgesiAxisStationSide.None,
+      double tol = DefaultTolerance)
     {
       ValidateNormalizedPosition(positionNormalized);
-      var key = new PositionKey(positionNormalized, tol);
+      var key = new StationKey(new PositionKey(positionNormalized, tol), side);
       return _map.TryGetValue(key, out var set) ? set.OrderBy(x => x).ToArray() : Array.Empty<int>();
     }
 
-    public IEnumerable<(double positionNormalized, int variableId)> EnumerateAll()
+    public IEnumerable<(double positionNormalized, int variableId, ProgesiAxisStationSide side)> EnumerateAll()
     {
       foreach (var inner in _map)
       {
-        var posKey = inner.Key;
+        var stationKey = inner.Key;
         var ids = inner.Value;
         foreach (int vid in ids.OrderBy(x => x))
-          yield return (posKey.Value, vid);
+          yield return (stationKey.Position.Value, vid, stationKey.Side);
       }
     }
 
-    public void Add(ProgesiVariableSignature signature, double positionNormalized, double tol = DefaultTolerance)
+    public IReadOnlyDictionary<double, string> GetLabels(double tol = DefaultTolerance)
+    {
+      var result = new Dictionary<double, string>();
+      foreach (var kv in _labels)
+        result[kv.Key.Value] = kv.Value;
+      return result;
+    }
+
+    public string? GetLabel(double positionNormalized, double tol = DefaultTolerance)
+    {
+      ValidateNormalizedPosition(positionNormalized);
+      var key = new PositionKey(positionNormalized, tol);
+      return _labels.TryGetValue(key, out var label) ? label : null;
+    }
+
+    public void SetLabel(double positionNormalized, string? label, double tol = DefaultTolerance)
+    {
+      ValidateNormalizedPosition(positionNormalized);
+      var key = new PositionKey(positionNormalized, tol);
+      if (string.IsNullOrWhiteSpace(label))
+      {
+        _labels.Remove(key);
+        return;
+      }
+
+      _labels[key] = label.Trim();
+    }
+
+    public bool RemoveLabel(double positionNormalized, double tol = DefaultTolerance)
+    {
+      ValidateNormalizedPosition(positionNormalized);
+      return _labels.Remove(new PositionKey(positionNormalized, tol));
+    }
+
+    public void Add(
+      ProgesiVariableSignature signature,
+      double positionNormalized,
+      ProgesiAxisStationSide side = ProgesiAxisStationSide.None,
+      double tol = DefaultTolerance)
     {
       if (!StringComparer.Ordinal.Equals(signature.Name, Name))
         throw new InvalidOperationException($"Signature.Name '{signature.Name}' does not match axis series Name '{Name}'.");
@@ -148,15 +193,19 @@ namespace ProgesiCore
       if (!StringComparer.Ordinal.Equals(signature.ValueTypeKey, ValueTypeKey))
         throw new InvalidOperationException($"Signature.ValueTypeKey '{signature.ValueTypeKey}' does not match axis series ValueTypeKey '{ValueTypeKey}'.");
 
-      AddUnsafe(positionNormalized, signature.Id, tol);
+      AddUnsafe(positionNormalized, signature.Id, side, tol);
     }
 
-    internal void AddUnsafe(double positionNormalized, int variableId, double tol = DefaultTolerance)
+    internal void AddUnsafe(
+      double positionNormalized,
+      int variableId,
+      ProgesiAxisStationSide side = ProgesiAxisStationSide.None,
+      double tol = DefaultTolerance)
     {
       Guard.Against.Negative(variableId, nameof(variableId));
       ValidateNormalizedPosition(positionNormalized);
 
-      var key = new PositionKey(positionNormalized, tol);
+      var key = new StationKey(new PositionKey(positionNormalized, tol), side);
       if (!_map.TryGetValue(key, out var set))
       {
         set = new HashSet<int>();
@@ -166,19 +215,24 @@ namespace ProgesiCore
       set.Add(variableId);
     }
 
-    public bool Move(double fromPositionNormalized, double toPositionNormalized, int variableId, double tol = DefaultTolerance)
+    public bool Move(
+      double fromPositionNormalized,
+      double toPositionNormalized,
+      int variableId,
+      ProgesiAxisStationSide side = ProgesiAxisStationSide.None,
+      double tol = DefaultTolerance)
     {
       Guard.Against.Negative(variableId, nameof(variableId));
       ValidateNormalizedPosition(fromPositionNormalized);
       ValidateNormalizedPosition(toPositionNormalized);
 
-      var fromKey = new PositionKey(fromPositionNormalized, tol);
+      var fromKey = new StationKey(new PositionKey(fromPositionNormalized, tol), side);
       if (!_map.TryGetValue(fromKey, out var set) || !set.Remove(variableId))
         return false;
 
       if (set.Count == 0) _map.Remove(fromKey);
 
-      var toKey = new PositionKey(toPositionNormalized, tol);
+      var toKey = new StationKey(new PositionKey(toPositionNormalized, tol), side);
       if (!_map.TryGetValue(toKey, out var toSet))
       {
         toSet = new HashSet<int>();
@@ -189,12 +243,16 @@ namespace ProgesiCore
       return true;
     }
 
-    public bool RemoveAt(double positionNormalized, int variableId, double tol = DefaultTolerance)
+    public bool RemoveAt(
+      double positionNormalized,
+      int variableId,
+      ProgesiAxisStationSide side = ProgesiAxisStationSide.None,
+      double tol = DefaultTolerance)
     {
       Guard.Against.Negative(variableId, nameof(variableId));
       ValidateNormalizedPosition(positionNormalized);
 
-      var key = new PositionKey(positionNormalized, tol);
+      var key = new StationKey(new PositionKey(positionNormalized, tol), side);
       if (!_map.TryGetValue(key, out var set)) return false;
 
       bool removed = set.Remove(variableId);
@@ -202,20 +260,23 @@ namespace ProgesiCore
       return removed;
     }
 
-    public void ReplaceMap(IEnumerable<(double positionNormalized, IEnumerable<int> ids)> entries, double tol = DefaultTolerance)
+    public void ReplaceMap(
+      IEnumerable<(double positionNormalized, IEnumerable<int> ids, ProgesiAxisStationSide side)> entries,
+      double tol = DefaultTolerance)
     {
       Guard.Against.Null(entries, nameof(entries));
 
-      var newMap = new SortedDictionary<PositionKey, HashSet<int>>();
+      var newMap = new SortedDictionary<StationKey, HashSet<int>>();
       foreach (var entry in entries)
       {
         double pos = entry.positionNormalized;
         IEnumerable<int> ids = entry.ids;
+        var side = entry.side;
 
         ValidateNormalizedPosition(pos);
         Guard.Against.Null(ids, nameof(entries));
 
-        var key = new PositionKey(pos, tol);
+        var key = new StationKey(new PositionKey(pos, tol), side);
         if (!newMap.TryGetValue(key, out var set))
         {
           set = new HashSet<int>();
@@ -232,6 +293,20 @@ namespace ProgesiCore
       _map.Clear();
       foreach (var kv in newMap)
         _map.Add(kv.Key, kv.Value);
+    }
+
+    public void ReplaceLabels(IEnumerable<(double positionNormalized, string label)> entries, double tol = DefaultTolerance)
+    {
+      Guard.Against.Null(entries, nameof(entries));
+
+      _labels.Clear();
+      foreach (var entry in entries)
+      {
+        ValidateNormalizedPosition(entry.positionNormalized);
+        if (string.IsNullOrWhiteSpace(entry.label))
+          continue;
+        _labels[new PositionKey(entry.positionNormalized, tol)] = entry.label.Trim();
+      }
     }
 
     public void SetRule(int? ruleId)
@@ -325,9 +400,45 @@ namespace ProgesiCore
 
       foreach (var kv in _map)
       {
-        yield return kv.Key.Value;
+        yield return kv.Key.Position.Value;
+        yield return (int)kv.Key.Side;
         foreach (int vid in kv.Value.OrderBy(x => x))
           yield return vid;
+      }
+
+      foreach (var kv in _labels)
+      {
+        yield return kv.Key.Value;
+        yield return kv.Value;
+      }
+    }
+
+    private readonly struct StationKey : IComparable<StationKey>, IEquatable<StationKey>
+    {
+      public PositionKey Position { get; }
+      public ProgesiAxisStationSide Side { get; }
+
+      public StationKey(PositionKey position, ProgesiAxisStationSide side)
+      {
+        Position = position;
+        Side = side;
+      }
+
+      public int CompareTo(StationKey other)
+      {
+        int cmp = Position.CompareTo(other.Position);
+        if (cmp != 0) return cmp;
+        return Side.CompareTo(other.Side);
+      }
+
+      public bool Equals(StationKey other) => Position.Equals(other.Position) && Side == other.Side;
+      public override bool Equals(object obj) => obj is StationKey sk && Equals(sk);
+      public override int GetHashCode()
+      {
+        unchecked
+        {
+          return (Position.GetHashCode() * 397) ^ (int)Side;
+        }
       }
     }
 

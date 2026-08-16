@@ -15,6 +15,13 @@ namespace ProgesiRepositories.Sqlite
     {
       public double Position { get; set; }
       public int VariableId { get; set; }
+      public ProgesiAxisStationSide Side { get; set; } = ProgesiAxisStationSide.None;
+    }
+
+    internal sealed class LabelJsonEntry
+    {
+      public double Position { get; set; }
+      public string Label { get; set; } = string.Empty;
     }
 
     public static ProgesiAxisVariableDto FromDomain(ProgesiAxisVariable axis)
@@ -26,8 +33,9 @@ namespace ProgesiRepositories.Sqlite
     public static string SerializeStations(IEnumerable<ProgesiAxisVariableDto.Entry> entries)
     {
       var payload = entries
-        .Select(e => new StationJsonEntry { Position = e.Position, VariableId = e.VariableId })
+        .Select(e => new StationJsonEntry { Position = e.Position, VariableId = e.VariableId, Side = e.Side })
         .OrderBy(e => e.Position)
+        .ThenBy(e => e.Side)
         .ThenBy(e => e.VariableId)
         .ToArray();
       return JsonConvert.SerializeObject(payload);
@@ -42,7 +50,31 @@ namespace ProgesiRepositories.Sqlite
       return rows.Select(r => new ProgesiAxisVariableDto.Entry
       {
         Position = r.Position,
-        VariableId = r.VariableId
+        VariableId = r.VariableId,
+        Side = r.Side
+      }).ToList();
+    }
+
+    public static string SerializeLabels(IEnumerable<ProgesiAxisVariableDto.LabelEntry> labels)
+    {
+      var payload = labels
+        .Where(l => !string.IsNullOrWhiteSpace(l.Label))
+        .Select(l => new LabelJsonEntry { Position = l.Position, Label = l.Label })
+        .OrderBy(l => l.Position)
+        .ToArray();
+      return JsonConvert.SerializeObject(payload);
+    }
+
+    public static List<ProgesiAxisVariableDto.LabelEntry> DeserializeLabels(string? json)
+    {
+      if (string.IsNullOrWhiteSpace(json))
+        return new List<ProgesiAxisVariableDto.LabelEntry>();
+
+      var rows = JsonConvert.DeserializeObject<LabelJsonEntry[]>(json) ?? Array.Empty<LabelJsonEntry>();
+      return rows.Select(r => new ProgesiAxisVariableDto.LabelEntry
+      {
+        Position = r.Position,
+        Label = r.Label
       }).ToList();
     }
 
@@ -62,13 +94,14 @@ namespace ProgesiRepositories.Sqlite
         FunctionId = reader.IsDBNull(9) ? (int?)null : reader.GetInt32(9),
         FunctionHashtag = reader.IsDBNull(10) ? null : reader.GetString(10),
         FunctionPayload = reader.IsDBNull(11) ? null : reader.GetString(11),
-        ContentHash = reader.IsDBNull(13) ? string.Empty : reader.GetString(13),
-        Entries = DeserializeStations(reader.IsDBNull(12) ? "[]" : reader.GetString(12))
+        ContentHash = reader.IsDBNull(14) ? string.Empty : reader.GetString(14),
+        Entries = DeserializeStations(reader.IsDBNull(12) ? "[]" : reader.GetString(12)),
+        Labels = DeserializeLabels(reader.IsDBNull(13) ? "[]" : reader.GetString(13))
       };
     }
 
     public const string SelectColumns = @"
 Id, AxisName, Name, ValueTypeKey, AxisLength, CurvePayload, Mode, KeyPointsJson,
-RuleId, FunctionId, FunctionHashtag, FunctionPayload, StationsJson, ContentHash, Hashtag";
+RuleId, FunctionId, FunctionHashtag, FunctionPayload, StationsJson, LabelsJson, ContentHash, Hashtag";
   }
 }

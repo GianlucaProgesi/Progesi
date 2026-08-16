@@ -154,6 +154,38 @@ public sealed class EfAxisVariableRepositoryTests : IDisposable
     (await _repo.GetAllAsync()).Should().BeEmpty();
   }
 
+  [Fact]
+  public async Task SaveAsync_RoundTrips_ValueCurve_With_Nurbs_Labels_And_Side()
+  {
+    var nurbs = new ProgesiNurbsPayload(
+      1,
+      new[] { (0.0, 1.0), (1.0, 3.0) },
+      new[] { 1.0, 1.0 },
+      new[] { 0.0, 0.0, 1.0, 1.0 });
+
+    var fn = new ProgesiFunction(1, "value-curve", new[]
+    {
+      new ProgesiFunctionSegment(0.0, 1.0, ProgesiFunctionSegmentKind.Nurbs, nurbs: nurbs)
+    });
+
+    var axis = new ProgesiAxisVariable(8, "Axis-VC", "Thickness", "System.Double", functionRef: ProgesiFunctionRef.Embed(fn));
+    axis.SetLabel(0.0, "Origin");
+    var sigLeft = new ProgesiAxisVariable.ProgesiVariableSignature(11, "Thickness", "System.Double");
+    var sigRight = new ProgesiAxisVariable.ProgesiVariableSignature(12, "Thickness", "System.Double");
+    axis.Add(sigLeft, 0.5, ProgesiAxisStationSide.Left);
+    axis.Add(sigRight, 0.5, ProgesiAxisStationSide.Right);
+
+    await _repo.SaveAsync(axis);
+    var loaded = await _repo.GetByIdAsync(8);
+
+    loaded.Should().NotBeNull();
+    loaded!.FunctionRef.Embedded!.Segments[0].Kind.Should().Be(ProgesiFunctionSegmentKind.Nurbs);
+    loaded.GetLabel(0.0).Should().Be("Origin");
+    loaded.GetAt(0.5, ProgesiAxisStationSide.Left).Should().Contain(11);
+    loaded.GetAt(0.5, ProgesiAxisStationSide.Right).Should().Contain(12);
+    ProgesiHash.Compute(loaded).Should().Be(ProgesiHash.Compute(axis));
+  }
+
   public void Dispose()
   {
     _repo.Dispose();

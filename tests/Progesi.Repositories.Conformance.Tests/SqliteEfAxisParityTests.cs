@@ -71,6 +71,54 @@ public sealed class SqliteEfAxisParityTests
   }
 
   [Fact]
+  public async Task SaveAndRead_ValueCurve_Axis_Produces_Equivalent_Results()
+  {
+    using var stores = new SqliteEfAxisParityStores();
+    var original = MakeValueCurveAxis(11);
+
+    await stores.Sqlite.SaveAsync(original);
+    await stores.Ef.SaveAsync(original);
+
+    var sqliteLoaded = await stores.Sqlite.GetByIdAsync(11);
+    var efLoaded = await stores.Ef.GetByIdAsync(11);
+
+    ParityAssertions.AxisShouldMatch(sqliteLoaded!, efLoaded!, original);
+  }
+
+  private static ProgesiAxisVariable MakeValueCurveAxis(int id)
+  {
+    var nurbs = new ProgesiNurbsPayload(
+      1,
+      new[] { (0.0, 0.0), (1.0, 2.0) },
+      new[] { 1.0, 1.0 },
+      new[] { 0.0, 0.0, 1.0, 1.0 });
+
+    var fn = new ProgesiFunction(1, "parity-curve", new[]
+    {
+      new ProgesiFunctionSegment(0.0, 1.0, ProgesiFunctionSegmentKind.Nurbs, nurbs: nurbs)
+    });
+
+    var axis = new ProgesiAxisVariable(
+      id,
+      "Axis-ValueCurve",
+      "Thickness",
+      "System.Double",
+      50.0,
+      ruleId: 7,
+      curvePayload: "curve-vc",
+      AxisCurveMode.PlanXY,
+      new[] { 0.0, 1.0 },
+      ProgesiFunctionRef.Embed(fn));
+
+    axis.SetLabel(0.0, "A");
+    var sigLeft = new ProgesiAxisVariable.ProgesiVariableSignature(3, "Thickness", "System.Double");
+    var sigRight = new ProgesiAxisVariable.ProgesiVariableSignature(4, "Thickness", "System.Double");
+    axis.Add(sigLeft, 0.5, ProgesiAxisStationSide.Left);
+    axis.Add(sigRight, 0.5, ProgesiAxisStationSide.Right);
+    return axis;
+  }
+
+  [Fact]
   public async Task GetByHashtagAsync_Returns_Equivalent_Axis_On_Both_Providers()
   {
     using var stores = new SqliteEfAxisParityStores();

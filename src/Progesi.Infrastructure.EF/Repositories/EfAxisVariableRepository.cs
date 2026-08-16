@@ -61,6 +61,7 @@ public sealed class EfAxisVariableRepository : IProgesiVariableAxisRepository, I
     entity.FunctionHashtag = dto.FunctionHashtag;
     entity.FunctionPayload = dto.FunctionPayload ?? string.Empty;
     entity.StationsJson = SerializeStations(dto.Entries);
+    entity.LabelsJson = SerializeLabels(dto.Labels);
     entity.ContentHash = hash;
     entity.Hashtag = axis.Hashtag ?? string.Empty;
 
@@ -179,7 +180,8 @@ public sealed class EfAxisVariableRepository : IProgesiVariableAxisRepository, I
       FunctionHashtag = entity.FunctionHashtag,
       FunctionPayload = string.IsNullOrWhiteSpace(entity.FunctionPayload) ? null : entity.FunctionPayload,
       ContentHash = entity.ContentHash,
-      Entries = DeserializeStations(entity.StationsJson)
+      Entries = DeserializeStations(entity.StationsJson),
+      Labels = DeserializeLabels(entity.LabelsJson)
     };
 
     return ProgesiAxisVariableDto.ToDomain(dto);
@@ -189,13 +191,21 @@ public sealed class EfAxisVariableRepository : IProgesiVariableAxisRepository, I
   {
     public double Position { get; set; }
     public int VariableId { get; set; }
+    public ProgesiAxisStationSide Side { get; set; } = ProgesiAxisStationSide.None;
+  }
+
+  private sealed class LabelJsonEntry
+  {
+    public double Position { get; set; }
+    public string Label { get; set; } = string.Empty;
   }
 
   private static string SerializeStations(IEnumerable<ProgesiAxisVariableDto.Entry> entries)
   {
     var payload = entries
-      .Select(e => new StationJsonEntry { Position = e.Position, VariableId = e.VariableId })
+      .Select(e => new StationJsonEntry { Position = e.Position, VariableId = e.VariableId, Side = e.Side })
       .OrderBy(e => e.Position)
+      .ThenBy(e => e.Side)
       .ThenBy(e => e.VariableId)
       .ToArray();
     return JsonConvert.SerializeObject(payload);
@@ -210,7 +220,31 @@ public sealed class EfAxisVariableRepository : IProgesiVariableAxisRepository, I
     return rows.Select(r => new ProgesiAxisVariableDto.Entry
     {
       Position = r.Position,
-      VariableId = r.VariableId
+      VariableId = r.VariableId,
+      Side = r.Side
+    }).ToList();
+  }
+
+  private static string SerializeLabels(IEnumerable<ProgesiAxisVariableDto.LabelEntry> labels)
+  {
+    var payload = labels
+      .Where(l => !string.IsNullOrWhiteSpace(l.Label))
+      .Select(l => new LabelJsonEntry { Position = l.Position, Label = l.Label })
+      .OrderBy(l => l.Position)
+      .ToArray();
+    return JsonConvert.SerializeObject(payload);
+  }
+
+  private static List<ProgesiAxisVariableDto.LabelEntry> DeserializeLabels(string? json)
+  {
+    if (string.IsNullOrWhiteSpace(json))
+      return new List<ProgesiAxisVariableDto.LabelEntry>();
+
+    var rows = JsonConvert.DeserializeObject<LabelJsonEntry[]>(json) ?? Array.Empty<LabelJsonEntry>();
+    return rows.Select(r => new ProgesiAxisVariableDto.LabelEntry
+    {
+      Position = r.Position,
+      Label = r.Label
     }).ToList();
   }
 }

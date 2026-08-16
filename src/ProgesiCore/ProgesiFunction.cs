@@ -11,7 +11,8 @@ namespace ProgesiCore
   {
     Constant = 0,
     Expression = 1,
-    Undefined = 2
+    Undefined = 2,
+    Nurbs = 3
   }
 
   /// <summary>
@@ -24,13 +25,15 @@ namespace ProgesiCore
     public ProgesiFunctionSegmentKind Kind { get; }
     public double? ConstantValue { get; }
     public string? Expression { get; }
+    public ProgesiNurbsPayload? Nurbs { get; }
 
     public ProgesiFunctionSegment(
       double start,
       double end,
       ProgesiFunctionSegmentKind kind,
       double? constantValue = null,
-      string? expression = null)
+      string? expression = null,
+      ProgesiNurbsPayload? nurbs = null)
     {
       ValidateInterval(start, end);
       Start = start;
@@ -44,16 +47,26 @@ namespace ProgesiCore
             throw new ArgumentException("Constant segment requires constantValue.", nameof(constantValue));
           ConstantValue = constantValue.Value;
           Expression = null;
+          Nurbs = null;
           break;
         case ProgesiFunctionSegmentKind.Expression:
           if (string.IsNullOrWhiteSpace(expression))
             throw new ArgumentException("Expression segment requires expression.", nameof(expression));
           ConstantValue = null;
           Expression = expression.Trim();
+          Nurbs = null;
           break;
         case ProgesiFunctionSegmentKind.Undefined:
           ConstantValue = null;
           Expression = null;
+          Nurbs = null;
+          break;
+        case ProgesiFunctionSegmentKind.Nurbs:
+          if (nurbs == null)
+            throw new ArgumentException("Nurbs segment requires nurbs payload.", nameof(nurbs));
+          ConstantValue = null;
+          Expression = null;
+          Nurbs = nurbs;
           break;
         default:
           throw new ArgumentOutOfRangeException(nameof(kind));
@@ -85,6 +98,8 @@ namespace ProgesiCore
           return null;
         case ProgesiFunctionSegmentKind.Expression:
           return ProgesiFunctionExpressionEvaluator.Evaluate(Expression!, normalizedPosition);
+        case ProgesiFunctionSegmentKind.Nurbs:
+          return ProgesiNurbsEvaluator.EvaluateAtX(Nurbs!, normalizedPosition);
         default:
           return null;
       }
@@ -97,6 +112,8 @@ namespace ProgesiCore
       yield return Kind;
       yield return ConstantValue.HasValue ? ConstantValue.Value : double.NaN;
       yield return Expression ?? string.Empty;
+      if (Nurbs != null)
+        yield return Nurbs;
     }
   }
 
@@ -191,6 +208,16 @@ namespace ProgesiCore
         public ProgesiFunctionSegmentKind Kind { get; set; }
         public double? ConstantValue { get; set; }
         public string? Expression { get; set; }
+        public int? Degree { get; set; }
+        public List<ControlPointDto>? ControlPoints { get; set; }
+        public List<double>? Weights { get; set; }
+        public List<double>? Knots { get; set; }
+      }
+
+      internal sealed class ControlPointDto
+      {
+        public double X { get; set; }
+        public double Value { get; set; }
       }
 
       public static ProgesiFunctionSerializationDto FromDomain(ProgesiFunction function)
@@ -205,7 +232,13 @@ namespace ProgesiCore
             End = s.End,
             Kind = s.Kind,
             ConstantValue = s.ConstantValue,
-            Expression = s.Expression
+            Expression = s.Expression,
+            Degree = s.Nurbs?.Degree,
+            ControlPoints = s.Nurbs?.ControlPoints
+              .Select(cp => new ControlPointDto { X = cp.X, Value = cp.Value })
+              .ToList(),
+            Weights = s.Nurbs?.Weights.ToList(),
+            Knots = s.Nurbs?.Knots.ToList()
           }).ToList()
         };
       }
@@ -213,7 +246,21 @@ namespace ProgesiCore
       public ProgesiFunction ToDomain()
       {
         var segments = Segments.Select(s =>
-          new ProgesiFunctionSegment(s.Start, s.End, s.Kind, s.ConstantValue, s.Expression));
+        {
+          ProgesiNurbsPayload? nurbs = null;
+          if (s.Kind == ProgesiFunctionSegmentKind.Nurbs)
+          {
+            if (!s.Degree.HasValue || s.ControlPoints == null || s.Weights == null || s.Knots == null)
+              throw new FormatException("Nurbs segment requires Degree, ControlPoints, Weights, and Knots.");
+            nurbs = new ProgesiNurbsPayload(
+              s.Degree.Value,
+              s.ControlPoints.Select(cp => (cp.X, cp.Value)),
+              s.Weights,
+              s.Knots);
+          }
+
+          return new ProgesiFunctionSegment(s.Start, s.End, s.Kind, s.ConstantValue, s.Expression, nurbs);
+        });
         return new ProgesiFunction(Id, Name, segments);
       }
     }

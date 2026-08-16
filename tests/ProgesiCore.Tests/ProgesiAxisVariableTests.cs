@@ -123,9 +123,9 @@ namespace ProgesiCore.Tests
       var sig1 = new ProgesiAxisVariable.ProgesiVariableSignature(1, "Thickness", "System.Double");
       var sig2 = new ProgesiAxisVariable.ProgesiVariableSignature(2, "Thickness", "System.Double");
       double tol = ProgesiAxisVariable.DefaultTolerance;
-      sut.Add(sig1, 0.5, tol);
-      sut.Add(sig2, 0.5 + tol * 0.4, tol);
-      var at = sut.GetAt(0.5, tol).OrderBy(x => x).ToArray();
+      sut.Add(sig1, 0.5, ProgesiAxisStationSide.None, tol);
+      sut.Add(sig2, 0.5 + tol * 0.4, ProgesiAxisStationSide.None, tol);
+      var at = sut.GetAt(0.5, ProgesiAxisStationSide.None, tol).OrderBy(x => x).ToArray();
       Assert.Equal(new[] { 1, 2 }, at);
     }
 

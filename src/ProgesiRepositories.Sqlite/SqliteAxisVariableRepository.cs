@@ -49,6 +49,7 @@ CREATE TABLE Axis (
     FunctionHashtag TEXT NULL,
     FunctionPayload TEXT NOT NULL DEFAULT '',
     StationsJson    TEXT NOT NULL DEFAULT '[]',
+    LabelsJson      TEXT NOT NULL DEFAULT '[]',
     ContentHash     TEXT NOT NULL,
     Hashtag         TEXT NOT NULL DEFAULT ''
 );";
@@ -72,6 +73,7 @@ CREATE TABLE IF NOT EXISTS Axis (
     FunctionHashtag TEXT NULL,
     FunctionPayload TEXT NOT NULL DEFAULT '',
     StationsJson    TEXT NOT NULL DEFAULT '[]',
+    LabelsJson      TEXT NOT NULL DEFAULT '[]',
     ContentHash     TEXT NOT NULL,
     Hashtag         TEXT NOT NULL DEFAULT ''
 );";
@@ -85,6 +87,7 @@ CREATE TABLE IF NOT EXISTS Axis (
           AddColumnIfMissing(conn, "Axis", "FunctionHashtag", "TEXT NULL");
           AddColumnIfMissing(conn, "Axis", "FunctionPayload", "TEXT NOT NULL DEFAULT ''");
           AddColumnIfMissing(conn, "Axis", "StationsJson", "TEXT NOT NULL DEFAULT '[]'");
+          AddColumnIfMissing(conn, "Axis", "LabelsJson", "TEXT NOT NULL DEFAULT '[]'");
           AddColumnIfMissing(conn, "Axis", "ContentHash", "TEXT NOT NULL DEFAULT ''");
           AddColumnIfMissing(conn, "Axis", "Hashtag", "TEXT NOT NULL DEFAULT ''");
         }
@@ -115,6 +118,7 @@ CREATE TABLE IF NOT EXISTS Axis (
         var hash = ProgesiHash.Compute(axis);
         var dto = AxisPersistenceMapping.FromDomain(axis);
         var stationsJson = AxisPersistenceMapping.SerializeStations(dto.Entries);
+        var labelsJson = AxisPersistenceMapping.SerializeLabels(dto.Labels);
         var keyPointsJson = JsonConvert.SerializeObject(dto.KeyPoints ?? new List<double>());
         var hashtag = axis.Hashtag ?? string.Empty;
 
@@ -142,10 +146,10 @@ CREATE TABLE IF NOT EXISTS Axis (
           cmd.CommandText = @"
 INSERT INTO Axis (
   Id, AxisName, Name, ValueTypeKey, AxisLength, CurvePayload, Mode, KeyPointsJson,
-  RuleId, FunctionId, FunctionHashtag, FunctionPayload, StationsJson, ContentHash, Hashtag)
+  RuleId, FunctionId, FunctionHashtag, FunctionPayload, StationsJson, LabelsJson, ContentHash, Hashtag)
 VALUES (
   $id, $axisName, $name, $valueTypeKey, $axisLength, $curvePayload, $mode, $keyPointsJson,
-  $ruleId, $functionId, $functionHashtag, $functionPayload, $stationsJson, $h, $tag)
+  $ruleId, $functionId, $functionHashtag, $functionPayload, $stationsJson, $labelsJson, $h, $tag)
 ON CONFLICT(Id) DO UPDATE SET
   AxisName=excluded.AxisName,
   Name=excluded.Name,
@@ -159,6 +163,7 @@ ON CONFLICT(Id) DO UPDATE SET
   FunctionHashtag=excluded.FunctionHashtag,
   FunctionPayload=excluded.FunctionPayload,
   StationsJson=excluded.StationsJson,
+  LabelsJson=excluded.LabelsJson,
   ContentHash=excluded.ContentHash,
   Hashtag=excluded.Hashtag;";
           cmd.Parameters.AddWithValue("$id", axis.Id);
@@ -174,6 +179,7 @@ ON CONFLICT(Id) DO UPDATE SET
           cmd.Parameters.AddWithValue("$functionHashtag", (object?)dto.FunctionHashtag ?? DBNull.Value);
           cmd.Parameters.AddWithValue("$functionPayload", dto.FunctionPayload ?? string.Empty);
           cmd.Parameters.AddWithValue("$stationsJson", stationsJson);
+          cmd.Parameters.AddWithValue("$labelsJson", labelsJson);
           cmd.Parameters.AddWithValue("$h", hash);
           cmd.Parameters.AddWithValue("$tag", hashtag);
           await cmd.ExecuteNonQueryAsync(ct);
