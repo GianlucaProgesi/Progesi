@@ -12,7 +12,7 @@ using Rhino.Geometry;
 
 namespace ProgesiGrasshopperAssembly.Infrastructure.AxisVar
 {
-  internal static class AxisVarGhSupport
+  public static class AxisVarGhSupport
   {
     internal static bool TryGetRun(IGH_DataAccess da, GH_Component owner, out bool run)
     {
@@ -68,41 +68,104 @@ namespace ProgesiGrasshopperAssembly.Infrastructure.AxisVar
       int inputIndex,
       GH_Component owner,
       RhinoAxisVariableRepository repo,
-      out ProgesiAxisVariable axis)
+      out ProgesiAxisVariable axis,
+      int? optionalIdInputIndex = null)
     {
       axis = null!;
       object? input = null;
-      if (!da.GetData(inputIndex, ref input))
+      bool hasAxisInput = da.GetData(inputIndex, ref input);
+
+      if (hasAxisInput && input != null)
       {
-        owner.AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "Axis input is required.");
+        if (TryUnwrapHandle(input, owner, out var handle))
+        {
+          axis = handle.Axis;
+          return true;
+        }
+
+        if (input is GH_Integer ghInt)
+          input = ghInt.Value;
+        else if (input is IGH_Goo gooInt && gooInt.CastTo(out int idFromAxis))
+          input = idFromAxis;
+
+        if (input is int axisIdFromInput && axisIdFromInput > 0)
+        {
+          var loadedFromAxis = repo.GetByIdAsync(axisIdFromInput).GetAwaiter().GetResult();
+          if (loadedFromAxis == null)
+          {
+            owner.AddRuntimeMessage(GH_RuntimeMessageLevel.Error, $"Axis id {axisIdFromInput} not found.");
+            return false;
+          }
+          axis = loadedFromAxis;
+          return true;
+        }
+
+        owner.AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "Axis input is not an AxisVarHandle or positive Id.");
         return false;
       }
 
-      if (TryUnwrapHandle(input, owner, out var handle))
+      if (optionalIdInputIndex.HasValue)
       {
-        axis = handle.Axis;
-        return true;
-      }
-
-      if (input is GH_Integer ghInt)
-        input = ghInt.Value;
-      else if (input is IGH_Goo gooInt && gooInt.CastTo(out int id))
-        input = id;
-
-      if (input is int axisId && axisId > 0)
-      {
-        var loaded = repo.GetByIdAsync(axisId).GetAwaiter().GetResult();
-        if (loaded == null)
+        int id = 0;
+        if (da.GetData(optionalIdInputIndex.Value, ref id) && id > 0)
         {
-          owner.AddRuntimeMessage(GH_RuntimeMessageLevel.Error, $"Axis id {axisId} not found.");
-          return false;
+          var loaded = repo.GetByIdAsync(id).GetAwaiter().GetResult();
+          if (loaded == null)
+          {
+            owner.AddRuntimeMessage(GH_RuntimeMessageLevel.Error, $"Axis id {id} not found.");
+            return false;
+          }
+          axis = loaded;
+          return true;
         }
-        axis = loaded;
-        return true;
       }
 
-      owner.AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "Axis input must be an AxisVarHandle or positive Id.");
+      owner.AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "Axis handle or positive Id is required.");
       return false;
+    }
+
+    public static double FloorToNormalizedStep(double norm, IReadOnlyList<double> keyPoints)
+    {
+      if (keyPoints == null || keyPoints.Count == 0)
+        return norm;
+      double best = keyPoints[0];
+      foreach (var kp in keyPoints)
+      {
+        if (kp <= norm + ProgesiAxisVariable.DefaultTolerance)
+          best = kp;
+        else
+          break;
+      }
+      return best;
+    }
+
+    public static object? EvaluateStepValue(ProgesiAxisVariable axis, double normalizedStation)
+    {
+      var stepPos = FloorToNormalizedStep(normalizedStation, axis.KeyPoints);
+      var label = axis.GetLabel(stepPos);
+      if (label != null)
+        return label;
+
+      foreach (var kv in axis.GetLabels().OrderByDescending(x => x.Key))
+      {
+        if (kv.Key <= normalizedStation + ProgesiAxisVariable.DefaultTolerance)
+          return kv.Value;
+      }
+
+      return string.Empty;
+    }
+
+    public static int ResolveDefineAxisId(
+      RhinoAxisVariableRepository repo,
+      string axisName,
+      string curvePayload,
+      ProgesiCore.AxisCurveMode mode,
+      string name,
+      string valueTypeKey,
+      IReadOnlyList<double> keyPoints)
+    {
+      var existing = repo.FindByDefineSignature(axisName, curvePayload, mode, name, valueTypeKey, keyPoints);
+      return existing?.Id ?? NextAxisId(repo);
     }
 
     internal static ProgesiCore.AxisCurveMode ParseMode(int modeInt)
@@ -185,13 +248,14 @@ namespace ProgesiGrasshopperAssembly.Infrastructure.AxisVar
       out IReadOnlyList<double>? normalizedStations,
       out IReadOnlyList<double>? realStations,
       IReadOnlyList<double>? values = null,
-      IReadOnlyList<int>? variableIds = null)
+      IReadOnlyList<int>? variableIds = null,
+      int? optionalIdInputIndex = null)
     {
       handle = null;
       normalizedStations = null;
       realStations = null;
 
-      if (!TryLoadAxis(da, axisInputIndex, owner, repo, out var axis))
+      if (!TryLoadAxis(da, axisInputIndex, owner, repo, out var axis, optionalIdInputIndex))
         return false;
 
       if (!TryDecodeCurve(axis, owner, out var curve) || curve == null)

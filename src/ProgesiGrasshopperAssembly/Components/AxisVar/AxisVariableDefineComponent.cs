@@ -69,7 +69,15 @@ namespace ProgesiGrasshopperAssembly.Components.AxisVar
         var mode = AxisVarGhSupport.ParseMode(modeInt);
         var mapper = AxisVarGhSupport.CreateMapper(curve, mode);
         var payload = ProgesiGeometryValueCodec.Encode(curve);
-        int id = AxisVarGhSupport.NextAxisId(repo);
+        var keyPoints = new[] { 0.0, 1.0 };
+        int id = AxisVarGhSupport.ResolveDefineAxisId(
+          repo,
+          axisName ?? "AXIS",
+          payload,
+          mode,
+          name ?? "Thickness",
+          valueTypeKey ?? "System.Double",
+          keyPoints);
 
         var axis = new ProgesiAxisVariable(
           id,
@@ -79,7 +87,7 @@ namespace ProgesiGrasshopperAssembly.Components.AxisVar
           mapper.TotalLength,
           curvePayload: payload,
           mode: mode,
-          keyPoints: new[] { 0.0, 1.0 });
+          keyPoints: keyPoints);
 
         var handle = AxisVarGhSupport.SaveAxis(repo, axis);
         da.SetData(0, new Grasshopper.Kernel.Types.GH_ObjectWrapper(handle));

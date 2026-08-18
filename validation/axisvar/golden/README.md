@@ -12,3 +12,7 @@ Worked example: 3D line from `(0,0,0)` to `(3,4,12)`.
 Real stations `[0, 2.5, 5.0]` normalize differently in Curve3d vs projected modes — the golden test asserts mapper output matches this table to tolerance.
 
 Consumed by `StationTableGoldenTests` in `ProgesiRepositories.Rhino.Tests` (Rhino-native; requires hosted runner with Rhino 8 on PATH).
+
+## equal-segments-n10.json
+
+N=10 equal segments on a 100-unit line → 11 normalized stations at `i/10` and real stations at `i*10` for `i=0..10`.

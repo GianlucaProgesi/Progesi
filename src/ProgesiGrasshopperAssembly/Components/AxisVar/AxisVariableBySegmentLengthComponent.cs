@@ -20,8 +20,11 @@ namespace ProgesiGrasshopperAssembly.Components.AxisVar
     protected override void RegisterInputParams(GH_InputParamManager p)
     {
       p.AddBooleanParameter("Run", "Run", "Execute", GH_ParamAccess.item, false);
-      p.AddGenericParameter("Axis", "Ax", "Axis handle or Id.", GH_ParamAccess.item);
+      p.AddGenericParameter("Axis", "Ax", "Axis handle (optional when Id is set).", GH_ParamAccess.item);
       p.AddNumberParameter("SegmentLength", "L", "Real spacing along the abscissa.", GH_ParamAccess.item, 1.0);
+      p.AddIntegerParameter("Id", "Id", "Persisted axis Id (when Axis is unwired).", GH_ParamAccess.item);
+      Params.Input[1].Optional = true;
+      Params.Input[3].Optional = true;
     }
 
     protected override void RegisterOutputParams(GH_OutputParamManager p)
@@ -48,7 +51,8 @@ namespace ProgesiGrasshopperAssembly.Components.AxisVar
       if (!AxisVarGhSupport.TryApplyVariation(
             da, 1, this, repo,
             new BySegmentLengthStrategy(segmentLength),
-            out var handle, out var normalized, out var real))
+            out var handle, out var normalized, out var real,
+            optionalIdInputIndex: 3))
         return;
 
       da.SetData(0, new Grasshopper.Kernel.Types.GH_ObjectWrapper(handle));

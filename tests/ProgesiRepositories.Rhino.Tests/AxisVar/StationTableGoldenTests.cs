@@ -70,5 +70,34 @@ namespace ProgesiRepositories.Rhino.Tests.AxisVar
         }
       }
     }
+
+    [Fact]
+    public void Golden_EqualSegments_N10_Yields_N_Plus_One_Stations()
+    {
+      RhinoTestBootstrap.Require();
+
+      var goldenPath = Path.Combine(RepoRoot(), "validation", "axisvar", "golden", "equal-segments-n10.json");
+      File.Exists(goldenPath).Should().BeTrue("golden fixture must exist at validation/axisvar/golden/equal-segments-n10.json");
+
+      var json = JObject.Parse(File.ReadAllText(goldenPath));
+      double tol = json.Value<double>("tolerance");
+      int n = json.Value<int>("segmentCount");
+      double axisLength = json.Value<double>("axisLength");
+      var expectedNorm = json["expectedNormalized"]!.ToObject<double[]>()!;
+      var expectedReal = json["expectedReal"]!.ToObject<double[]>()!;
+
+      var line = new LineCurve(new Point3d(0, 0, 0), new Point3d(axisLength, 0, 0));
+      var mapper = new CurveParameterMapper(line, ProgesiCore.AxisCurveMode.Curve3d);
+      var actualNorm = StationFactory.Create(new ByEqualSegmentsStrategy(n), mapper).ToArray();
+
+      actualNorm.Should().HaveSameCount(expectedNorm);
+      for (int i = 0; i < expectedNorm.Length; i++)
+        actualNorm[i].Should().BeApproximately(expectedNorm[i], tol, $"normalized station {i}");
+
+      var actualReal = actualNorm.Select(s => mapper.NormalizedToReal(s)).ToArray();
+      actualReal.Should().HaveSameCount(expectedReal);
+      for (int i = 0; i < expectedReal.Length; i++)
+        actualReal[i].Should().BeApproximately(expectedReal[i], tol, $"real station {i}");
+    }
   }
 }

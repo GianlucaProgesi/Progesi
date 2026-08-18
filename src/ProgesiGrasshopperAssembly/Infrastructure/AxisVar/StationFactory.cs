@@ -40,15 +40,15 @@ namespace ProgesiGrasshopperAssembly.Infrastructure.AxisVar
 
     public ByEqualSegmentsStrategy(int count)
     {
-      if (count < 2) throw new ArgumentOutOfRangeException(nameof(count), "Segment count must be >= 2.");
+      if (count < 1) throw new ArgumentOutOfRangeException(nameof(count), "Segment count must be >= 1.");
       _count = count;
     }
 
     public IReadOnlyList<double> CreateNormalizedStations(CurveParameterMapper mapper)
     {
       if (mapper == null) throw new ArgumentNullException(nameof(mapper));
-      return Enumerable.Range(0, _count)
-        .Select(i => i / (double)(_count - 1))
+      return Enumerable.Range(0, _count + 1)
+        .Select(i => i / (double)_count)
         .ToList();
     }
   }

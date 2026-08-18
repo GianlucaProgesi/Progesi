@@ -26,7 +26,10 @@ namespace ProgesiGrasshopperAssembly.Components.AxisVar
     protected override void RegisterInputParams(GH_InputParamManager p)
     {
       p.AddBooleanParameter("Run", "Run", "Execute", GH_ParamAccess.item, false);
-      p.AddGenericParameter("Axis", "Ax", "Axis handle or Id.", GH_ParamAccess.item);
+      p.AddGenericParameter("Axis", "Ax", "Axis handle (optional when Id is set).", GH_ParamAccess.item);
+      p.AddIntegerParameter("Id", "Id", "Persisted axis Id (when Axis is unwired).", GH_ParamAccess.item);
+      Params.Input[1].Optional = true;
+      Params.Input[2].Optional = true;
     }
 
     protected override void RegisterOutputParams(GH_OutputParamManager p)
@@ -40,6 +43,9 @@ namespace ProgesiGrasshopperAssembly.Components.AxisVar
       p.AddTextParameter("Labels", "Lb", "Labels (pos;label pairs).", GH_ParamAccess.item);
       p.AddCurveParameter("Curve", "C", "3D axis curve.", GH_ParamAccess.item);
       p.AddTextParameter("Hash", "H", "Content hash.", GH_ParamAccess.item);
+      p.AddIntegerParameter("VariableIds", "Vid", "ProgesiVariable ids per station.", GH_ParamAccess.list);
+      p.AddGenericParameter("Values", "V", "ProgesiVariable values per station.", GH_ParamAccess.list);
+      // TODO(B3c): expose PlaneService UVW + true-vertical frames on Out
     }
 
     protected override void SolveInstance(IGH_DataAccess da)
@@ -52,7 +58,7 @@ namespace ProgesiGrasshopperAssembly.Components.AxisVar
       var repo = AxisVarGhSupport.TryGetAxisRepo(this, doc);
       if (repo == null) return;
 
-      if (!AxisVarGhSupport.TryLoadAxis(da, 1, this, repo, out var axis))
+      if (!AxisVarGhSupport.TryLoadAxis(da, 1, this, repo, out var axis, optionalIdInputIndex: 2))
         return;
 
       if (!AxisVarGhSupport.TryDecodeCurve(axis, this, out var curve) || curve == null)
@@ -70,6 +76,22 @@ namespace ProgesiGrasshopperAssembly.Components.AxisVar
           .OrderBy(kv => kv.Key)
           .Select(kv => kv.Key.ToString("R", CultureInfo.InvariantCulture) + ";" + kv.Value);
 
+        var entries = axis.EnumerateAll()
+          .OrderBy(e => e.positionNormalized)
+          .ThenBy(e => e.side)
+          .ThenBy(e => e.variableId)
+          .ToList();
+
+        var varRepo = new RhinoVariableRepository(doc);
+        var variableIds = new List<int>();
+        var values = new List<object?>();
+        foreach (var entry in entries)
+        {
+          variableIds.Add(entry.variableId);
+          var variable = varRepo.GetByIdAsync(entry.variableId).GetAwaiter().GetResult();
+          values.Add(variable?.Value);
+        }
+
         da.SetData(0, axis.Id);
         da.SetData(1, axis.AxisName);
         da.SetData(2, axis.Name);
@@ -79,6 +101,8 @@ namespace ProgesiGrasshopperAssembly.Components.AxisVar
         da.SetData(6, string.Join("|", labelPairs));
         da.SetData(7, curve);
         da.SetData(8, axis.ContentHash);
+        da.SetDataList(9, variableIds);
+        da.SetDataList(10, values);
       }
       catch (Exception ex)
       {

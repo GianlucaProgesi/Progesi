@@ -25,8 +25,14 @@ namespace ProgesiRepositories.Rhino
       var nurbs = new NurbsCurve(3, true, order, points.Count);
       for (int i = 0; i < points.Count; i++)
         nurbs.Points[i] = new ControlPoint(points[i], payload.Weights[i]);
-      for (int i = 0; i < payload.Knots.Count; i++)
-        nurbs.Knots[i] = payload.Knots[i];
+
+      // Payload knots are standard (cp + degree + 1); Rhino stores interior only (cp + degree - 1).
+      int interiorCount = nurbs.Knots.Count;
+      if (payload.Knots.Count != interiorCount + 2)
+        throw new InvalidOperationException(
+          $"Payload knot count {payload.Knots.Count} does not match expected {interiorCount + 2} (interior + 2 end knots).");
+      for (int i = 0; i < interiorCount; i++)
+        nurbs.Knots[i] = payload.Knots[i + 1];
 
       if (!nurbs.IsValid)
         throw new InvalidOperationException("Failed to create NurbsCurve from payload.");
@@ -52,6 +58,11 @@ namespace ProgesiRepositories.Rhino
       var knots = new List<double>();
       for (int i = 0; i < nurbs.Knots.Count; i++)
         knots.Add(nurbs.Knots[i]);
+      if (knots.Count > 0)
+      {
+        knots.Insert(0, knots[0]);
+        knots.Add(knots[knots.Count - 1]);
+      }
       int degree = nurbs.Degree;
 
       if (!IsMonotonicInX(cps) && !repairNonMonotonic)

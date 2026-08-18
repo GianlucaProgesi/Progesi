@@ -24,13 +24,16 @@ namespace ProgesiGrasshopperAssembly.Components.AxisVar
     protected override void RegisterInputParams(GH_InputParamManager p)
     {
       p.AddBooleanParameter("Run", "Run", "Execute", GH_ParamAccess.item, false);
-      p.AddGenericParameter("Axis", "Ax", "Axis handle or Id.", GH_ParamAccess.item);
+      p.AddGenericParameter("Axis", "Ax", "Axis handle (optional when Id is set).", GH_ParamAccess.item);
       p.AddIntegerParameter("Kind", "K", "0=Constant, 1=Linear, 2=DrawnCurve", GH_ParamAccess.item, 0);
       p.AddNumberParameter("Constant", "C", "Constant value (Kind=0).", GH_ParamAccess.item, 0.0);
       p.AddNumberParameter("LinearStart", "Y0", "Linear start value (Kind=1).", GH_ParamAccess.item, 0.0);
       p.AddNumberParameter("LinearEnd", "Y1", "Linear end value (Kind=1).", GH_ParamAccess.item, 1.0);
       p.AddCurveParameter("Curve", "Cv", "Drawn value curve x→value (Kind=2).", GH_ParamAccess.item);
+      p.AddIntegerParameter("Id", "Id", "Persisted axis Id (when Axis is unwired).", GH_ParamAccess.item);
+      Params.Input[1].Optional = true;
       Params.Input[6].Optional = true;
+      Params.Input[7].Optional = true;
     }
 
     protected override void RegisterOutputParams(GH_OutputParamManager p)
@@ -49,7 +52,7 @@ namespace ProgesiGrasshopperAssembly.Components.AxisVar
       var repo = AxisVarGhSupport.TryGetAxisRepo(this, doc);
       if (repo == null) return;
 
-      if (!AxisVarGhSupport.TryLoadAxis(da, 1, this, repo, out var axis))
+      if (!AxisVarGhSupport.TryLoadAxis(da, 1, this, repo, out var axis, optionalIdInputIndex: 7))
         return;
 
       int kind = 0;

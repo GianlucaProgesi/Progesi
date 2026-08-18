@@ -1,6 +1,5 @@
 #nullable enable
 using System;
-using System.Collections.Generic;
 using Grasshopper.Kernel;
 using ProgesiCore;
 using ProgesiGrasshopperAssembly.Infrastructure;
@@ -23,14 +22,17 @@ namespace ProgesiGrasshopperAssembly.Components.AxisVar
     protected override void RegisterInputParams(GH_InputParamManager p)
     {
       p.AddBooleanParameter("Run", "Run", "Execute", GH_ParamAccess.item, false);
-      p.AddGenericParameter("Axis", "Ax", "Axis handle or Id.", GH_ParamAccess.item);
+      p.AddGenericParameter("Axis", "Ax", "Axis handle (optional when Id is set).", GH_ParamAccess.item);
       p.AddNumberParameter("Station", "S", "Station (real or normalized).", GH_ParamAccess.item);
       p.AddBooleanParameter("Normalized", "Nrm", "True when Station is normalized [0,1].", GH_ParamAccess.item, true);
+      p.AddIntegerParameter("Id", "Id", "Persisted axis Id (when Axis is unwired).", GH_ParamAccess.item);
+      Params.Input[1].Optional = true;
+      Params.Input[4].Optional = true;
     }
 
     protected override void RegisterOutputParams(GH_OutputParamManager p)
     {
-      p.AddNumberParameter("Value", "V", "Interpolated value (null if undefined).", GH_ParamAccess.item);
+      p.AddGenericParameter("Value", "V", "Interpolated or step value.", GH_ParamAccess.item);
       p.AddNumberParameter("StationNorm", "Sn", "Station normalized.", GH_ParamAccess.item);
       p.AddTextParameter("Info", "Info", "Diagnostics.", GH_ParamAccess.item);
     }
@@ -45,7 +47,7 @@ namespace ProgesiGrasshopperAssembly.Components.AxisVar
       var repo = AxisVarGhSupport.TryGetAxisRepo(this, doc);
       if (repo == null) return;
 
-      if (!AxisVarGhSupport.TryLoadAxis(da, 1, this, repo, out var axis))
+      if (!AxisVarGhSupport.TryLoadAxis(da, 1, this, repo, out var axis, optionalIdInputIndex: 4))
         return;
 
       double station = 0;
@@ -67,25 +69,24 @@ namespace ProgesiGrasshopperAssembly.Components.AxisVar
         double norm = normalized ? station : mapper.RealToNormalized(station);
         norm = Math.Max(0.0, Math.Min(1.0, norm));
 
-        double? value = null;
+        object? value;
         string info;
 
         if (axis.FunctionRef.IsEmpty)
         {
-          info = "No value curve defined on axis.";
+          value = AxisVarGhSupport.EvaluateStepValue(axis, norm);
+          info = "No value curve defined on axis; step value from nearest keypoint label.";
         }
         else if (!string.Equals(axis.ValueTypeKey, "System.Double", StringComparison.Ordinal))
         {
-          var vc = axis.FunctionRef.Embedded != null
-            ? new ProgesiValueCurve(axis.FunctionRef.Embedded)
-            : null;
-          value = vc?.Evaluate(FloorToStep(norm, axis.KeyPoints));
-          info = "Non-numeric ValueTypeKey: step/constant evaluation at nearest keypoint.";
+          value = AxisVarGhSupport.EvaluateStepValue(axis, norm);
+          info = "Non-numeric ValueTypeKey: step value at nearest keypoint.";
         }
         else
         {
           if (axis.FunctionRef.Embedded == null)
           {
+            value = null;
             info = "Function reference is not embedded; cannot evaluate.";
           }
           else
@@ -104,21 +105,6 @@ namespace ProgesiGrasshopperAssembly.Components.AxisVar
       {
         AddRuntimeMessage(GH_RuntimeMessageLevel.Error, ex.Message);
       }
-    }
-
-    private static double FloorToStep(double norm, IReadOnlyList<double> keyPoints)
-    {
-      if (keyPoints == null || keyPoints.Count == 0)
-        return norm;
-      double best = keyPoints[0];
-      foreach (var kp in keyPoints)
-      {
-        if (kp <= norm + ProgesiAxisVariable.DefaultTolerance)
-          best = kp;
-        else
-          break;
-      }
-      return best;
     }
   }
 }
