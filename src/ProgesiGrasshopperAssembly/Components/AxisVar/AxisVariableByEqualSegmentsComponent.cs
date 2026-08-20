@@ -6,7 +6,7 @@ using ProgesiGrasshopperAssembly.Infrastructure.AxisVar;
 
 namespace ProgesiGrasshopperAssembly.Components.AxisVar
 {
-  public sealed class AxisVariableByEqualSegmentsComponent : GH_Component
+  public sealed class AxisVariableByEqualSegmentsComponent : AxisVarConsumerComponentBase
   {
     public AxisVariableByEqualSegmentsComponent()
       : base("AxisVariable.ByEqualSegments", "AxByEq",

@@ -6,7 +6,7 @@ using ProgesiGrasshopperAssembly.Infrastructure.AxisVar;
 
 namespace ProgesiGrasshopperAssembly.Components.AxisVar
 {
-  public sealed class AxisVariableBySegmentLengthComponent : GH_Component
+  public sealed class AxisVariableBySegmentLengthComponent : AxisVarConsumerComponentBase
   {
     public AxisVariableBySegmentLengthComponent()
       : base("AxisVariable.BySegmentLength", "AxByLen",

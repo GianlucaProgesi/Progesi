@@ -1,6 +1,7 @@
 #nullable enable
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Linq;
 using Grasshopper.Kernel;
 using Grasshopper.Kernel.Types;
@@ -37,6 +38,92 @@ namespace ProgesiGrasshopperAssembly.Infrastructure.AxisVar
     {
       RhinoBridgeBootstrap.EnsureConfigured();
       return new RhinoAxisVariableRepository(doc);
+    }
+
+    /// <summary>
+    /// Clears collection state on an unwired optional Generic Axis input so GH does not
+    /// abort SolveInstance with "failed to collect data" when loading by Id instead.
+    /// </summary>
+    internal static void PrepareOptionalAxisInput(GH_Component owner, int axisInputIndex)
+    {
+      if (axisInputIndex < 0 || axisInputIndex >= owner.Params.Input.Count)
+        return;
+
+      var param = owner.Params.Input[axisInputIndex];
+      if (param.Optional && param.SourceCount == 0)
+        param.ClearData();
+    }
+
+    internal static bool TryLoadAxisById(
+      IGH_DataAccess da,
+      int idInputIndex,
+      GH_Component owner,
+      RhinoAxisVariableRepository repo,
+      out ProgesiAxisVariable axis)
+    {
+      axis = null!;
+      int id = 0;
+      if (!da.GetData(idInputIndex, ref id) || id <= 0)
+      {
+        owner.AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "Positive Id is required.");
+        return false;
+      }
+
+      var loaded = repo.GetByIdAsync(id).GetAwaiter().GetResult();
+      if (loaded == null)
+      {
+        owner.AddRuntimeMessage(GH_RuntimeMessageLevel.Error, $"Axis id {id} not found.");
+        return false;
+      }
+
+      axis = loaded;
+      return true;
+    }
+
+    public static Curve NormalizeDrawnValueCurveToStationDomain(Curve drawn, double axisLength)
+    {
+      if (drawn == null) throw new ArgumentNullException(nameof(drawn));
+      if (axisLength <= 0)
+        throw new InvalidOperationException("Axis length must be positive.");
+
+      var nurbs = drawn.ToNurbsCurve()
+        ?? throw new InvalidOperationException("Curve cannot be converted to NurbsCurve.");
+
+      var scale = 1.0 / axisLength;
+      nurbs.Transform(Transform.Scale(Plane.WorldXY, scale, 1.0, 1.0));
+      return nurbs;
+    }
+
+    public static string CoerceValueLabel(object? value)
+    {
+      if (value == null)
+        return string.Empty;
+
+      if (value is GH_ObjectWrapper ow && ow.Value != null)
+        return CoerceValueLabel(ow.Value);
+
+      if (value is IGH_Goo goo)
+        return CoerceValueLabel(goo.ScriptVariable());
+
+      if (value is string s)
+        return s;
+
+      if (value is GH_String gs)
+        return gs.Value ?? string.Empty;
+
+      if (value is IFormattable formattable)
+        return formattable.ToString(null, CultureInfo.InvariantCulture) ?? string.Empty;
+
+      return Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty;
+    }
+
+    internal static IReadOnlyList<object>? ReadOptionalValueLabels(IGH_DataAccess da, int inputIndex)
+    {
+      var gooList = new List<IGH_Goo>();
+      if (!da.GetDataList(inputIndex, gooList) || gooList.Count == 0)
+        return null;
+
+      return gooList.Cast<object>().ToList();
     }
 
     internal static bool TryUnwrapHandle(object? input, GH_Component owner, out AxisVarHandle handle)
@@ -247,7 +334,7 @@ namespace ProgesiGrasshopperAssembly.Infrastructure.AxisVar
       out AxisVarHandle? handle,
       out IReadOnlyList<double>? normalizedStations,
       out IReadOnlyList<double>? realStations,
-      IReadOnlyList<double>? values = null,
+      IReadOnlyList<object>? values = null,
       IReadOnlyList<int>? variableIds = null,
       int? optionalIdInputIndex = null)
     {
@@ -273,7 +360,7 @@ namespace ProgesiGrasshopperAssembly.Infrastructure.AxisVar
           if (values.Count != normalized.Count)
             throw new InvalidOperationException("Values count must match station count.");
           for (int i = 0; i < normalized.Count; i++)
-            edited.SetLabel(normalized[i], values[i].ToString(System.Globalization.CultureInfo.InvariantCulture));
+            edited.SetLabel(normalized[i], CoerceValueLabel(values[i]));
         }
 
         handle = SaveAxis(repo, edited);

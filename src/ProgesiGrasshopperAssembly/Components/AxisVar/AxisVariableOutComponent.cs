@@ -7,12 +7,11 @@ using Grasshopper.Kernel;
 using ProgesiCore;
 using ProgesiGrasshopperAssembly.Infrastructure;
 using ProgesiGrasshopperAssembly.Infrastructure.AxisVar;
-using ProgesiRepositories.Rhino;
 using Rhino.Geometry;
 
 namespace ProgesiGrasshopperAssembly.Components.AxisVar
 {
-  public sealed class AxisVariableOutComponent : GH_Component
+  public sealed class AxisVariableOutComponent : AxisVarConsumerComponentBase
   {
     public AxisVariableOutComponent()
       : base("AxisVariable.Out", "AxOut",
@@ -44,7 +43,7 @@ namespace ProgesiGrasshopperAssembly.Components.AxisVar
       p.AddCurveParameter("Curve", "C", "3D axis curve.", GH_ParamAccess.item);
       p.AddTextParameter("Hash", "H", "Content hash.", GH_ParamAccess.item);
       p.AddIntegerParameter("VariableIds", "Vid", "ProgesiVariable ids per station.", GH_ParamAccess.list);
-      p.AddGenericParameter("Values", "V", "ProgesiVariable values per station.", GH_ParamAccess.list);
+      p.AddGenericParameter("Values", "V", "Placed label values per station.", GH_ParamAccess.list);
       // TODO(B3c): expose PlaneService UVW + true-vertical frames on Out
     }
 
@@ -82,15 +81,13 @@ namespace ProgesiGrasshopperAssembly.Components.AxisVar
           .ThenBy(e => e.variableId)
           .ToList();
 
-        var varRepo = new RhinoVariableRepository(doc);
-        var variableIds = new List<int>();
-        var values = new List<object?>();
-        foreach (var entry in entries)
-        {
-          variableIds.Add(entry.variableId);
-          var variable = varRepo.GetByIdAsync(entry.variableId).GetAwaiter().GetResult();
-          values.Add(variable?.Value);
-        }
+        var values = normalized
+          .Select(n => (object?)(axis.GetLabel(n) ?? string.Empty))
+          .ToList();
+
+        var variableIds = entries.Count > 0
+          ? entries.Select(e => e.variableId).ToList()
+          : new List<int>();
 
         da.SetData(0, axis.Id);
         da.SetData(1, axis.AxisName);

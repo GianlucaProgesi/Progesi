@@ -10,7 +10,7 @@ using Rhino.Geometry;
 
 namespace ProgesiGrasshopperAssembly.Components.AxisVar
 {
-  public sealed class AxisVariableValueCurveDefineComponent : GH_Component
+  public sealed class AxisVariableValueCurveDefineComponent : AxisVarConsumerComponentBase
   {
     public AxisVariableValueCurveDefineComponent()
       : base("AxisVariable.ValueCurve.Define", "AxVC",
@@ -89,7 +89,14 @@ namespace ProgesiGrasshopperAssembly.Components.AxisVar
               AddRuntimeMessage(GH_RuntimeMessageLevel.Error, "Curve is required for Kind=2 (DrawnCurve).");
               return;
             }
-            var payload = ProgesiNurbsValueCurveCodec.FromCurve(drawn);
+
+            if (!AxisVarGhSupport.TryDecodeCurve(axis, this, out var axisCurve) || axisCurve == null)
+              return;
+
+            var mapper = AxisVarGhSupport.CreateMapper(axisCurve, axis.Mode);
+            var axisLength = axis.AxisLength ?? mapper.TotalLength;
+            var normalizedDrawn = AxisVarGhSupport.NormalizeDrawnValueCurveToStationDomain(drawn, axisLength);
+            var payload = ProgesiNurbsValueCurveCodec.FromCurve(normalizedDrawn);
             segment = new ProgesiFunctionSegment(0.0, 1.0, ProgesiFunctionSegmentKind.Nurbs, nurbs: payload);
             break;
           default:

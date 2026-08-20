@@ -7,7 +7,7 @@ using ProgesiGrasshopperAssembly.Infrastructure.AxisVar;
 
 namespace ProgesiGrasshopperAssembly.Components.AxisVar
 {
-  public sealed class AxisVariableByStationValueComponent : GH_Component
+  public sealed class AxisVariableByStationValueComponent : AxisVarConsumerComponentBase
   {
     public AxisVariableByStationValueComponent()
       : base("AxisVariable.ByStationValue", "AxBySV",
@@ -23,7 +23,7 @@ namespace ProgesiGrasshopperAssembly.Components.AxisVar
       p.AddBooleanParameter("Run", "Run", "Execute", GH_ParamAccess.item, false);
       p.AddGenericParameter("Axis", "Ax", "Axis handle (optional when Id is set).", GH_ParamAccess.item);
       p.AddNumberParameter("RealStations", "Rs", "Real arc-length stations.", GH_ParamAccess.list);
-      p.AddNumberParameter("Values", "V", "Optional values (labels at stations).", GH_ParamAccess.list);
+      p.AddGenericParameter("Values", "V", "Optional values (numeric or string labels at stations).", GH_ParamAccess.list);
       p.AddIntegerParameter("VariableIds", "Vid", "Optional variable ids (1:1 with stations).", GH_ParamAccess.list);
       p.AddIntegerParameter("Id", "Id", "Persisted axis Id (when Axis is unwired).", GH_ParamAccess.item);
       Params.Input[1].Optional = true;
@@ -57,8 +57,7 @@ namespace ProgesiGrasshopperAssembly.Components.AxisVar
         return;
       }
 
-      var values = new List<double>();
-      da.GetDataList(3, values);
+      var values = AxisVarGhSupport.ReadOptionalValueLabels(da, 3);
       var variableIds = new List<int>();
       da.GetDataList(4, variableIds);
 
@@ -66,7 +65,7 @@ namespace ProgesiGrasshopperAssembly.Components.AxisVar
             da, 1, this, repo,
             new ByStationValueStrategy(realStations),
             out var handle, out var normalized, out var real,
-            values.Count > 0 ? values : null,
+            values,
             variableIds.Count > 0 ? variableIds : null,
             optionalIdInputIndex: 5))
         return;

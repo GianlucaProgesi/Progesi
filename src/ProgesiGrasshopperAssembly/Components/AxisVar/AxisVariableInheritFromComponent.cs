@@ -7,7 +7,7 @@ using ProgesiGrasshopperAssembly.Infrastructure.AxisVar;
 
 namespace ProgesiGrasshopperAssembly.Components.AxisVar
 {
-  public sealed class AxisVariableInheritFromComponent : GH_Component
+  public sealed class AxisVariableInheritFromComponent : AxisVarConsumerComponentBase
   {
     public AxisVariableInheritFromComponent()
       : base("AxisVariable.InheritFrom", "AxInh",

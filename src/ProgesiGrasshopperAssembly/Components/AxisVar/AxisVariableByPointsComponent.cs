@@ -8,7 +8,7 @@ using Rhino.Geometry;
 
 namespace ProgesiGrasshopperAssembly.Components.AxisVar
 {
-  public sealed class AxisVariableByPointsComponent : GH_Component
+  public sealed class AxisVariableByPointsComponent : AxisVarConsumerComponentBase
   {
     public AxisVariableByPointsComponent()
       : base("AxisVariable.ByPoints", "AxByPt",

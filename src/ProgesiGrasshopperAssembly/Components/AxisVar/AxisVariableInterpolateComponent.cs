@@ -8,7 +8,7 @@ using ProgesiRepositories.Rhino;
 
 namespace ProgesiGrasshopperAssembly.Components.AxisVar
 {
-  public sealed class AxisVariableInterpolateComponent : GH_Component
+  public sealed class AxisVariableInterpolateComponent : AxisVarConsumerComponentBase
   {
     public AxisVariableInterpolateComponent()
       : base("AxisVariable.Interpolate", "AxEval",
