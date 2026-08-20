@@ -242,6 +242,37 @@ namespace ProgesiGrasshopperAssembly.Infrastructure.AxisVar
       return string.Empty;
     }
 
+    public static (object Value, string Info) EvaluateInterpolateValue(
+      ProgesiAxisVariable axis,
+      double normalizedStation)
+    {
+      double norm = Math.Max(0.0, Math.Min(1.0, normalizedStation));
+
+      if (axis.FunctionRef.IsEmpty)
+      {
+        return (
+          EvaluateStepValue(axis, norm)!,
+          "No value curve defined on axis; step value from nearest keypoint label.");
+      }
+
+      if (!string.Equals(axis.ValueTypeKey, "System.Double", StringComparison.Ordinal))
+      {
+        return (
+          EvaluateStepValue(axis, norm)!,
+          "Non-numeric ValueTypeKey: step value at nearest keypoint.");
+      }
+
+      if (axis.FunctionRef.Embedded == null)
+      {
+        return (
+          EvaluateStepValue(axis, norm)!,
+          "Value-curve reference is not embedded; returned step value from nearest keypoint label.");
+      }
+
+      var vc = new ProgesiValueCurve(axis.FunctionRef.Embedded);
+      return (vc.Evaluate(norm)!, "Interpolated via ProgesiValueCurve.Evaluate.");
+    }
+
     public static int ResolveDefineAxisId(
       RhinoAxisVariableRepository repo,
       string axisName,
@@ -358,7 +389,8 @@ namespace ProgesiGrasshopperAssembly.Infrastructure.AxisVar
         if (values != null && values.Count > 0)
         {
           if (values.Count != normalized.Count)
-            throw new InvalidOperationException("Values count must match station count.");
+            throw new InvalidOperationException(
+              $"Values count ({values.Count}) must match station count ({normalized.Count}).");
           for (int i = 0; i < normalized.Count; i++)
             edited.SetLabel(normalized[i], CoerceValueLabel(values[i]));
         }

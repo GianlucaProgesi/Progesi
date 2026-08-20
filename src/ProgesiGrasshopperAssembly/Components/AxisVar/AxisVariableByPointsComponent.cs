@@ -24,9 +24,11 @@ namespace ProgesiGrasshopperAssembly.Components.AxisVar
       p.AddBooleanParameter("Run", "Run", "Execute", GH_ParamAccess.item, false);
       p.AddGenericParameter("Axis", "Ax", "Axis handle (optional when Id is set).", GH_ParamAccess.item);
       p.AddPointParameter("Points", "P", "3D points to project.", GH_ParamAccess.list);
+      p.AddGenericParameter("Values", "V", "Optional values (numeric or string labels at stations).", GH_ParamAccess.list);
       p.AddIntegerParameter("Id", "Id", "Persisted axis Id (when Axis is unwired).", GH_ParamAccess.item);
       Params.Input[1].Optional = true;
       Params.Input[3].Optional = true;
+      Params.Input[4].Optional = true;
     }
 
     protected override void RegisterOutputParams(GH_OutputParamManager p)
@@ -54,11 +56,14 @@ namespace ProgesiGrasshopperAssembly.Components.AxisVar
         return;
       }
 
+      var values = AxisVarGhSupport.ReadOptionalValueLabels(da, 3);
+
       if (!AxisVarGhSupport.TryApplyVariation(
             da, 1, this, repo,
             new ByPointsStrategy(points),
             out var handle, out var normalized, out var real,
-            optionalIdInputIndex: 3))
+            values,
+            optionalIdInputIndex: 4))
         return;
 
       da.SetData(0, new Grasshopper.Kernel.Types.GH_ObjectWrapper(handle));

@@ -1,10 +1,8 @@
 #nullable enable
 using System;
 using Grasshopper.Kernel;
-using ProgesiCore;
 using ProgesiGrasshopperAssembly.Infrastructure;
 using ProgesiGrasshopperAssembly.Infrastructure.AxisVar;
-using ProgesiRepositories.Rhino;
 
 namespace ProgesiGrasshopperAssembly.Components.AxisVar
 {
@@ -67,38 +65,11 @@ namespace ProgesiGrasshopperAssembly.Components.AxisVar
 
         var mapper = AxisVarGhSupport.CreateMapper(curve, axis.Mode);
         double norm = normalized ? station : mapper.RealToNormalized(station);
-        norm = Math.Max(0.0, Math.Min(1.0, norm));
 
-        object? value;
-        string info;
-
-        if (axis.FunctionRef.IsEmpty)
-        {
-          value = AxisVarGhSupport.EvaluateStepValue(axis, norm);
-          info = "No value curve defined on axis; step value from nearest keypoint label.";
-        }
-        else if (!string.Equals(axis.ValueTypeKey, "System.Double", StringComparison.Ordinal))
-        {
-          value = AxisVarGhSupport.EvaluateStepValue(axis, norm);
-          info = "Non-numeric ValueTypeKey: step value at nearest keypoint.";
-        }
-        else
-        {
-          if (axis.FunctionRef.Embedded == null)
-          {
-            value = null;
-            info = "Function reference is not embedded; cannot evaluate.";
-          }
-          else
-          {
-            var vc = new ProgesiValueCurve(axis.FunctionRef.Embedded);
-            value = vc.Evaluate(norm);
-            info = "Interpolated via ProgesiValueCurve.Evaluate.";
-          }
-        }
+        var (value, info) = AxisVarGhSupport.EvaluateInterpolateValue(axis, norm);
 
         da.SetData(0, value);
-        da.SetData(1, norm);
+        da.SetData(1, Math.Max(0.0, Math.Min(1.0, norm)));
         da.SetData(2, info);
       }
       catch (Exception ex)
