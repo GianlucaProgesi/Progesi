@@ -4,13 +4,16 @@ using Grasshopper.Kernel.Types;
 using Rhino.Geometry;
 using ProgesiGrasshopperAssembly.Infrastructure.AxisVar;
 
+[Obsolete("Use AxisVariable.Define instead.")]
 public sealed class AxisVarDefineComponent : GH_Component
 {
   public AxisVarDefineComponent()
     : base("AxisVar.Define", "AxisDef",
-      "Create an AxisContext from a Rhino curve.",
+      "Create an AxisContext from a Rhino curve. (Deprecated — use AxisVariable.Define.)",
       "Progesi", "AxisVar")
   { }
+
+  public override GH_Exposure Exposure => GH_Exposure.hidden;
 
   protected override void RegisterInputParams(GH_InputParamManager pManager)
   {

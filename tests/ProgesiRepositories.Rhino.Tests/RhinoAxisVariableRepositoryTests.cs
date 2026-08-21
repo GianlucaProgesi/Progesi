@@ -62,6 +62,109 @@ namespace ProgesiRepositories.Rhino.Tests
     }
 
     [Fact]
+    public async Task FindByDefineSignature_Reuses_Existing_Id_For_Same_Define_Identity()
+    {
+      var axis = new ProgesiAxisVariable(
+        1,
+        "Bridge-A",
+        "Thickness",
+        "System.Double",
+        100.0,
+        curvePayload: "curve-payload-v1",
+        mode: AxisCurveMode.Curve3d,
+        keyPoints: new[] { 0.0, 1.0 });
+
+      await _repo.SaveAsync(axis);
+
+      var found = _repo.FindByDefineSignature(
+        "Bridge-A",
+        "curve-payload-v1",
+        AxisCurveMode.Curve3d,
+        "Thickness",
+        "System.Double",
+        new[] { 0.0, 1.0 });
+
+      found.Should().NotBeNull();
+      found!.Id.Should().Be(1);
+    }
+
+    [Fact]
+    public async Task ResolveDefineAxisId_Does_Not_Increment_When_Define_Identity_Matches()
+    {
+      var axis = new ProgesiAxisVariable(
+        1,
+        "Bridge-B",
+        "Thickness",
+        "System.Double",
+        50.0,
+        curvePayload: "curve-payload-v2",
+        mode: AxisCurveMode.PlanXY,
+        keyPoints: new[] { 0.0, 1.0 });
+      await _repo.SaveAsync(axis);
+
+      var id = ProgesiGrasshopperAssembly.Infrastructure.AxisVar.AxisVarGhSupport.ResolveDefineAxisId(
+        _repo,
+        "Bridge-B",
+        "curve-payload-v2",
+        AxisCurveMode.PlanXY,
+        "Thickness",
+        "System.Double",
+        new[] { 0.0, 1.0 });
+
+      id.Should().Be(1);
+      (await _repo.GetAllAsync()).Should().HaveCount(1);
+    }
+
+    [Fact]
+    public async Task DefineTwice_WithIdenticalInputs_ReusesSameId()
+    {
+      var keyPoints = new[] { 0.0, 1.0 };
+      var id1 = ProgesiGrasshopperAssembly.Infrastructure.AxisVar.AxisVarGhSupport.ResolveDefineAxisId(
+        _repo,
+        "Bridge-C",
+        "curve-payload-v3",
+        AxisCurveMode.Curve3d,
+        "Thickness",
+        "System.Double",
+        keyPoints);
+
+      var axis1 = new ProgesiAxisVariable(
+        id1,
+        "Bridge-C",
+        "Thickness",
+        "System.Double",
+        100.0,
+        curvePayload: "curve-payload-v3",
+        mode: AxisCurveMode.Curve3d,
+        keyPoints: keyPoints);
+      await _repo.SaveAsync(axis1);
+
+      var id2 = ProgesiGrasshopperAssembly.Infrastructure.AxisVar.AxisVarGhSupport.ResolveDefineAxisId(
+        _repo,
+        "Bridge-C",
+        "curve-payload-v3",
+        AxisCurveMode.Curve3d,
+        "Thickness",
+        "System.Double",
+        keyPoints);
+
+      id2.Should().Be(id1);
+      (await _repo.GetAllAsync()).Should().HaveCount(1);
+    }
+
+    [Fact]
+    public async Task GetById_Returns_Persisted_Axis_For_GetComponentPath()
+    {
+      var axis = MakeRichAxis(9);
+      await _repo.SaveAsync(axis);
+
+      var loaded = await _repo.GetByIdAsync(9);
+      loaded.Should().NotBeNull();
+      loaded!.Id.Should().Be(9);
+      new ProgesiGrasshopperAssembly.Infrastructure.AxisVar.AxisVarHandle(loaded.Id, loaded).AxisId.Should().Be(9);
+    }
+
+    [Fact]
     public async Task SaveAsync_Deduplicates_By_ContentHash()
     {
       await _repo.SaveAsync(MakeRichAxis(1));

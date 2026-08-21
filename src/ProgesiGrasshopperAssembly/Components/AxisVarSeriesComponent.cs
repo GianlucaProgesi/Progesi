@@ -4,13 +4,16 @@ using Grasshopper.Kernel;
 using Grasshopper.Kernel.Types;
 using ProgesiGrasshopperAssembly.Infrastructure.AxisVar;
 
+[Obsolete("Use AxisVariable.ByStationValue and related variation components instead.")]
 public sealed class AxisVarSeriesComponent : GH_Component
 {
   public AxisVarSeriesComponent()
     : base("AxisVar.Series", "AxisSeries",
-      "Create an AxisVarMapping (normalized stations + variable hashes).",
+      "Create an AxisVarMapping (normalized stations + variable hashes). (Deprecated.)",
       "Progesi", "AxisVar")
   { }
+
+  public override GH_Exposure Exposure => GH_Exposure.hidden;
 
   protected override void RegisterInputParams(GH_InputParamManager pManager)
   {

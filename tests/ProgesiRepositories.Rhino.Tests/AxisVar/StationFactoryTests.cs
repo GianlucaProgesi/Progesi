@@ -25,13 +25,26 @@ namespace ProgesiRepositories.Rhino.Tests.AxisVar
     }
 
     [Fact]
-    public void ByEqualSegments_Divides_Into_N_Parts()
+    public void ByEqualSegments_N_Segments_Yields_N_Plus_One_Stations()
+    {
+      RhinoTestBootstrap.Require();
+      const int n = 10;
+      var mapper = LineMapper();
+      var stations = StationFactory.Create(new ByEqualSegmentsStrategy(n), mapper);
+      stations.Should().HaveCount(n + 1);
+      stations.First().Should().Be(0.0);
+      stations.Last().Should().Be(1.0);
+      for (int i = 0; i <= n; i++)
+        stations[i].Should().BeApproximately(i / (double)n, 1e-12);
+    }
+
+    [Fact]
+    public void ByEqualSegments_Five_Segments_Yields_Six_Stations()
     {
       RhinoTestBootstrap.Require();
       var stations = StationFactory.Create(new ByEqualSegmentsStrategy(5), LineMapper());
-      stations.Should().HaveCount(5);
-      stations.First().Should().Be(0.0);
-      stations.Last().Should().Be(1.0);
+      stations.Should().HaveCount(6);
+      stations.Should().Equal(0.0, 0.2, 0.4, 0.6, 0.8, 1.0);
     }
 
     [Fact]

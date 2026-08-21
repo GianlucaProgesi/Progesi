@@ -101,6 +101,56 @@ namespace ProgesiRepositories.Rhino
       return result;
     }
 
+    /// <summary>
+    /// Finds an axis whose Define-time identity matches (Id-independent signature).
+    /// </summary>
+    public ProgesiAxisVariable? FindByDefineSignature(
+      string axisName,
+      string curvePayload,
+      AxisCurveMode mode,
+      string name,
+      string valueTypeKey,
+      IReadOnlyList<double> keyPoints)
+    {
+      var expectedKeyPoints = NormalizeKeyPoints(keyPoints);
+      foreach (var axis in GetAllAsync().GetAwaiter().GetResult())
+      {
+        if (!string.Equals(axis.AxisName, axisName, StringComparison.Ordinal))
+          continue;
+        if (!string.Equals(axis.CurvePayload, curvePayload ?? string.Empty, StringComparison.Ordinal))
+          continue;
+        if (axis.Mode != mode)
+          continue;
+        if (!string.Equals(axis.Name, name, StringComparison.Ordinal))
+          continue;
+        if (!string.Equals(axis.ValueTypeKey, valueTypeKey, StringComparison.Ordinal))
+          continue;
+        if (!KeyPointsEqual(axis.KeyPoints, expectedKeyPoints))
+          continue;
+        return axis;
+      }
+      return null;
+    }
+
+    private static IReadOnlyList<double> NormalizeKeyPoints(IReadOnlyList<double>? keyPoints)
+    {
+      if (keyPoints == null || keyPoints.Count == 0)
+        return Array.Empty<double>();
+      return keyPoints.OrderBy(x => x).ToArray();
+    }
+
+    private static bool KeyPointsEqual(IReadOnlyList<double> left, IReadOnlyList<double> right)
+    {
+      if (left.Count != right.Count)
+        return false;
+      for (int i = 0; i < left.Count; i++)
+      {
+        if (Math.Abs(left[i] - right[i]) > ProgesiAxisVariable.DefaultTolerance)
+          return false;
+      }
+      return true;
+    }
+
     public Task<bool> DeleteAsync(int id, CancellationToken ct = default)
     {
       var key = KeyOf(id);
