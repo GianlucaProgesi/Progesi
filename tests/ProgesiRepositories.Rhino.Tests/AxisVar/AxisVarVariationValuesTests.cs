@@ -3,7 +3,9 @@ using System.Linq;
 using FluentAssertions;
 using ProgesiCore;
 using ProgesiGrasshopperAssembly.Infrastructure.AxisVar;
+using ProgesiRepositories.Rhino;
 using ProgesiRepositories.Rhino.Tests.Support;
+using Rhino;
 using Rhino.Geometry;
 using Xunit;
 
@@ -11,22 +13,30 @@ namespace ProgesiRepositories.Rhino.Tests.AxisVar
 {
   public sealed class AxisVarVariationValuesTests
   {
-    private static ProgesiAxisVariable ApplyLabelsAtStations(
+    private static ProgesiAxisVariable ApplyValuesAtStations(
+      RhinoVariableRepository varRepo,
       ProgesiAxisVariable axis,
       IReadOnlyList<double> normalizedStations,
       IReadOnlyList<object> values)
     {
-      var edited = axis;
-      edited.SetKeyPoints(normalizedStations);
-      for (int i = 0; i < normalizedStations.Count; i++)
-        edited.SetLabel(normalizedStations[i], AxisVarGhSupport.CoerceValueLabel(values[i]));
+      var edited = AxisVarGhSupport.CloneForEdit(axis);
+      var sides = AxisVarGhSupport.AssignSidesForStations(normalizedStations);
+      var ids = values
+        .Select(v => AxisVarGhSupport.ResolveOrCreateVariable(
+          varRepo, axis.Name, axis.ValueTypeKey,
+          AxisVarGhSupport.CoerceTypedValue(v, axis.ValueTypeKey)))
+        .ToList();
+
+      AxisVarGhSupport.ApplyKeyPointsAndOptionalVariables(edited, normalizedStations, ids, sides);
       return edited;
     }
 
     [Fact]
-    public void ByEqualSegments_StringValues_InterpolateAndOut_Align()
+    public void ByEqualSegments_StringValues_ResolveFromLinkedVariables()
     {
       RhinoTestBootstrap.Require();
+      var doc = RhinoDocTestHelper.CreateTestDoc();
+      var varRepo = new RhinoVariableRepository(doc);
 
       var line = new LineCurve(new Point3d(0, 0, 0), new Point3d(10, 0, 0));
       var mapper = new CurveParameterMapper(line, ProgesiCore.AxisCurveMode.Curve3d);
@@ -42,18 +52,23 @@ namespace ProgesiRepositories.Rhino.Tests.AxisVar
         10.0,
         keyPoints: stations);
 
-      axis = ApplyLabelsAtStations(axis, stations, new object[] { "A", "M", "B" });
+      axis = ApplyValuesAtStations(varRepo, axis, stations, new object[] { "A", "M", "B" });
 
-      AxisVarGhSupport.EvaluateStepValue(axis, 0.4).Should().Be("A");
+      var outValues = axis.EnumerateAll()
+        .OrderBy(e => e.positionNormalized)
+        .Select(e => AxisVarGhSupport.ResolveVariableValue(varRepo, e.variableId))
+        .ToList();
 
-      var outValues = stations.Select(n => axis.GetLabel(n) ?? string.Empty).ToList();
       outValues.Should().Equal("A", "M", "B");
+      doc.Dispose();
     }
 
     [Fact]
     public void ByEqualSegments_NumericValues_Appear_In_OutValues()
     {
       RhinoTestBootstrap.Require();
+      var doc = RhinoDocTestHelper.CreateTestDoc();
+      var varRepo = new RhinoVariableRepository(doc);
 
       var line = new LineCurve(new Point3d(0, 0, 0), new Point3d(100, 0, 0));
       var mapper = new CurveParameterMapper(line, ProgesiCore.AxisCurveMode.Curve3d);
@@ -67,10 +82,15 @@ namespace ProgesiRepositories.Rhino.Tests.AxisVar
         100.0,
         keyPoints: stations);
 
-      axis = ApplyLabelsAtStations(axis, stations, new object[] { 10.0, 20.0, 30.0 });
+      axis = ApplyValuesAtStations(varRepo, axis, stations, new object[] { 10.0, 20.0, 30.0 });
 
-      var outValues = stations.Select(n => axis.GetLabel(n) ?? string.Empty).ToList();
-      outValues.Should().Equal("10", "20", "30");
+      var outValues = axis.EnumerateAll()
+        .OrderBy(e => e.positionNormalized)
+        .Select(e => AxisVarGhSupport.ResolveVariableValue(varRepo, e.variableId))
+        .ToList();
+
+      outValues.Should().Equal(10.0, 20.0, 30.0);
+      doc.Dispose();
     }
 
     [Fact]

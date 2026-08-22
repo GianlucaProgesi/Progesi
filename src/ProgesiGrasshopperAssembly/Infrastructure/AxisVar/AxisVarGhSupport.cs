@@ -117,6 +117,61 @@ namespace ProgesiGrasshopperAssembly.Infrastructure.AxisVar
       return Convert.ToString(value, CultureInfo.InvariantCulture) ?? string.Empty;
     }
 
+    /// <summary>Coerce a GH/generic input to the axis series value type (Option B station values).</summary>
+    public static object CoerceTypedValue(object? value, string valueTypeKey)
+    {
+      if (value is GH_ObjectWrapper ow && ow.Value != null)
+        value = ow.Value;
+      else if (value is IGH_Goo goo)
+        value = goo.ScriptVariable();
+
+      if (value == null)
+        throw new InvalidOperationException("Station value cannot be null.");
+
+      if (string.Equals(valueTypeKey, "System.Double", StringComparison.Ordinal))
+      {
+        if (value is double d) return d;
+        if (value is float f) return (double)f;
+        if (value is int i) return i;
+        if (value is long l) return l;
+        if (value is decimal m) return (double)m;
+        if (double.TryParse(CoerceValueLabel(value), NumberStyles.Float, CultureInfo.InvariantCulture, out var parsed))
+          return parsed;
+        throw new InvalidOperationException($"Cannot coerce value to System.Double: {CoerceValueLabel(value)}");
+      }
+
+      if (string.Equals(valueTypeKey, "System.Int32", StringComparison.Ordinal))
+      {
+        if (value is int iv) return iv;
+        if (int.TryParse(CoerceValueLabel(value), NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsed))
+          return parsed;
+        throw new InvalidOperationException($"Cannot coerce value to System.Int32: {CoerceValueLabel(value)}");
+      }
+
+      if (string.Equals(valueTypeKey, "System.String", StringComparison.Ordinal))
+        return CoerceValueLabel(value);
+
+      if (string.Equals(valueTypeKey, "System.Boolean", StringComparison.Ordinal))
+      {
+        if (value is bool b) return b;
+        var text = CoerceValueLabel(value);
+        if (bool.TryParse(text, out var parsed))
+          return parsed;
+        throw new InvalidOperationException($"Cannot coerce value to System.Boolean: {text}");
+      }
+
+      return CoerceValueLabel(value);
+    }
+
+    internal static IReadOnlyList<string>? ReadOptionalLabels(IGH_DataAccess da, int inputIndex)
+    {
+      var texts = new List<string>();
+      if (!da.GetDataList(inputIndex, texts) || texts.Count == 0)
+        return null;
+
+      return texts;
+    }
+
     internal static IReadOnlyList<object>? ReadOptionalValueLabels(IGH_DataAccess da, int inputIndex)
     {
       var gooList = new List<IGH_Goo>();
@@ -329,30 +384,140 @@ namespace ProgesiGrasshopperAssembly.Infrastructure.AxisVar
       return new AxisVarHandle(saved.Id, saved);
     }
 
-    internal static ProgesiAxisVariable CloneForEdit(ProgesiAxisVariable source)
+    public static ProgesiAxisVariable CloneForEdit(ProgesiAxisVariable source)
     {
       var dto = ProgesiCore.Serialization.ProgesiAxisVariableDto.FromDomain(source);
       return ProgesiCore.Serialization.ProgesiAxisVariableDto.ToDomain(dto);
     }
 
-    internal static void ApplyKeyPointsAndOptionalVariables(
+    internal static int NextVariableId(RhinoVariableRepository repo)
+    {
+      var all = repo.GetAllAsync().GetAwaiter().GetResult();
+      return all.Count == 0 ? 1 : all.Max(v => v.Id) + 1;
+    }
+
+    public static int ResolveOrCreateVariable(
+      RhinoVariableRepository varRepo,
+      string name,
+      string valueTypeKey,
+      object typedValue)
+    {
+      var probe = new ProgesiVariable(0, name, typedValue);
+      var hash = ProgesiHash.Compute(probe);
+      var existing = varRepo.GetByHashtagAsync(hash).GetAwaiter().GetResult();
+      if (existing != null)
+        return existing.Id;
+
+      int id = NextVariableId(varRepo);
+      varRepo.SaveAsync(new ProgesiVariable(id, name, typedValue)).GetAwaiter().GetResult();
+      return id;
+    }
+
+    /// <summary>Union keypoints with tolerance bucketing (additive variation chaining).</summary>
+    public static IReadOnlyList<double> MergeKeyPoints(
+      IReadOnlyList<double> existing,
+      IReadOnlyList<double> incoming,
+      double tol = ProgesiAxisVariable.DefaultTolerance)
+    {
+      var merged = existing.ToList();
+      foreach (var station in incoming)
+      {
+        bool exists = merged.Any(existingStation => Math.Abs(existingStation - station) <= tol);
+        if (!exists)
+          merged.Add(station);
+      }
+
+      return merged.OrderBy(x => x).ToList();
+    }
+
+    /// <summary>Auto-assign Side for duplicate normalized stations (discontinuity).</summary>
+    public static IReadOnlyList<ProgesiAxisStationSide> AssignSidesForStations(
+      IReadOnlyList<double> normalizedStations,
+      double tol = ProgesiAxisVariable.DefaultTolerance)
+    {
+      var bucketCounts = new Dictionary<long, int>();
+      foreach (var pos in normalizedStations)
+      {
+        long bucket = (long)Math.Round(pos / tol);
+        if (!bucketCounts.TryGetValue(bucket, out var count))
+          count = 0;
+        bucketCounts[bucket] = count + 1;
+      }
+
+      var bucketOccurrence = new Dictionary<long, int>();
+      var sides = new List<ProgesiAxisStationSide>(normalizedStations.Count);
+      foreach (var pos in normalizedStations)
+      {
+        long bucket = (long)Math.Round(pos / tol);
+        if (!bucketOccurrence.TryGetValue(bucket, out var occ))
+          occ = 0;
+        bucketOccurrence[bucket] = occ + 1;
+
+        int totalAtBucket = bucketCounts[bucket];
+        if (totalAtBucket <= 1)
+          sides.Add(ProgesiAxisStationSide.None);
+        else if (occ == 0)
+          sides.Add(ProgesiAxisStationSide.Left);
+        else
+          sides.Add(ProgesiAxisStationSide.Right);
+      }
+
+      return sides;
+    }
+
+    public static void ApplyKeyPointsAndOptionalVariables(
       ProgesiAxisVariable axis,
       IReadOnlyList<double> normalizedStations,
-      IReadOnlyList<int>? variableIds = null)
+      IReadOnlyList<int>? variableIds = null,
+      IReadOnlyList<ProgesiAxisStationSide>? sides = null,
+      bool replace = false)
     {
-      axis.SetKeyPoints(normalizedStations);
+      if (replace)
+      {
+        axis.ReplaceMap(Array.Empty<(double positionNormalized, IEnumerable<int> ids, ProgesiAxisStationSide side)>());
+        axis.ReplaceLabels(Array.Empty<(double positionNormalized, string label)>());
+        axis.SetKeyPoints(normalizedStations);
+      }
+      else
+      {
+        axis.SetKeyPoints(MergeKeyPoints(axis.KeyPoints, normalizedStations));
+      }
+
       if (variableIds == null || variableIds.Count == 0)
         return;
 
       if (variableIds.Count != normalizedStations.Count)
         throw new InvalidOperationException("VariableIds count must match station count.");
 
-      var sig = new ProgesiAxisVariable.ProgesiVariableSignature(0, axis.Name, axis.ValueTypeKey);
+      var sideList = sides ?? normalizedStations.Select(_ => ProgesiAxisStationSide.None).ToList();
+      if (sideList.Count != normalizedStations.Count)
+        throw new InvalidOperationException("Side count must match station count.");
+
       for (int i = 0; i < normalizedStations.Count; i++)
       {
         if (variableIds[i] <= 0) continue;
-        sig = new ProgesiAxisVariable.ProgesiVariableSignature(variableIds[i], axis.Name, axis.ValueTypeKey);
-        axis.Add(sig, normalizedStations[i]);
+        var sig = new ProgesiAxisVariable.ProgesiVariableSignature(
+          variableIds[i], axis.Name, axis.ValueTypeKey);
+        axis.Add(sig, normalizedStations[i], sideList[i]);
+      }
+    }
+
+    public static void ApplyOptionalStationLabels(
+      ProgesiAxisVariable axis,
+      IReadOnlyList<double> normalizedStations,
+      IReadOnlyList<string>? labels)
+    {
+      if (labels == null || labels.Count == 0)
+        return;
+
+      if (labels.Count != normalizedStations.Count)
+        throw new InvalidOperationException(
+          $"Labels count ({labels.Count}) must match station count ({normalizedStations.Count}).");
+
+      for (int i = 0; i < normalizedStations.Count; i++)
+      {
+        if (!string.IsNullOrWhiteSpace(labels[i]))
+          axis.SetLabel(normalizedStations[i], labels[i]);
       }
     }
 
@@ -361,12 +526,16 @@ namespace ProgesiGrasshopperAssembly.Infrastructure.AxisVar
       int axisInputIndex,
       GH_Component owner,
       RhinoAxisVariableRepository repo,
+      RhinoVariableRepository varRepo,
       IStationStrategy strategy,
       out AxisVarHandle? handle,
       out IReadOnlyList<double>? normalizedStations,
       out IReadOnlyList<double>? realStations,
       IReadOnlyList<object>? values = null,
+      IReadOnlyList<string>? labels = null,
       IReadOnlyList<int>? variableIds = null,
+      bool replace = false,
+      int? modeOverrideInt = null,
       int? optionalIdInputIndex = null)
     {
       handle = null;
@@ -381,19 +550,37 @@ namespace ProgesiGrasshopperAssembly.Infrastructure.AxisVar
 
       try
       {
-        var mapper = CreateMapper(curve, axis.Mode);
+        var mode = modeOverrideInt.HasValue ? ParseMode(modeOverrideInt.Value) : axis.Mode;
+        var mapper = CreateMapper(curve, mode);
         var normalized = StationFactory.Create(strategy, mapper);
         var edited = CloneForEdit(axis);
-        ApplyKeyPointsAndOptionalVariables(edited, normalized, variableIds);
+        var sides = AssignSidesForStations(normalized);
 
         if (values != null && values.Count > 0)
         {
           if (values.Count != normalized.Count)
             throw new InvalidOperationException(
               $"Values count ({values.Count}) must match station count ({normalized.Count}).");
+
+          var resolvedIds = new List<int>(normalized.Count);
           for (int i = 0; i < normalized.Count; i++)
-            edited.SetLabel(normalized[i], CoerceValueLabel(values[i]));
+          {
+            var typed = CoerceTypedValue(values[i], axis.ValueTypeKey);
+            resolvedIds.Add(ResolveOrCreateVariable(varRepo, axis.Name, axis.ValueTypeKey, typed));
+          }
+
+          ApplyKeyPointsAndOptionalVariables(edited, normalized, resolvedIds, sides, replace);
         }
+        else if (variableIds != null && variableIds.Count > 0)
+        {
+          ApplyKeyPointsAndOptionalVariables(edited, normalized, variableIds, sides, replace);
+        }
+        else
+        {
+          ApplyKeyPointsAndOptionalVariables(edited, normalized, null, null, replace);
+        }
+
+        ApplyOptionalStationLabels(edited, normalized, labels);
 
         handle = SaveAxis(repo, edited);
         normalizedStations = normalized;
@@ -405,6 +592,14 @@ namespace ProgesiGrasshopperAssembly.Infrastructure.AxisVar
         owner.AddRuntimeMessage(GH_RuntimeMessageLevel.Error, ex.Message);
         return false;
       }
+    }
+
+    public static object? ResolveVariableValue(RhinoVariableRepository varRepo, int variableId)
+    {
+      if (variableId <= 0)
+        return null;
+
+      return varRepo.GetByIdAsync(variableId).GetAwaiter().GetResult()?.Value;
     }
   }
 }
