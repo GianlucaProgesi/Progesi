@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using Grasshopper.Kernel;
 using ProgesiGrasshopperAssembly.Infrastructure;
 using ProgesiGrasshopperAssembly.Infrastructure.AxisVar;
+using ProgesiRepositories.Rhino;
 
 namespace ProgesiGrasshopperAssembly.Components.AxisVar
 {
@@ -23,13 +24,19 @@ namespace ProgesiGrasshopperAssembly.Components.AxisVar
       p.AddBooleanParameter("Run", "Run", "Execute", GH_ParamAccess.item, false);
       p.AddGenericParameter("Axis", "Ax", "Axis handle (optional when Id is set).", GH_ParamAccess.item);
       p.AddNumberParameter("RealStations", "Rs", "Real arc-length stations.", GH_ParamAccess.list);
-      p.AddGenericParameter("Values", "V", "Optional values (numeric or string labels at stations).", GH_ParamAccess.list);
+      p.AddGenericParameter("Values", "V", "Optional values at stations (typed per axis ValueTypeKey).", GH_ParamAccess.list);
+      p.AddTextParameter("Labels", "Lb", "Optional station names (not values).", GH_ParamAccess.list);
       p.AddIntegerParameter("VariableIds", "Vid", "Optional variable ids (1:1 with stations).", GH_ParamAccess.list);
+      p.AddBooleanParameter("Replace", "Rpl", "When true, reset stations instead of additive merge.", GH_ParamAccess.item, false);
+      p.AddIntegerParameter("Mode", "M", "Optional CurveParameterMapper mode override (default = axis mode).", GH_ParamAccess.item, -1);
       p.AddIntegerParameter("Id", "Id", "Persisted axis Id (when Axis is unwired).", GH_ParamAccess.item);
       Params.Input[1].Optional = true;
       Params.Input[3].Optional = true;
       Params.Input[4].Optional = true;
       Params.Input[5].Optional = true;
+      Params.Input[6].Optional = true;
+      Params.Input[7].Optional = true;
+      Params.Input[8].Optional = true;
     }
 
     protected override void RegisterOutputParams(GH_OutputParamManager p)
@@ -49,6 +56,7 @@ namespace ProgesiGrasshopperAssembly.Components.AxisVar
       if (doc == null) return;
       var repo = AxisVarGhSupport.TryGetAxisRepo(this, doc);
       if (repo == null) return;
+      var varRepo = new RhinoVariableRepository(doc);
 
       var realStations = new List<double>();
       if (!da.GetDataList(2, realStations) || realStations.Count == 0)
@@ -58,16 +66,24 @@ namespace ProgesiGrasshopperAssembly.Components.AxisVar
       }
 
       var values = AxisVarGhSupport.ReadOptionalValueLabels(da, 3);
+      var labels = AxisVarGhSupport.ReadOptionalLabels(da, 4);
       var variableIds = new List<int>();
-      da.GetDataList(4, variableIds);
+      da.GetDataList(5, variableIds);
+      bool replace = false;
+      da.GetData(6, ref replace);
+      int modeInt = -1;
+      da.GetData(7, ref modeInt);
 
       if (!AxisVarGhSupport.TryApplyVariation(
-            da, 1, this, repo,
+            da, 1, this, repo, varRepo,
             new ByStationValueStrategy(realStations),
             out var handle, out var normalized, out var real,
             values,
+            labels,
             variableIds.Count > 0 ? variableIds : null,
-            optionalIdInputIndex: 5))
+            replace: replace,
+            modeOverrideInt: modeInt >= 0 ? (int?)modeInt : null,
+            optionalIdInputIndex: 8))
         return;
 
       da.SetData(0, new Grasshopper.Kernel.Types.GH_ObjectWrapper(handle));

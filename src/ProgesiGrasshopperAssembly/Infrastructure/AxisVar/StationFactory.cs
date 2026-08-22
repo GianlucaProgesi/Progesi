@@ -25,10 +25,9 @@ namespace ProgesiGrasshopperAssembly.Infrastructure.AxisVar
     public IReadOnlyList<double> CreateNormalizedStations(CurveParameterMapper mapper)
     {
       if (mapper == null) throw new ArgumentNullException(nameof(mapper));
+      // Preserve input order and duplicates so station↔value pairing and discontinuity Side assignment stay aligned.
       return _realStations
         .Select(s => mapper.RealToNormalized(s))
-        .OrderBy(x => x)
-        .Distinct()
         .ToList();
     }
   }

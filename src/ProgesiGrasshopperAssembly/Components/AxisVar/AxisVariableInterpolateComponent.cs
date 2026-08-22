@@ -23,9 +23,11 @@ namespace ProgesiGrasshopperAssembly.Components.AxisVar
       p.AddGenericParameter("Axis", "Ax", "Axis handle (optional when Id is set).", GH_ParamAccess.item);
       p.AddNumberParameter("Station", "S", "Station (real or normalized).", GH_ParamAccess.item);
       p.AddBooleanParameter("Normalized", "Nrm", "True when Station is normalized [0,1].", GH_ParamAccess.item, true);
+      p.AddIntegerParameter("Mode", "M", "Optional CurveParameterMapper mode override (default = axis mode).", GH_ParamAccess.item, -1);
       p.AddIntegerParameter("Id", "Id", "Persisted axis Id (when Axis is unwired).", GH_ParamAccess.item);
       Params.Input[1].Optional = true;
       Params.Input[4].Optional = true;
+      Params.Input[5].Optional = true;
     }
 
     protected override void RegisterOutputParams(GH_OutputParamManager p)
@@ -45,7 +47,7 @@ namespace ProgesiGrasshopperAssembly.Components.AxisVar
       var repo = AxisVarGhSupport.TryGetAxisRepo(this, doc);
       if (repo == null) return;
 
-      if (!AxisVarGhSupport.TryLoadAxis(da, 1, this, repo, out var axis, optionalIdInputIndex: 4))
+      if (!AxisVarGhSupport.TryLoadAxis(da, 1, this, repo, out var axis, optionalIdInputIndex: 5))
         return;
 
       double station = 0;
@@ -58,12 +60,16 @@ namespace ProgesiGrasshopperAssembly.Components.AxisVar
       bool normalized = true;
       da.GetData(3, ref normalized);
 
+      int modeInt = -1;
+      da.GetData(4, ref modeInt);
+
       try
       {
         if (!AxisVarGhSupport.TryDecodeCurve(axis, this, out var curve) || curve == null)
           return;
 
-        var mapper = AxisVarGhSupport.CreateMapper(curve, axis.Mode);
+        var mode = modeInt >= 0 ? AxisVarGhSupport.ParseMode(modeInt) : axis.Mode;
+        var mapper = AxisVarGhSupport.CreateMapper(curve, mode);
         double norm = normalized ? station : mapper.RealToNormalized(station);
 
         var (value, info) = AxisVarGhSupport.EvaluateInterpolateValue(axis, norm);

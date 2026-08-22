@@ -25,6 +25,14 @@ namespace ProgesiRepositories.Rhino.Tests.AxisVar
     }
 
     [Fact]
+    public void ByStationValue_Preserves_Duplicate_Real_Stations_In_Order()
+    {
+      RhinoTestBootstrap.Require();
+      var stations = StationFactory.Create(new ByStationValueStrategy(new[] { 50.0, 50.0, 25.0 }), LineMapper());
+      stations.Should().Equal(0.5, 0.5, 0.25);
+    }
+
+    [Fact]
     public void ByEqualSegments_N_Segments_Yields_N_Plus_One_Stations()
     {
       RhinoTestBootstrap.Require();
